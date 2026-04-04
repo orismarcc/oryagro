@@ -1,105 +1,102 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Eye, FlaskConical, CalendarDays, TrendingUp } from 'lucide-react';
+import { Leaf, Droplets, Thermometer, FlaskConical, Clock } from 'lucide-react';
 import VisaoGeral from './VisaoGeral';
 import ManejoAdubacao from './ManejoAdubacao';
 import CronogramaTimeline from './CronogramaTimeline';
 import SimuladorFinanceiro from './SimuladorFinanceiro';
 
-const TABS = [
-  { value: 'visao',      label: 'Visão Geral',  Icon: Eye },
-  { value: 'manejo',     label: 'Manejo',        Icon: FlaskConical },
-  { value: 'cronograma', label: 'Cronograma',    Icon: CalendarDays },
-  { value: 'simulador',  label: 'Simulador',     Icon: TrendingUp },
+const GLASS_STATS = (c) => [
+  { Icon: FlaskConical, label: 'Solo',   value: c.soloTipo },
+  { Icon: Clock,        label: 'Ciclo',  value: c.ciclo },
+  { Icon: Droplets,     label: 'Água',   value: c.necessidadeHidrica },
 ];
 
-const INFO_CHIPS = (c) => [
-  { label: c.soloTipo,           prefix: 'Solo' },
-  { label: c.pH,                 prefix: 'pH' },
-  { label: c.necessidadeHidrica, prefix: 'Água' },
-  { label: c.clima,              prefix: 'Clima' },
-  { label: c.ciclo,              prefix: 'Ciclo' },
-];
-
-const slideVariants = {
-  enter:  { opacity: 0, y: 12 },
-  center: { opacity: 1, y: 0 },
-  exit:   { opacity: 0, y: -6 },
-};
-
-export default function CulturaPage({ cultura }) {
-  const [activeTab, setActiveTab] = useState('visao');
-  const [dir, setDir] = useState(1);
-  const tabIdx = TABS.findIndex(t => t.value === activeTab);
-
-  const switchTab = (val) => {
-    setActiveTab(val);
-  };
+export default function CulturaPage({ cultura, section }) {
+  const isCampo = cultura.tipo === 'campo';
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#f4f6f8]">
+    <div className="min-h-screen bg-background">
 
-      {/* ── Hero ───────────────────────────────────── */}
-      <div
-        className="relative overflow-hidden"
-        style={{
-          background: `linear-gradient(135deg, ${cultura.cor}12 0%, ${cultura.cor}05 60%, transparent 100%)`,
-          borderBottom: '1px solid rgba(0,0,0,0.06)',
-        }}
-      >
-        {/* Ghost name */}
+      {/* ── Hero ─────────────────────────────────────────── */}
+      <div className="gradient-hero relative overflow-hidden">
+
+        {/* Culture-colored glow blobs */}
         <div
-          className="absolute right-0 top-1/2 -translate-y-1/2 select-none pointer-events-none font-bold leading-none"
+          className="absolute pointer-events-none"
           style={{
-            fontFamily: 'Fraunces, Georgia, serif',
-            fontSize: 'clamp(100px, 18vw, 200px)',
+            top: '-30%', right: '-15%',
+            width: '55%', height: '65%',
+            background: `radial-gradient(circle, ${cultura.cor}35 0%, transparent 70%)`,
+          }}
+        />
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            bottom: '-20%', left: '-10%',
+            width: '40%', height: '50%',
+            background: `radial-gradient(circle, ${cultura.cor}18 0%, transparent 70%)`,
+          }}
+        />
+
+        {/* Ghost name watermark */}
+        <div
+          className="absolute right-0 bottom-0 select-none pointer-events-none font-display font-black leading-none overflow-hidden"
+          style={{
+            fontSize: 'clamp(80px, 16vw, 160px)',
             color: cultura.cor,
-            opacity: 0.045,
-            letterSpacing: '-0.05em',
+            opacity: 0.07,
+            letterSpacing: '-0.06em',
             right: '-2%',
+            bottom: '-10%',
           }}
         >
           {cultura.nome}
         </div>
 
-        <div className="relative px-8 py-8">
-          {/* Scientific */}
-          <motion.p
-            initial={{ opacity: 0, y: -8 }}
+        <div className="relative z-10 px-5 pt-5 pb-6">
+
+          {/* Top row: icon + identity + badge */}
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            className="text-xs italic mb-2"
-            style={{ color: 'rgba(0,0,0,0.35)' }}
+            className="flex items-start justify-between mb-4"
           >
-            {cultura.nomesCientifico}
-          </motion.p>
-
-          {/* Crop name */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.05 }}
-            className="flex items-center gap-4 flex-wrap mb-3"
-          >
-            <h1
-              className="display leading-none"
-              style={{
-                fontSize: 'clamp(36px, 6vw, 60px)',
-                color: cultura.cor,
-              }}
-            >
-              {cultura.emoji} {cultura.nome}
-            </h1>
-            {cultura.tipo === 'campo' && (
-              <span
-                className="text-[10px] font-bold uppercase tracking-[2px] px-2.5 py-1 rounded-full"
+            <div className="flex items-center gap-3">
+              <div
+                className="h-12 w-12 rounded-2xl flex items-center justify-center border flex-shrink-0"
                 style={{
-                  background: `${cultura.cor}15`,
-                  color: cultura.cor,
-                  border: `1px solid ${cultura.cor}25`,
+                  background: 'rgba(255,255,255,0.15)',
+                  borderColor: 'rgba(255,255,255,0.25)',
+                  fontSize: 22,
                 }}
               >
-                Campo · por hectare
+                {cultura.emoji}
+              </div>
+              <div>
+                <p className="text-white/55 text-xs italic leading-none mb-1">
+                  {cultura.nomesCientifico}
+                </p>
+                <h1
+                  className="font-display text-white font-extrabold leading-tight"
+                  style={{ fontSize: 'clamp(22px, 5vw, 32px)' }}
+                >
+                  {cultura.nome}
+                </h1>
+              </div>
+            </div>
+
+            {isCampo && (
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full flex-shrink-0 mt-1"
+                style={{
+                  background: 'rgba(255,255,255,0.15)',
+                  color: 'rgba(255,255,255,0.8)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                }}
+              >
+                campo · ha
               </span>
             )}
           </motion.div>
@@ -108,94 +105,55 @@ export default function CulturaPage({ cultura }) {
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-            className="text-sm max-w-2xl mb-5 leading-relaxed"
-            style={{ color: 'rgba(0,0,0,0.5)' }}
+            transition={{ duration: 0.4, delay: 0.08 }}
+            className="text-white/65 text-sm leading-relaxed mb-5 max-w-lg"
           >
             {cultura.descricao}
           </motion.p>
 
-          {/* Chips */}
+          {/* Glass stat chips */}
           <motion.div
-            initial={{ opacity: 0, y: 6 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.15 }}
-            className="flex flex-wrap gap-2"
+            transition={{ duration: 0.4, delay: 0.14 }}
+            className="grid grid-cols-3 gap-2"
           >
-            {INFO_CHIPS(cultura).map(({ prefix, label }) => (
-              <span
-                key={prefix}
-                className="inline-flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-full font-medium"
-                style={{
-                  background: 'rgba(255,255,255,0.7)',
-                  color: 'rgba(0,0,0,0.55)',
-                  border: '1px solid rgba(0,0,0,0.07)',
-                  backdropFilter: 'blur(8px)',
-                }}
+            {GLASS_STATS(cultura).map(({ Icon, label, value }) => (
+              <div
+                key={label}
+                className="glass rounded-xl p-3"
+                style={{ borderColor: 'rgba(255,255,255,0.18)' }}
               >
-                <span style={{ color: cultura.cor, fontWeight: 700, fontSize: 10 }}>{prefix}</span>
-                {label}
-              </span>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Icon size={11} className="text-white/60" />
+                  <span className="text-white/55 text-[9px] font-bold uppercase tracking-widest">
+                    {label}
+                  </span>
+                </div>
+                <p className="text-white font-display text-xs font-bold leading-tight">
+                  {value}
+                </p>
+              </div>
             ))}
           </motion.div>
         </div>
       </div>
 
-      {/* ── Tabs ───────────────────────────────────── */}
-      <div
-        className="sticky top-0 z-20 px-8 py-3"
-        style={{
-          background: 'rgba(244,246,248,0.85)',
-          backdropFilter: 'blur(12px)',
-          borderBottom: '1px solid rgba(0,0,0,0.06)',
-        }}
-      >
-        <div className="tabs-bar inline-flex gap-0.5">
-          {TABS.map(({ value, label, Icon }) => {
-            const isActive = activeTab === value;
-            return (
-              <button
-                key={value}
-                onClick={() => switchTab(value)}
-                className="relative flex items-center gap-1.5 px-4 py-2 rounded-[8px] text-[13px] font-semibold outline-none cursor-pointer"
-                style={{ color: isActive ? '#fff' : 'rgba(0,0,0,0.45)' }}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="tab-pill"
-                    className="absolute inset-0 rounded-[8px]"
-                    style={{ background: cultura.cor }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                  />
-                )}
-                <span className="relative z-10 flex items-center gap-1.5">
-                  <Icon size={13} />
-                  <span className="hidden sm:inline">{label}</span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Content ────────────────────────────────── */}
-      <div className="flex-1">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={`${cultura.id}-${activeTab}`}
-            variants={slideVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          >
-            {activeTab === 'visao'      && <VisaoGeral         cultura={cultura} />}
-            {activeTab === 'manejo'     && <ManejoAdubacao      cultura={cultura} />}
-            {activeTab === 'cronograma' && <CronogramaTimeline  cultura={cultura} />}
-            {activeTab === 'simulador'  && <SimuladorFinanceiro cultura={cultura} />}
-          </motion.div>
-        </AnimatePresence>
-      </div>
+      {/* ── Tab content ──────────────────────────────────── */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`${cultura.id}-${section}`}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        >
+          {section === 'visao'      && <VisaoGeral         cultura={cultura} />}
+          {section === 'manejo'     && <ManejoAdubacao      cultura={cultura} />}
+          {section === 'cronograma' && <CronogramaTimeline  cultura={cultura} />}
+          {section === 'simulador'  && <SimuladorFinanceiro cultura={cultura} />}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
