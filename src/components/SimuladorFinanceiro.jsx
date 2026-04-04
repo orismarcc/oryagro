@@ -3,10 +3,12 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
 import { Separator } from './ui/separator';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import InsumoField from './InsumoField';
 import ResultadoPanel from './ResultadoPanel';
 import { useSimulador, calcularPlantas } from '../hooks/useSimulador';
-import { RotateCcw } from 'lucide-react';
+import { useSimuladorSync, loadSimuladorConfig, registrarPlantio } from '../hooks/useSupabaseSync';
+import { RotateCcw, Database, CheckCircle2 } from 'lucide-react';
 
 const loadFromStorage = (key, def) => {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; }
@@ -36,6 +38,23 @@ export default function SimuladorFinanceiro({ cultura }) {
   }, [cultura, isCampo, ins]);
 
   const [valores, setValores] = useState(() => loadFromStorage(storageKey, getDefaults()));
+  const [plantioDialog, setPlantioDialog] = useState(false);
+  const [plantioNome, setPlantioNome] = useState('');
+  const [plantioData, setPlantioData] = useState(new Date().toISOString().split('T')[0]);
+  const [plantioSaved, setPlantioSaved] = useState(null); // { id, nome }
+
+  // Sync valores to Supabase (debounced)
+  useSimuladorSync(cultura.id, valores);
+
+  // Load from Supabase on first mount (prefer remote over localStorage)
+  useEffect(() => {
+    loadSimuladorConfig(cultura.id).then(remote => {
+      if (remote && Object.keys(remote).length > 0) {
+        setValores(remote);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cultura.id]);
 
   // Track previous area to detect changes
   const prevAreaRef = useRef(null);
@@ -105,11 +124,22 @@ export default function SimuladorFinanceiro({ cultura }) {
         <div>
           <h2 className="text-lg font-display font-semibold text-gray-900">Simulador Financeiro</h2>
           {isCampo && <p className="text-xs text-ambar-600 font-bold">Cálculo por hectare</p>}
+          {plantioSaved && (
+            <p className="text-xs text-verde-800 font-medium flex items-center gap-1 mt-0.5">
+              <CheckCircle2 size={12} /> Plantio "{plantioSaved.nome}" registrado
+            </p>
+          )}
         </div>
-        <Button variant="amber" size="sm" onClick={resetAll}>
-          <RotateCcw size={13} />
-          Restaurar padrões
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => setPlantioDialog(true)}>
+            <Database size={13} />
+            Registrar plantio
+          </Button>
+          <Button variant="amber" size="sm" onClick={resetAll}>
+            <RotateCcw size={13} />
+            Restaurar padrões
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_340px] gap-6">
@@ -253,6 +283,62 @@ export default function SimuladorFinanceiro({ cultura }) {
           <ResultadoPanel resultado={resultado} cultura={cultura} />
         </div>
       </div>
+      {/* REGISTRAR PLANTIO DIALOG */}
+      <Dialog open={plantioDialog} onOpenChange={(o) => !o && setPlantioDialog(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Registrar plantio no banco</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-gray-500 mb-3">
+            Salva os parâmetros atuais como um plantio real no Supabase para acompanhamento histórico.
+          </p>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="pNome">Nome / identificação</Label>
+              <Input id="pNome" placeholder={`${cultura.nome} – Lote 1`}
+                value={plantioNome} onChange={(e) => setPlantioNome(e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="pData">Data de plantio</Label>
+              <Input id="pData" type="date" value={plantioData} onChange={(e) => setPlantioData(e.target.value)} />
+            </div>
+            <div className="bg-papel rounded border border-borda px-3 py-2 text-xs text-gray-600">
+              <div className="font-semibold text-gray-800 mb-1">Resumo</div>
+              {isCampo
+                ? <><span>{dim.areaHa} ha · {dim.totalPlantas?.toLocaleString('pt-BR')} plantas</span></>
+                : <><span>{dim.comp}×{dim.larg}m · {dim.totalPlantas} plantas</span></>
+              }
+              <div className="mt-1 text-verde-800 font-medium">
+                Lucro estimado: {resultado.formatBRL(resultado.lucro)}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPlantioDialog(false)}>Cancelar</Button>
+            <Button onClick={async () => {
+              const dim2 = calcularPlantas(cultura, valores);
+              const payload = {
+                cultura_id: cultura.id,
+                nome: plantioNome || `${cultura.nome} – ${plantioData}`,
+                data_plantio: plantioData,
+                comprimento_m: isCampo ? null : dim2.comp,
+                largura_m: isCampo ? null : dim2.larg,
+                area_ha: isCampo ? dim2.areaHa : parseFloat((dim2.area / 10000).toFixed(6)),
+                espacamento_linhas: parseFloat(valores.espacamentoLinhas) || (isCampo ? cultura.espacamento.linhas : cultura.canteiro.espacamentoLinhas),
+                espacamento_plantas: parseFloat(valores.espacamentoPlantas) || (isCampo ? cultura.espacamento.plantas : cultura.canteiro.espacamentoPlantas),
+                total_plantas: dim2.totalPlantas,
+              };
+              const saved = await registrarPlantio(payload);
+              if (saved) {
+                setPlantioSaved({ id: saved.id, nome: saved.nome });
+                setPlantioDialog(false);
+              }
+            }}>
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
