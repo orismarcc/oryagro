@@ -122,7 +122,7 @@ export default function SimuladorFinanceiro({ cultura }) {
     <div className="p-6 md:p-8 max-w-5xl">
       <div className="flex items-start justify-between mb-5 flex-wrap gap-2">
         <div>
-          <h2 className="text-lg font-display font-semibold text-gray-900">Simulador Financeiro</h2>
+          <h2 className="font-bold text-xl text-gray-900">Simulador Financeiro</h2>
           {isCampo && <p className="text-xs text-ambar-600 font-bold">Cálculo por hectare</p>}
           {plantioSaved && (
             <p className="text-xs text-verde-800 font-medium flex items-center gap-1 mt-0.5">

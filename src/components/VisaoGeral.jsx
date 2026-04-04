@@ -1,36 +1,67 @@
-import React from 'react';
-import { Droplets, Thermometer, Leaf, FlaskConical, Clock } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
+import { Droplets, Thermometer, Leaf, FlaskConical, Clock, ArrowUpRight } from 'lucide-react';
 
-const CHIP_ICONS = {
-  'Solo': Leaf,
-  'pH': FlaskConical,
-  'Água': Droplets,
-  'Clima': Thermometer,
-  'Ciclo': Clock,
+/* Animated number count-up */
+function CountUp({ to, duration = 0.9, format = (v) => Math.round(v).toLocaleString('pt-BR') }) {
+  const [val, setVal] = useState(0);
+  const rafRef = useRef(null);
+  useEffect(() => {
+    const start = performance.now();
+    const animate = (now) => {
+      const progress = Math.min((now - start) / (duration * 1000), 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      setVal(ease * to);
+      if (progress < 1) rafRef.current = requestAnimationFrame(animate);
+    };
+    rafRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [to, duration]);
+  return <span>{format(val)}</span>;
+}
+
+const containerVariants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.07 } },
 };
+const cardVariants = {
+  hidden:   { opacity: 0, y: 20, scale: 0.97 },
+  visible:  { opacity: 1, y: 0,  scale: 1, transition: { type: 'spring', stiffness: 280, damping: 24 } },
+};
+const infoVariants = {
+  hidden:   { opacity: 0, x: 16 },
+  visible:  (i) => ({ opacity: 1, x: 0, transition: { delay: i * 0.06, duration: 0.35, ease: [0.16, 1, 0.3, 1] } }),
+};
+
+const INFO_FIELDS = [
+  { key: 'soloTipo',           label: 'Solo',   Icon: Leaf },
+  { key: 'pH',                 label: 'pH',     Icon: FlaskConical },
+  { key: 'necessidadeHidrica', label: 'Água',   Icon: Droplets },
+  { key: 'clima',              label: 'Clima',  Icon: Thermometer },
+  { key: 'ciclo',              label: 'Ciclo',  Icon: Clock },
+];
 
 export default function VisaoGeral({ cultura }) {
   const isCampo = cultura.tipo === 'campo';
 
   let stats;
   if (isCampo) {
-    const plantasPorHa = Math.floor(10000 / (cultura.espacamento.linhas * cultura.espacamento.plantas));
+    const pph = Math.floor(10000 / (cultura.espacamento.linhas * cultura.espacamento.plantas));
     stats = [
-      { label: 'Sistema',      value: 'Campo', sub: 'plantio a campo aberto', num: false },
-      { label: 'Área base',    value: cultura.areaPadrao, sub: 'referência padrão', num: false },
-      { label: 'Espaçamento',  value: cultura.espacamentoPadrao, sub: 'entre linhas × plantas', num: false },
-      { label: 'Plantas/ha',   value: plantasPorHa.toLocaleString('pt-BR'), sub: 'densidade máxima', num: true },
+      { label: 'Área base',    value: cultura.areaPadrao,     numericTo: null },
+      { label: 'Espaçamento',  value: cultura.espacamentoPadrao, numericTo: null },
+      { label: 'Plantas/ha',   value: null, numericTo: pph },
+      { label: 'Sistema',      value: 'Campo aberto', numericTo: null },
     ];
   } else {
-    const area = cultura.canteiro.comprimento * cultura.canteiro.largura;
+    const area   = cultura.canteiro.comprimento * cultura.canteiro.largura;
     const linhas = Math.floor(cultura.canteiro.largura / cultura.canteiro.espacamentoLinhas);
-    const porLinha = Math.floor(cultura.canteiro.comprimento / cultura.canteiro.espacamentoPlantas);
-    const totalPlantas = linhas * porLinha;
+    const porL   = Math.floor(cultura.canteiro.comprimento / cultura.canteiro.espacamentoPlantas);
     stats = [
-      { label: 'Área/canteiro',      value: `${area} m²`, sub: 'área de cultivo', num: false },
-      { label: 'Dimensões',          value: `${cultura.canteiro.comprimento}×${cultura.canteiro.largura} m`, sub: 'comprimento × largura', num: false },
-      { label: 'Plantas/canteiro',   value: totalPlantas.toLocaleString('pt-BR'), sub: `${linhas} fil. × ${porLinha} plantas`, num: true },
-      { label: 'Equiv. em ha',       value: `~${Math.round(10000 / area)}`, sub: 'canteiros por hectare', num: true },
+      { label: 'Área/canteiro',    value: `${area} m²`,     numericTo: null },
+      { label: 'Dimensões',        value: `${cultura.canteiro.comprimento}×${cultura.canteiro.largura} m`, numericTo: null },
+      { label: 'Plantas/canteiro', value: null,              numericTo: linhas * porL },
+      { label: 'Equiv. em ha',     value: null,              numericTo: Math.round(10000 / area), suffix: ' canteiros' },
     ];
   }
 
@@ -38,77 +69,104 @@ export default function VisaoGeral({ cultura }) {
     <div className="p-6 md:p-8 max-w-5xl">
 
       {/* ── Stat cards ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+      <motion.div
+        className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
         {stats.map((s, i) => (
-          <div
+          <motion.div
             key={s.label}
-            className={`stat-card anim-fade-up delay-${i * 50}`}
+            variants={cardVariants}
+            whileHover={{ y: -3, boxShadow: '0 0 0 1px rgba(0,0,0,0.04), 0 12px 40px rgba(0,0,0,0.12)' }}
+            className="card p-5 flex flex-col justify-between min-h-[110px] cursor-default"
           >
-            {/* Color top accent */}
-            <div className="h-1 w-full" style={{ background: cultura.cor }} />
-            <div className="p-4">
-              {s.num ? (
-                <div className="num-highlight text-2xl mb-0.5 anim-count-up" style={{ color: cultura.cor }}>
-                  {s.value}
+            {/* Color accent top line */}
+            <div
+              className="w-8 h-0.5 rounded-full mb-3"
+              style={{ background: cultura.cor }}
+            />
+
+            {/* Value */}
+            <div>
+              {s.numericTo != null ? (
+                <div className="stat-num text-2xl mb-1" style={{ color: cultura.cor }}>
+                  <CountUp to={s.numericTo} />
+                  {s.suffix && <span className="text-sm ml-1 font-sans font-normal" style={{ color: cultura.cor }}>{s.suffix}</span>}
                 </div>
               ) : (
-                <div className="text-[15px] font-bold text-gray-800 mb-0.5 leading-snug">{s.value}</div>
+                <div className="font-bold text-[15px] text-gray-900 leading-snug mb-1">{s.value}</div>
               )}
-              <div className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">{s.label}</div>
-              <div className="text-[10px] text-gray-300 mt-0.5">{s.sub}</div>
+              <div className="text-[10px] font-semibold uppercase tracking-[1.5px] text-gray-400">{s.label}</div>
             </div>
-          </div>
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
 
-      {/* ── About section ── */}
-      <div className="grid md:grid-cols-[1fr_280px] gap-5">
-        {/* Description */}
-        <div
-          className="rounded-xl p-6 border anim-fade-up delay-200"
-          style={{
-            background: `linear-gradient(135deg, ${cultura.cor}08, transparent)`,
-            borderColor: `${cultura.cor}25`,
-          }}
+      {/* ── Bottom grid ── */}
+      <div className="grid md:grid-cols-[1fr_260px] gap-4">
+
+        {/* About card */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+          className="card p-6"
         >
-          <div
-            className="text-[10px] font-bold tracking-[2px] uppercase mb-2"
-            style={{ color: cultura.cor }}
-          >
-            Sobre a Cultura
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <div
+                className="text-[10px] font-bold uppercase tracking-[2px] mb-1"
+                style={{ color: cultura.cor }}
+              >
+                Sobre a Cultura
+              </div>
+              <div className="text-xs italic text-gray-400">{cultura.nomesCientifico}</div>
+            </div>
+            <ArrowUpRight size={14} className="text-gray-300 mt-1" />
           </div>
-          <p className="text-gray-600 leading-relaxed text-[14px]">
-            {cultura.descricao}
-          </p>
-          <div className="mt-4 pt-4 border-t" style={{ borderColor: `${cultura.cor}20` }}>
-            <span className="text-xs italic text-gray-400">{cultura.nomesCientifico}</span>
-          </div>
-        </div>
 
-        {/* Info chips vertical */}
-        <div className="flex flex-col gap-2 anim-fade-up delay-250">
-          {[
-            { prefix: 'Solo',  value: cultura.soloTipo,           Icon: Leaf },
-            { prefix: 'pH',    value: cultura.pH,                  Icon: FlaskConical },
-            { prefix: 'Água',  value: cultura.necessidadeHidrica,  Icon: Droplets },
-            { prefix: 'Clima', value: cultura.clima,               Icon: Thermometer },
-            { prefix: 'Ciclo', value: cultura.ciclo,               Icon: Clock },
-          ].map(({ prefix, value, Icon }) => (
-            <div
-              key={prefix}
-              className="flex items-center gap-3 rounded-lg px-4 py-3 bg-white border border-borda"
+          {/* Accent line */}
+          <div
+            className="w-full h-px mb-4"
+            style={{ background: `linear-gradient(90deg, ${cultura.cor}40, transparent)` }}
+          />
+
+          <p className="text-sm text-gray-600 leading-relaxed">{cultura.descricao}</p>
+
+          <div
+            className="mt-5 pt-4 border-t text-[11px] font-semibold uppercase tracking-widest"
+            style={{ borderColor: 'rgba(0,0,0,0.06)', color: cultura.cor }}
+          >
+            {cultura.ciclo}
+          </div>
+        </motion.div>
+
+        {/* Info chips */}
+        <div className="flex flex-col gap-2">
+          {INFO_FIELDS.map(({ key, label, Icon }, i) => (
+            <motion.div
+              key={key}
+              custom={i}
+              variants={infoVariants}
+              initial="hidden"
+              animate="visible"
+              whileHover={{ x: 3 }}
+              className="card flex items-center gap-3 px-4 py-3"
+              style={{ cursor: 'default' }}
             >
               <div
-                className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
-                style={{ background: `${cultura.cor}14` }}
+                className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: `${cultura.cor}12` }}
               >
-                <Icon size={13} style={{ color: cultura.cor }} />
+                <Icon size={14} style={{ color: cultura.cor }} />
               </div>
               <div>
-                <div className="text-[9px] font-bold uppercase tracking-[1.5px] text-gray-300">{prefix}</div>
-                <div className="text-[12px] font-semibold text-gray-700 leading-tight">{value}</div>
+                <div className="text-[9px] font-bold uppercase tracking-[1.8px] text-gray-400">{label}</div>
+                <div className="text-[12px] font-semibold text-gray-800 leading-tight mt-0.5">{cultura[key]}</div>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>

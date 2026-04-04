@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Eye, Beaker, Calendar, BarChart2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Eye, FlaskConical, CalendarDays, TrendingUp } from 'lucide-react';
 import VisaoGeral from './VisaoGeral';
 import ManejoAdubacao from './ManejoAdubacao';
 import CronogramaTimeline from './CronogramaTimeline';
@@ -7,128 +8,196 @@ import SimuladorFinanceiro from './SimuladorFinanceiro';
 
 const TABS = [
   { value: 'visao',      label: 'Visão Geral',  Icon: Eye },
-  { value: 'manejo',     label: 'Manejo',        Icon: Beaker },
-  { value: 'cronograma', label: 'Cronograma',    Icon: Calendar },
-  { value: 'simulador',  label: 'Simulador',     Icon: BarChart2 },
+  { value: 'manejo',     label: 'Manejo',        Icon: FlaskConical },
+  { value: 'cronograma', label: 'Cronograma',    Icon: CalendarDays },
+  { value: 'simulador',  label: 'Simulador',     Icon: TrendingUp },
 ];
 
 const INFO_CHIPS = (c) => [
-  { label: c.soloTipo,          prefix: 'Solo',   color: '#5a3e1b' },
-  { label: c.pH,                prefix: 'pH',     color: '#1a6b9a' },
-  { label: c.necessidadeHidrica,prefix: 'Água',   color: '#1e4d2b' },
-  { label: c.clima,             prefix: 'Clima',  color: '#7b1fa2' },
-  { label: c.ciclo,             prefix: 'Ciclo',  color: '#555' },
+  { label: c.soloTipo,           prefix: 'Solo' },
+  { label: c.pH,                 prefix: 'pH' },
+  { label: c.necessidadeHidrica, prefix: 'Água' },
+  { label: c.clima,              prefix: 'Clima' },
+  { label: c.ciclo,              prefix: 'Ciclo' },
 ];
+
+const slideVariants = {
+  enter: (dir) => ({ opacity: 0, x: dir > 0 ? 24 : -24 }),
+  center: { opacity: 1, x: 0 },
+  exit:  (dir) => ({ opacity: 0, x: dir > 0 ? -24 : 24 }),
+};
 
 export default function CulturaPage({ cultura }) {
   const [activeTab, setActiveTab] = useState('visao');
-  const chips = INFO_CHIPS(cultura);
+  const [dir, setDir] = useState(1);
+  const tabIdx = TABS.findIndex(t => t.value === activeTab);
+
+  const switchTab = (val) => {
+    const newIdx = TABS.findIndex(t => t.value === val);
+    setDir(newIdx > tabIdx ? 1 : -1);
+    setActiveTab(val);
+  };
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen bg-[#f4f6f8]">
 
-      {/* ── Hero Header ────────────────────────────── */}
-      <header
-        className="relative overflow-hidden border-b border-borda"
+      {/* ── Hero ───────────────────────────────────── */}
+      <div
+        className="relative overflow-hidden"
         style={{
-          background: `linear-gradient(135deg, ${cultura.cor}18 0%, ${cultura.cor}06 55%, transparent 100%)`,
+          background: `linear-gradient(135deg, ${cultura.cor}12 0%, ${cultura.cor}05 60%, transparent 100%)`,
+          borderBottom: '1px solid rgba(0,0,0,0.06)',
         }}
       >
-        {/* Decorative giant letter */}
+        {/* Ghost name */}
         <div
-          className="absolute right-6 top-1/2 -translate-y-1/2 font-display font-bold select-none pointer-events-none leading-none"
+          className="absolute right-0 top-1/2 -translate-y-1/2 select-none pointer-events-none font-bold leading-none"
           style={{
-            fontSize: 'clamp(80px, 14vw, 160px)',
+            fontFamily: 'Fraunces, Georgia, serif',
+            fontSize: 'clamp(100px, 18vw, 200px)',
             color: cultura.cor,
-            opacity: 0.055,
-            letterSpacing: '-0.04em',
+            opacity: 0.045,
+            letterSpacing: '-0.05em',
+            right: '-2%',
           }}
         >
           {cultura.nome}
         </div>
 
-        <div className="relative px-8 py-7">
-          {/* Scientific name */}
-          <div className="text-xs italic text-gray-400 mb-1 font-sans tracking-wide">
+        <div className="relative px-8 py-8">
+          {/* Scientific */}
+          <motion.p
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="text-xs italic mb-2"
+            style={{ color: 'rgba(0,0,0,0.35)' }}
+          >
             {cultura.nomesCientifico}
-          </div>
+          </motion.p>
 
-          {/* Crop name + type badge */}
-          <div className="flex items-end gap-4 flex-wrap mb-3">
+          {/* Crop name */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.05 }}
+            className="flex items-center gap-4 flex-wrap mb-3"
+          >
             <h1
-              className="font-display font-bold leading-none"
-              style={{ fontSize: 'clamp(28px, 5vw, 48px)', color: cultura.cor }}
+              className="display leading-none"
+              style={{
+                fontSize: 'clamp(36px, 6vw, 60px)',
+                color: cultura.cor,
+              }}
             >
-              {cultura.emoji || ''} {cultura.nome}
+              {cultura.emoji} {cultura.nome}
             </h1>
             {cultura.tipo === 'campo' && (
               <span
-                className="text-[10px] font-bold uppercase tracking-[2px] px-2 py-1 rounded mb-1"
-                style={{ background: `${cultura.cor}15`, color: cultura.cor, border: `1px solid ${cultura.cor}30` }}
-              >
-                Cultura de Campo · por hectare
-              </span>
-            )}
-          </div>
-
-          {/* Description */}
-          <p className="text-[13px] text-gray-500 max-w-2xl leading-relaxed mb-4">
-            {cultura.descricao}
-          </p>
-
-          {/* Info chips */}
-          <div className="flex flex-wrap gap-1.5">
-            {chips.map(c => (
-              <span
-                key={c.prefix}
-                className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium"
+                className="text-[10px] font-bold uppercase tracking-[2px] px-2.5 py-1 rounded-full"
                 style={{
-                  background: `${c.color}10`,
-                  color: c.color,
-                  border: `1px solid ${c.color}20`,
+                  background: `${cultura.cor}15`,
+                  color: cultura.cor,
+                  border: `1px solid ${cultura.cor}25`,
                 }}
               >
-                <span className="opacity-60 text-[10px]">{c.prefix}:</span>
-                {c.label}
+                Campo · por hectare
+              </span>
+            )}
+          </motion.div>
+
+          {/* Description */}
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            className="text-sm max-w-2xl mb-5 leading-relaxed"
+            style={{ color: 'rgba(0,0,0,0.5)' }}
+          >
+            {cultura.descricao}
+          </motion.p>
+
+          {/* Chips */}
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.15 }}
+            className="flex flex-wrap gap-2"
+          >
+            {INFO_CHIPS(cultura).map(({ prefix, label }) => (
+              <span
+                key={prefix}
+                className="inline-flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-full font-medium"
+                style={{
+                  background: 'rgba(255,255,255,0.7)',
+                  color: 'rgba(0,0,0,0.55)',
+                  border: '1px solid rgba(0,0,0,0.07)',
+                  backdropFilter: 'blur(8px)',
+                }}
+              >
+                <span style={{ color: cultura.cor, fontWeight: 700, fontSize: 10 }}>{prefix}</span>
+                {label}
               </span>
             ))}
-          </div>
+          </motion.div>
         </div>
-      </header>
+      </div>
 
-      {/* ── Tab Navigation ─────────────────────────── */}
-      <div className="bg-white border-b border-borda px-6 sticky top-0 z-20 shadow-sm shadow-black/[0.03]">
-        <div className="flex gap-1 py-2">
+      {/* ── Tabs ───────────────────────────────────── */}
+      <div
+        className="sticky top-0 z-20 px-8 py-3"
+        style={{
+          background: 'rgba(244,246,248,0.85)',
+          backdropFilter: 'blur(12px)',
+          borderBottom: '1px solid rgba(0,0,0,0.06)',
+        }}
+      >
+        <div className="tabs-bar inline-flex gap-0.5">
           {TABS.map(({ value, label, Icon }) => {
             const isActive = activeTab === value;
             return (
               <button
                 key={value}
-                onClick={() => setActiveTab(value)}
-                className="relative flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all duration-200 outline-none"
-                style={isActive ? {
-                  background: cultura.cor,
-                  color: '#fff',
-                  boxShadow: `0 2px 8px ${cultura.cor}40`,
-                } : {
-                  color: '#888',
-                  background: 'transparent',
-                }}
+                onClick={() => switchTab(value)}
+                className="relative flex items-center gap-1.5 px-4 py-2 rounded-[8px] text-[13px] font-semibold outline-none cursor-pointer"
+                style={{ color: isActive ? '#fff' : 'rgba(0,0,0,0.45)' }}
               >
-                <Icon size={14} />
-                <span className="hidden sm:inline">{label}</span>
+                {isActive && (
+                  <motion.div
+                    layoutId="tab-pill"
+                    className="absolute inset-0 rounded-[8px]"
+                    style={{ background: cultura.cor }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-1.5">
+                  <Icon size={13} />
+                  <span className="hidden sm:inline">{label}</span>
+                </span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* ── Tab Content ────────────────────────────── */}
-      <div className="flex-1 anim-fade-up" key={`${cultura.id}-${activeTab}`}>
-        {activeTab === 'visao'      && <VisaoGeral          cultura={cultura} />}
-        {activeTab === 'manejo'     && <ManejoAdubacao       cultura={cultura} />}
-        {activeTab === 'cronograma' && <CronogramaTimeline   cultura={cultura} />}
-        {activeTab === 'simulador'  && <SimuladorFinanceiro  cultura={cultura} />}
+      {/* ── Content ────────────────────────────────── */}
+      <div className="flex-1 overflow-hidden">
+        <AnimatePresence mode="wait" custom={dir}>
+          <motion.div
+            key={`${cultura.id}-${activeTab}`}
+            custom={dir}
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          >
+            {activeTab === 'visao'      && <VisaoGeral         cultura={cultura} />}
+            {activeTab === 'manejo'     && <ManejoAdubacao      cultura={cultura} />}
+            {activeTab === 'cronograma' && <CronogramaTimeline  cultura={cultura} />}
+            {activeTab === 'simulador'  && <SimuladorFinanceiro cultura={cultura} />}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );
