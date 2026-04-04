@@ -5,15 +5,15 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
-import { Plus, Printer, Trash2, CheckCircle2, Circle } from 'lucide-react';
+import { Plus, Printer, Trash2, CheckCircle2, Circle, ChevronRight } from 'lucide-react';
 
 const TIPO_META = {
-  plantio:  { color: '#059669', bg: 'hsl(152 69% 93%)', label: 'Plantio' },
-  adubo:    { color: '#d97706', bg: 'hsl(43 96% 93%)',  label: 'Adubação' },
-  foliar:   { color: '#2563eb', bg: 'hsl(221 90% 95%)', label: 'Foliar' },
-  colheita: { color: '#dc2626', bg: 'hsl(4 80% 94%)',   label: 'Colheita' },
-  manejo:   { color: '#7c3aed', bg: 'hsl(263 80% 95%)', label: 'Manejo' },
-  especial: { color: '#db2777', bg: 'hsl(322 75% 95%)', label: 'Especial' },
+  plantio:  { color: '#059669', bg: 'hsl(152 69% 93%)', label: 'Plantio',   emoji: '🌱' },
+  adubo:    { color: '#d97706', bg: 'hsl(43 96% 93%)',  label: 'Adubação',  emoji: '🧪' },
+  foliar:   { color: '#2563eb', bg: 'hsl(221 90% 95%)', label: 'Foliar',    emoji: '💧' },
+  colheita: { color: '#dc2626', bg: 'hsl(4 80% 94%)',   label: 'Colheita',  emoji: '🌾' },
+  manejo:   { color: '#7c3aed', bg: 'hsl(263 80% 95%)', label: 'Manejo',    emoji: '🔧' },
+  especial: { color: '#db2777', bg: 'hsl(322 75% 95%)', label: 'Especial',  emoji: '⭐' },
 };
 const TIPOS = Object.keys(TIPO_META);
 
@@ -28,7 +28,7 @@ export default function CronogramaTimeline({ cultura }) {
   const statusKey = `cronograma_status_${cultura.id}`;
   const customKey  = `cronograma_custom_${cultura.id}`;
 
-  const [status, setStatus]     = useState(() => { try { return JSON.parse(localStorage.getItem(statusKey)) || {}; } catch { return {}; } });
+  const [status, setStatus]       = useState(() => { try { return JSON.parse(localStorage.getItem(statusKey)) || {}; } catch { return {}; } });
   const [customRows, setCustomRows] = useState(() => { try { return JSON.parse(localStorage.getItem(customKey)) || []; } catch { return []; } });
 
   const [confirmDialog, setConfirmDialog] = useState({ open: false, idx: null, etapa: '' });
@@ -77,7 +77,7 @@ export default function CronogramaTimeline({ cultura }) {
       </div>
 
       {/* ── Progress card ── */}
-      <div className="card p-4 mb-5">
+      <div className="card p-4 mb-6">
         <div className="flex items-center gap-4">
           <div className="flex-1">
             <div className="flex justify-between mb-2">
@@ -103,94 +103,138 @@ export default function CronogramaTimeline({ cultura }) {
         </div>
       </div>
 
-      {/* ── Timeline ── */}
-      <div className="space-y-2.5">
+      {/* ── Vertical Timeline ── */}
+      <div className="flex flex-col">
         {allEvents.map((ev, rowIdx) => {
           const st     = status[ev._id];
           const isDone = st?.status === 'feito';
           const meta   = TIPO_META[ev.tipo] || TIPO_META.manejo;
           const cidx   = ev._custom ? customRows.findIndex((_, i) => `custom_${i}` === ev._id) : -1;
+          const isLast = rowIdx === allEvents.length - 1;
 
           return (
             <motion.div
               key={ev._id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: rowIdx * 0.04, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              initial={{ opacity: 0, x: -12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: rowIdx * 0.045, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              className="flex gap-3"
             >
-              <div
-                className="card-interactive overflow-hidden"
-                style={{ opacity: isDone ? 0.65 : 1 }}
-              >
-                {/* Color strip */}
-                <div className="h-0.5 w-full" style={{ background: meta.color }} />
+              {/* ── Left: day indicator + connector ── */}
+              <div className="flex flex-col items-center flex-shrink-0" style={{ width: 48 }}>
+                {/* Day circle */}
+                <motion.div
+                  className="w-12 h-12 rounded-2xl flex flex-col items-center justify-center flex-shrink-0 border"
+                  style={isDone
+                    ? { background: meta.color, borderColor: meta.color, boxShadow: `0 4px 12px ${meta.color}40` }
+                    : { background: meta.bg, borderColor: `${meta.color}30` }
+                  }
+                  whileTap={{ scale: 0.92 }}
+                >
+                  {isDone
+                    ? <CheckCircle2 size={20} color="#fff" />
+                    : <>
+                        <span className="text-[8px] font-black uppercase tracking-widest leading-none" style={{ color: meta.color }}>DIA</span>
+                        <span className="font-display font-black text-sm leading-none mt-0.5" style={{ color: meta.color }}>{ev.dia}</span>
+                      </>
+                  }
+                </motion.div>
 
-                <div className="px-4 py-3 flex items-start gap-3">
-                  {/* Day badge */}
-                  <div className="flex-shrink-0 mt-0.5">
-                    <span
-                      className="text-[9px] font-black uppercase tracking-widest"
-                      style={{ color: meta.color }}
-                    >
-                      D{ev.dia}
-                    </span>
-                  </div>
+                {/* Connector line */}
+                {!isLast && (
+                  <div
+                    className="w-0.5 flex-1 mt-1 mb-1 min-h-[20px]"
+                    style={{ background: isDone ? `${meta.color}50` : 'hsl(214 20% 88%)' }}
+                  />
+                )}
+              </div>
 
-                  {/* Type badge */}
-                  <span
-                    className="text-[9px] font-bold uppercase tracking-wide px-2 py-1 rounded-lg flex-shrink-0 mt-0.5"
-                    style={{ background: meta.bg, color: meta.color }}
-                  >
-                    {meta.label}
-                  </span>
+              {/* ── Right: event card ── */}
+              <div className={`flex-1 ${!isLast ? 'mb-3' : ''}`}>
+                <div
+                  className="rounded-2xl overflow-hidden border transition-all duration-200"
+                  style={{
+                    borderColor: isDone ? `${meta.color}35` : 'hsl(214 20% 88%)',
+                    background: isDone ? `${meta.bg}` : '#fff',
+                    boxShadow: isDone ? 'none' : '0 1px 4px rgba(0,0,0,0.05)',
+                  }}
+                >
+                  {/* Card content */}
+                  <div className="px-4 pt-3.5 pb-3">
+                    {/* Type badge */}
+                    <div className="flex items-center justify-between mb-2">
+                      <span
+                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full"
+                        style={{ background: isDone ? `${meta.color}20` : meta.bg, color: meta.color }}
+                      >
+                        <span>{meta.emoji}</span>
+                        {meta.label}
+                      </span>
+                      {ev._custom && (
+                        <motion.button
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => setCustomRows(r => r.filter((_, i) => i !== cidx))}
+                          className="p-1 rounded-lg text-muted-foreground hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 size={12} />
+                        </motion.button>
+                      )}
+                    </div>
 
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-[13px] font-semibold leading-tight ${isDone ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                    {/* Title */}
+                    <p className={`text-[14px] font-bold leading-snug ${isDone ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                       {ev.etapa}
                     </p>
+
+                    {/* Produto / dose */}
                     {ev.produto && ev.produto !== '—' && (
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {ev.produto}{ev.dose && ev.dose !== '—' ? <> · <span className="font-semibold text-foreground">{ev.dose}</span></> : ''}
+                      <p className="text-[12px] text-muted-foreground mt-1.5 flex items-center gap-1">
+                        <span>{ev.produto}</span>
+                        {ev.dose && ev.dose !== '—' && (
+                          <>
+                            <span className="opacity-40">·</span>
+                            <span className="font-semibold text-foreground">{ev.dose}</span>
+                          </>
+                        )}
                       </p>
                     )}
+
+                    {/* Forma */}
                     {ev.forma && ev.forma !== '—' && (
-                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">{ev.forma}</p>
+                      <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{ev.forma}</p>
                     )}
+
+                    {/* Done badge */}
                     {isDone && st?.data && (
-                      <div className="flex items-center gap-1 mt-1.5">
-                        <CheckCircle2 size={10} style={{ color: meta.color }} />
-                        <span className="text-[10px] font-medium" style={{ color: meta.color }}>
-                          {formatDate(st.data)}{st.obs ? ` · ${st.obs}` : ''}
-                        </span>
+                      <div
+                        className="inline-flex items-center gap-1.5 mt-2.5 px-2.5 py-1 rounded-full text-[10px] font-semibold"
+                        style={{ background: `${meta.color}15`, color: meta.color }}
+                      >
+                        <CheckCircle2 size={10} />
+                        {formatDate(st.data)}{st.obs ? ` · ${st.obs}` : ''}
                       </div>
                     )}
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <motion.button
-                      whileTap={{ scale: 0.93 }}
-                      onClick={() => handleChipClick(ev._id, ev.etapa, st?.status)}
-                      className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-colors"
-                      style={isDone
-                        ? { background: meta.bg, color: meta.color }
-                        : { background: 'hsl(210 16% 95%)', color: 'hsl(215 16% 40%)' }}
-                    >
-                      {isDone ? <CheckCircle2 size={11} /> : <Circle size={11} />}
-                      {isDone ? 'Feito' : 'Pendente'}
-                    </motion.button>
-                    {ev._custom && (
-                      <motion.button
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => setCustomRows(r => r.filter((_, i) => i !== cidx))}
-                        className="p-1.5 rounded-lg text-muted-foreground transition-colors"
-                        style={{ ':hover': { color: '#dc2626', background: 'hsl(4 80% 94%)' } }}
-                      >
-                        <Trash2 size={12} />
-                      </motion.button>
-                    )}
-                  </div>
+                  {/* ── Bottom CTA ── */}
+                  <motion.button
+                    whileTap={{ scale: 0.985 }}
+                    onClick={() => handleChipClick(ev._id, ev.etapa, st?.status)}
+                    className="w-full flex items-center justify-between px-4 py-3 text-[12px] font-semibold transition-colors"
+                    style={isDone
+                      ? { background: `${meta.color}18`, color: meta.color, borderTop: `1px solid ${meta.color}25` }
+                      : { background: 'hsl(210 16% 97%)', color: 'hsl(215 16% 42%)', borderTop: '1px solid hsl(214 20% 91%)' }
+                    }
+                  >
+                    <span className="flex items-center gap-2">
+                      {isDone
+                        ? <CheckCircle2 size={13} />
+                        : <Circle size={13} />
+                      }
+                      {isDone ? 'Concluído — toque para desfazer' : 'Marcar como concluído'}
+                    </span>
+                    {!isDone && <ChevronRight size={13} className="opacity-50" />}
+                  </motion.button>
                 </div>
               </div>
             </motion.div>
@@ -258,7 +302,7 @@ export default function CronogramaTimeline({ cultura }) {
                 <Label>Tipo</Label>
                 <Select value={newRow.tipo} onValueChange={v => setNewRow(r => ({ ...r, tipo: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{TIPOS.map(t => <SelectItem key={t} value={t}>{TIPO_META[t].label}</SelectItem>)}</SelectContent>
+                  <SelectContent>{TIPOS.map(t => <SelectItem key={t} value={t}>{TIPO_META[t].emoji} {TIPO_META[t].label}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
