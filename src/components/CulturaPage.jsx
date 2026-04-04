@@ -22,9 +22,9 @@ const INFO_CHIPS = (c) => [
 ];
 
 const slideVariants = {
-  enter: (dir) => ({ opacity: 0, x: dir > 0 ? 24 : -24 }),
-  center: { opacity: 1, x: 0 },
-  exit:  (dir) => ({ opacity: 0, x: dir > 0 ? -24 : 24 }),
+  enter:  { opacity: 0, y: 12 },
+  center: { opacity: 1, y: 0 },
+  exit:   { opacity: 0, y: -6 },
 };
 
 export default function CulturaPage({ cultura }) {
@@ -33,8 +33,6 @@ export default function CulturaPage({ cultura }) {
   const tabIdx = TABS.findIndex(t => t.value === activeTab);
 
   const switchTab = (val) => {
-    const newIdx = TABS.findIndex(t => t.value === val);
-    setDir(newIdx > tabIdx ? 1 : -1);
     setActiveTab(val);
   };
 
@@ -181,16 +179,15 @@ export default function CulturaPage({ cultura }) {
       </div>
 
       {/* ── Content ────────────────────────────────── */}
-      <div className="flex-1 overflow-hidden">
-        <AnimatePresence mode="wait" custom={dir}>
+      <div className="flex-1">
+        <AnimatePresence mode="wait">
           <motion.div
             key={`${cultura.id}-${activeTab}`}
-            custom={dir}
             variants={slideVariants}
             initial="enter"
             animate="center"
             exit="exit"
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           >
             {activeTab === 'visao'      && <VisaoGeral         cultura={cultura} />}
             {activeTab === 'manejo'     && <ManejoAdubacao      cultura={cultura} />}
