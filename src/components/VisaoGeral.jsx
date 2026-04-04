@@ -9,11 +9,36 @@ const infoChips = (cultura) => [
 ];
 
 export default function VisaoGeral({ cultura }) {
-  const area = cultura.canteiro.comprimento * cultura.canteiro.largura;
-  const linhas = Math.floor(cultura.canteiro.largura / cultura.canteiro.espacamentoLinhas);
-  const porLinha = Math.floor(cultura.canteiro.comprimento / cultura.canteiro.espacamentoPlantas);
-  const totalPlantas = linhas * porLinha;
-  const ha = 10000 / area;
+  const isCampo = cultura.tipo === 'campo';
+
+  let gridItems;
+  if (isCampo) {
+    const spacingL = cultura.espacamento.linhas;
+    const spacingP = cultura.espacamento.plantas;
+    const plantasPorHa = spacingL > 0 && spacingP > 0
+      ? Math.floor(10000 / (spacingL * spacingP))
+      : 0;
+    gridItems = [
+      { label: 'Sistema de Cultivo', value: 'Campo — por hectare' },
+      { label: 'Área base', value: `${cultura.area.padrao} ha` },
+      { label: 'Espaçamento padrão', value: cultura.espacamentoPadrao },
+      { label: 'Plantas/ha', value: plantasPorHa.toLocaleString('pt-BR') },
+    ];
+  } else {
+    const area = cultura.canteiro.comprimento * cultura.canteiro.largura;
+    const linhas = Math.floor(cultura.canteiro.largura / cultura.canteiro.espacamentoLinhas);
+    const porLinha = Math.floor(cultura.canteiro.comprimento / cultura.canteiro.espacamentoPlantas);
+    const totalPlantas = linhas * porLinha;
+    const ha = 10000 / area;
+    gridItems = [
+      { label: 'Área', value: `${area} m²` },
+      { label: 'Dimensões', value: `${cultura.canteiro.comprimento}×${cultura.canteiro.largura} m` },
+      { label: 'Número de Plantas', value: totalPlantas.toLocaleString('pt-BR') },
+      { label: 'Equivalente em Hectare', value: `~${ha.toFixed(0)} canteiros/ha` },
+    ];
+  }
+
+  const espacamentoLabel = isCampo ? cultura.espacamentoPadrao : cultura.espacamento;
 
   return (
     <Box sx={{ p: { xs: 2, md: 3 } }}>
@@ -36,19 +61,16 @@ export default function VisaoGeral({ cultura }) {
           />
         ))}
         <Chip label={`Ciclo: ${cultura.ciclo}`} size="small" variant="outlined" />
-        <Chip label={`Espaçamento: ${cultura.espacamento}`} size="small" variant="outlined" />
+        {espacamentoLabel && (
+          <Chip label={`Espaçamento: ${espacamentoLabel}`} size="small" variant="outlined" />
+        )}
       </Box>
 
       <Typography variant="h6" sx={{ mb: 2, fontFamily: 'Fraunces, Georgia, serif' }}>
-        Dados do Canteiro Padrão
+        {isCampo ? 'Dados da Cultura' : 'Dados do Canteiro Padrão'}
       </Typography>
       <Grid container spacing={2}>
-        {[
-          { label: 'Área', value: `${area} m²` },
-          { label: 'Dimensões', value: `${cultura.canteiro.comprimento}×${cultura.canteiro.largura} m` },
-          { label: 'Número de Plantas', value: totalPlantas.toLocaleString('pt-BR') },
-          { label: 'Equivalente em Hectare', value: `~${ha.toFixed(0)} canteiros/ha` },
-        ].map((item) => (
+        {gridItems.map((item) => (
           <Grid item xs={6} md={3} key={item.label}>
             <Box sx={{
               p: 2,

@@ -14,7 +14,11 @@ function MetricaRow({ label, value, destaque }) {
 }
 
 export default function ResultadoPanel({ resultado, cultura }) {
-  const { area, totalPlantas, plantasViaveis, custoTotal, custoPlanta, receita, lucro, margem, pontoEquilibrio, composicaoCustos, formatBRL } = resultado;
+  const {
+    area, areaHa, totalPlantas, plantasPorHa, plantasViaveis,
+    custoTotal, custoPlanta, receita, lucro, margem,
+    pontoEquilibrio, composicaoCustos, formatBRL, isCampo,
+  } = resultado;
   const margemColor = margem >= 50 ? '#1e4d2b' : margem >= 20 ? '#d4a017' : '#c0392b';
 
   const barData = [
@@ -23,15 +27,34 @@ export default function ResultadoPanel({ resultado, cultura }) {
     { name: 'Lucro', valor: parseFloat(lucro.toFixed(2)), fill: '#1e4d2b' },
   ];
 
+  // Build area row
+  const areaLabel = 'Área calculada';
+  const areaValue = isCampo
+    ? `${(areaHa || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1 })} ha`
+    : `${(area || 0).toFixed(1)} m²`;
+
+  // Build total plants row
+  const plantasLabel = 'Total de plantas';
+  const plantasValue = isCampo
+    ? `${(plantasPorHa || 0).toLocaleString('pt-BR')} /ha → ${(totalPlantas || 0).toLocaleString('pt-BR')}`
+    : (totalPlantas || 0).toLocaleString('pt-BR');
+
+  // Build comercializáveis / produção row
+  const isMandioca = isCampo && cultura.id === 'mandioca';
+  const comercLabel = isMandioca ? 'Produção estimada' : 'Plantas comercializáveis';
+  const comercValue = isMandioca
+    ? `${((cultura.venda.producaoKgPorHa || 20000) * (areaHa || 1)).toLocaleString('pt-BR')} kg`
+    : (plantasViaveis || 0).toLocaleString('pt-BR');
+
   return (
     <Box sx={{ p: 2, border: '1px solid #e8e4de', borderRadius: '6px', bgcolor: 'background.paper' }}>
       <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5, fontFamily: 'Fraunces, Georgia, serif', color: 'primary.main' }}>
         Resumo Financeiro
       </Typography>
 
-      <MetricaRow label="Área calculada" value={`${area.toFixed(1)} m²`} />
-      <MetricaRow label="Total de plantas" value={totalPlantas.toLocaleString('pt-BR')} />
-      <MetricaRow label="Plantas comercializáveis" value={plantasViaveis.toLocaleString('pt-BR')} />
+      <MetricaRow label={areaLabel} value={areaValue} />
+      <MetricaRow label={plantasLabel} value={plantasValue} />
+      <MetricaRow label={comercLabel} value={comercValue} />
       <MetricaRow label="Custo total de produção" value={formatBRL(custoTotal)} />
       <MetricaRow label="Custo por planta" value={formatBRL(custoPlanta)} />
       <MetricaRow label="Receita estimada" value={formatBRL(receita)} />
