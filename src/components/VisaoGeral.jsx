@@ -1,94 +1,67 @@
 import React from 'react';
-import { Box, Typography, Grid, Chip, Divider } from '@mui/material';
-
-const infoChips = (cultura) => [
-  { label: `Solo: ${cultura.soloTipo}`, color: '#7b4f12' },
-  { label: `pH: ${cultura.pH}`, color: '#1a6b9a' },
-  { label: `Água: ${cultura.necessidadeHidrica}`, color: '#1e4d2b' },
-  { label: `Clima: ${cultura.clima}`, color: '#b5451b' },
-];
+import { Card } from './ui/card';
 
 export default function VisaoGeral({ cultura }) {
   const isCampo = cultura.tipo === 'campo';
 
   let gridItems;
   if (isCampo) {
-    const spacingL = cultura.espacamento.linhas;
-    const spacingP = cultura.espacamento.plantas;
-    const plantasPorHa = spacingL > 0 && spacingP > 0
-      ? Math.floor(10000 / (spacingL * spacingP))
-      : 0;
+    const plantasPorHa = Math.floor(10000 / (cultura.espacamento.linhas * cultura.espacamento.plantas));
     gridItems = [
-      { label: 'Sistema de Cultivo', value: 'Campo — por hectare' },
-      { label: 'Área base', value: `${cultura.area.padrao} ha` },
-      { label: 'Espaçamento padrão', value: cultura.espacamentoPadrao },
-      { label: 'Plantas/ha', value: plantasPorHa.toLocaleString('pt-BR') },
+      { label: 'Sistema',        value: 'Campo — por hectare' },
+      { label: 'Área base',      value: cultura.areaPadrao },
+      { label: 'Espaçamento',    value: cultura.espacamentoPadrao },
+      { label: 'Plantas/ha',     value: plantasPorHa.toLocaleString('pt-BR') },
     ];
   } else {
     const area = cultura.canteiro.comprimento * cultura.canteiro.largura;
     const linhas = Math.floor(cultura.canteiro.largura / cultura.canteiro.espacamentoLinhas);
     const porLinha = Math.floor(cultura.canteiro.comprimento / cultura.canteiro.espacamentoPlantas);
     const totalPlantas = linhas * porLinha;
-    const ha = 10000 / area;
     gridItems = [
-      { label: 'Área', value: `${area} m²` },
-      { label: 'Dimensões', value: `${cultura.canteiro.comprimento}×${cultura.canteiro.largura} m` },
-      { label: 'Número de Plantas', value: totalPlantas.toLocaleString('pt-BR') },
-      { label: 'Equivalente em Hectare', value: `~${ha.toFixed(0)} canteiros/ha` },
+      { label: 'Área',             value: `${area} m²` },
+      { label: 'Dimensões',        value: `${cultura.canteiro.comprimento}×${cultura.canteiro.largura} m` },
+      { label: 'Plantas/canteiro', value: totalPlantas.toLocaleString('pt-BR') },
+      { label: 'Equiv. em ha',     value: `~${Math.round(10000 / area)} canteiros/ha` },
     ];
   }
 
-  const espacamentoLabel = isCampo ? cultura.espacamentoPadrao : cultura.espacamento;
+  const chips = [
+    { label: `Solo: ${cultura.soloTipo}`,          color: cultura.cor },
+    { label: `pH: ${cultura.pH}`,                  color: '#1a6b9a' },
+    { label: `Água: ${cultura.necessidadeHidrica}`, color: '#1e4d2b' },
+    { label: `Clima: ${cultura.clima}`,             color: '#b5451b' },
+    { label: `Ciclo: ${cultura.ciclo}` },
+  ];
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
-      <Box sx={{ mb: 3, pb: 3, borderBottom: '1px solid #e8e4de' }}>
-        <Typography variant="caption" sx={{ color: 'text.secondary', fontStyle: 'italic', letterSpacing: 0.5 }}>
-          {cultura.nomesCientifico}
-        </Typography>
-        <Typography variant="body1" sx={{ mt: 1.5, color: 'text.secondary', lineHeight: 1.7 }}>
-          {cultura.descricao}
-        </Typography>
-      </Box>
+    <div className="p-6">
+      <div className="pb-5 mb-5 border-b border-borda">
+        <p className="text-xs text-gray-400 italic mb-2">{cultura.nomesCientifico}</p>
+        <p className="text-gray-600 leading-relaxed">{cultura.descricao}</p>
+      </div>
 
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
-        {infoChips(cultura).map((c) => (
-          <Chip
-            key={c.label}
-            label={c.label}
-            size="small"
-            sx={{ backgroundColor: c.color + '18', color: c.color, border: `1px solid ${c.color}40`, fontWeight: 600 }}
-          />
+      <div className="flex flex-wrap gap-2 mb-6">
+        {chips.map(c => (
+          <span key={c.label} className="inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold border"
+            style={ c.color ? { backgroundColor: c.color + '15', color: c.color, borderColor: c.color + '40' }
+              : { backgroundColor: '#f7f5f0', color: '#555', borderColor: '#e8e4de' }}>
+            {c.label}
+          </span>
         ))}
-        <Chip label={`Ciclo: ${cultura.ciclo}`} size="small" variant="outlined" />
-        {espacamentoLabel && (
-          <Chip label={`Espaçamento: ${espacamentoLabel}`} size="small" variant="outlined" />
-        )}
-      </Box>
+      </div>
 
-      <Typography variant="h6" sx={{ mb: 2, fontFamily: 'Fraunces, Georgia, serif' }}>
-        {isCampo ? 'Dados da Cultura' : 'Dados do Canteiro Padrão'}
-      </Typography>
-      <Grid container spacing={2}>
-        {gridItems.map((item) => (
-          <Grid item xs={6} md={3} key={item.label}>
-            <Box sx={{
-              p: 2,
-              border: '1px solid #e8e4de',
-              borderRadius: '6px',
-              bgcolor: 'background.paper',
-              textAlign: 'center',
-            }}>
-              <Typography variant="h5" sx={{ color: cultura.cor, fontFamily: 'Fraunces, Georgia, serif', fontWeight: 700 }}>
-                {item.value}
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                {item.label}
-              </Typography>
-            </Box>
-          </Grid>
+      <h2 className="font-display font-semibold text-lg text-gray-800 mb-3">
+        {isCampo ? 'Dados de Referência por Hectare' : 'Dados do Canteiro Padrão'}
+      </h2>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {gridItems.map(item => (
+          <Card key={item.label} className="p-4 text-center">
+            <div className="text-xl font-display font-bold mb-1" style={{ color: cultura.cor }}>{item.value}</div>
+            <div className="text-xs text-gray-400">{item.label}</div>
+          </Card>
         ))}
-      </Grid>
-    </Box>
+      </div>
+    </div>
   );
 }

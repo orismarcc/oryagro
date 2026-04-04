@@ -1,11 +1,12 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import {
-  Box, Grid, Typography, TextField, InputAdornment, Button, Divider,
-} from '@mui/material';
-import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Button } from './ui/button';
+import { Separator } from './ui/separator';
 import InsumoField from './InsumoField';
 import ResultadoPanel from './ResultadoPanel';
 import { useSimulador, calcularPlantas } from '../hooks/useSimulador';
+import { RotateCcw } from 'lucide-react';
 
 const loadFromStorage = (key, def) => {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; }
@@ -18,26 +19,11 @@ export default function SimuladorFinanceiro({ cultura }) {
   const isCampo = cultura.tipo === 'campo';
 
   const getDefaults = useCallback(() => {
-    if (isCampo) {
-      return {
-        areaHa: cultura.area.padrao,
-        espacamentoLinhas: cultura.espacamento.linhas,
-        espacamentoPlantas: cultura.espacamento.plantas,
-        calcareo: ins.calcareo.padrao,
-        esterco: ins.esterco.padrao,
-        npk: ins.npk.padrao,
-        ureia: ins.ureia.padrao,
-        nitratoCalcio: ins.nitratoCalcio.padrao,
-        modObra: ins.modObra.padrao,
-        precoVenda: cultura.venda.precoUnitario,
-        sobrevivencia: cultura.venda.sobrevivencia,
-      };
-    }
+    const base = isCampo
+      ? { areaHa: cultura.area.padrao, espacamentoLinhas: cultura.espacamento.linhas, espacamentoPlantas: cultura.espacamento.plantas }
+      : { comprimento: cultura.canteiro.comprimento, largura: cultura.canteiro.largura, espacamentoLinhas: cultura.canteiro.espacamentoLinhas, espacamentoPlantas: cultura.canteiro.espacamentoPlantas };
     return {
-      comprimento: cultura.canteiro.comprimento,
-      largura: cultura.canteiro.largura,
-      espacamentoLinhas: cultura.canteiro.espacamentoLinhas,
-      espacamentoPlantas: cultura.canteiro.espacamentoPlantas,
+      ...base,
       calcareo: ins.calcareo.padrao,
       esterco: ins.esterco.padrao,
       npk: ins.npk.padrao,
@@ -50,6 +36,40 @@ export default function SimuladorFinanceiro({ cultura }) {
   }, [cultura, isCampo, ins]);
 
   const [valores, setValores] = useState(() => loadFromStorage(storageKey, getDefaults()));
+
+  // Track previous area to detect changes
+  const prevAreaRef = useRef(null);
+
+  // Auto-calculate insumos when area/dimensions change
+  useEffect(() => {
+    let currentArea;
+    if (isCampo) {
+      currentArea = parseFloat(valores.areaHa) || cultura.area.padrao;
+    } else {
+      const comp = parseFloat(valores.comprimento) || cultura.canteiro.comprimento;
+      const larg = parseFloat(valores.largura) || cultura.canteiro.largura;
+      currentArea = comp * larg;
+    }
+
+    if (prevAreaRef.current !== null && prevAreaRef.current !== currentArea) {
+      const baseArea = isCampo ? cultura.area.padrao : (cultura.canteiro.comprimento * cultura.canteiro.largura);
+      const fator = currentArea / baseArea;
+
+      setValores(v => ({
+        ...v,
+        calcareo:      parseFloat((ins.calcareo.padrao  * fator).toFixed(3)),
+        esterco:       parseFloat((ins.esterco.padrao   * fator).toFixed(1)),
+        npk:           parseFloat((ins.npk.padrao       * fator).toFixed(3)),
+        ureia:         parseFloat((ins.ureia.padrao     * fator).toFixed(isCampo ? 1 : 0)),
+        nitratoCalcio: parseFloat((ins.nitratoCalcio.padrao * fator).toFixed(isCampo ? 1 : 0)),
+      }));
+    }
+
+    prevAreaRef.current = currentArea;
+  }, [
+    isCampo ? valores.areaHa : valores.comprimento,
+    isCampo ? valores.espacamentoLinhas : valores.largura,
+  ]);
 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(valores));
@@ -64,99 +84,130 @@ export default function SimuladorFinanceiro({ cultura }) {
     setValores(prev => ({ ...prev, [campo]: raw === '' ? '' : parseFloat(raw) || 0 }));
   };
 
-  const resetAll = () => setValores(getDefaults());
+  const resetAll = () => {
+    prevAreaRef.current = null;
+    setValores(getDefaults());
+  };
+
   const resultado = useSimulador(cultura, valores);
   const dim = calcularPlantas(cultura, valores);
 
+  const currentArea = isCampo
+    ? parseFloat(valores.areaHa) || cultura.area.padrao
+    : (parseFloat(valores.comprimento) || cultura.canteiro.comprimento) * (parseFloat(valores.largura) || cultura.canteiro.largura);
+  const baseArea = isCampo
+    ? cultura.area.padrao
+    : cultura.canteiro.comprimento * cultura.canteiro.largura;
+
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1 }}>
-        <Box>
-          <Typography variant="h6" sx={{ fontFamily: 'Fraunces, Georgia, serif' }}>
-            Simulador Financeiro
-          </Typography>
-          {isCampo && (
-            <Typography variant="caption" sx={{ color: '#b5451b', fontWeight: 700 }}>
-              Cálculo por hectare
-            </Typography>
-          )}
-        </Box>
-        <Button startIcon={<RestartAltIcon />} onClick={resetAll} size="small" variant="outlined" color="secondary">
+    <div className="p-6">
+      <div className="flex items-start justify-between mb-5 flex-wrap gap-2">
+        <div>
+          <h2 className="text-lg font-display font-semibold text-gray-900">Simulador Financeiro</h2>
+          {isCampo && <p className="text-xs text-ambar-600 font-bold">Cálculo por hectare</p>}
+        </div>
+        <Button variant="amber" size="sm" onClick={resetAll}>
+          <RotateCcw size={13} />
           Restaurar padrões
         </Button>
-      </Box>
+      </div>
 
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={7}>
-
-          {/* DIMENSÕES */}
-          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5, color: 'primary.main', textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.72rem' }}>
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_340px] gap-6">
+        <div>
+          {/* DIMENSIONS */}
+          <p className="text-[11px] font-bold text-verde-800 uppercase tracking-widest mb-3">
             {isCampo ? 'Área e Espaçamento' : 'Dimensões do Canteiro'}
-          </Typography>
+          </p>
 
-          {isCampo ? (
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 1 }}>
-              <TextField label="Área" type="number" value={valores.areaHa ?? ''} size="small" sx={{ width: 140 }}
-                onChange={handleNum('areaHa')}
-                InputProps={{ endAdornment: <InputAdornment position="end">ha</InputAdornment> }} />
-              <TextField label="Espaç. entre linhas" type="number" value={valores.espacamentoLinhas ?? ''} size="small" sx={{ width: 185 }}
-                onChange={handleNum('espacamentoLinhas')}
-                InputProps={{ endAdornment: <InputAdornment position="end">m</InputAdornment> }} />
-              <TextField label="Espaç. entre plantas" type="number" value={valores.espacamentoPlantas ?? ''} size="small" sx={{ width: 185 }}
-                onChange={handleNum('espacamentoPlantas')}
-                InputProps={{ endAdornment: <InputAdornment position="end">m</InputAdornment> }} />
-            </Box>
-          ) : (
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 1 }}>
-              <TextField label="Comprimento" type="number" value={valores.comprimento ?? ''} size="small" sx={{ width: 145 }}
-                onChange={handleNum('comprimento')}
-                InputProps={{ endAdornment: <InputAdornment position="end">m</InputAdornment> }} />
-              <TextField label="Largura" type="number" value={valores.largura ?? ''} size="small" sx={{ width: 130 }}
-                onChange={handleNum('largura')}
-                InputProps={{ endAdornment: <InputAdornment position="end">m</InputAdornment> }} />
-              <TextField label="Espaç. linhas" type="number" value={valores.espacamentoLinhas ?? ''} size="small" sx={{ width: 150 }}
-                onChange={handleNum('espacamentoLinhas')}
-                InputProps={{ endAdornment: <InputAdornment position="end">m</InputAdornment> }} />
-              <TextField label="Espaç. plantas" type="number" value={valores.espacamentoPlantas ?? ''} size="small" sx={{ width: 150 }}
-                onChange={handleNum('espacamentoPlantas')}
-                InputProps={{ endAdornment: <InputAdornment position="end">m</InputAdornment> }} />
-            </Box>
-          )}
-
-          {/* PLANTAS CALCULADAS — live */}
-          <Box sx={{ p: 1.5, bgcolor: '#f7f5f0', border: '1px solid #e8e4de', borderRadius: '6px', mb: 2.5 }}>
+          <div className="flex flex-wrap gap-3 mb-2">
             {isCampo ? (
               <>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {(dim.areaHa || 0).toLocaleString('pt-BR')} ha · espaçamento {(parseFloat(valores.espacamentoLinhas) || cultura.espacamento.linhas).toFixed(2)} × {(parseFloat(valores.espacamentoPlantas) || cultura.espacamento.plantas).toFixed(2)} m
-                </Typography>
-                <Typography variant="body2" fontWeight={700}>
-                  {(dim.plantasPorHa || 0).toLocaleString('pt-BR')} plantas/ha →{' '}
-                  <span style={{ color: '#1e4d2b' }}>{(dim.totalPlantas || 0).toLocaleString('pt-BR')} plantas no total</span>
-                </Typography>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="areaHa">Área (ha)</Label>
+                  <div className="relative w-32">
+                    <Input id="areaHa" type="number" value={valores.areaHa ?? ''} onChange={handleNum('areaHa')} className="pr-8" />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">ha</span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="espL">Espaç. linhas</Label>
+                  <div className="relative w-36">
+                    <Input id="espL" type="number" value={valores.espacamentoLinhas ?? ''} onChange={handleNum('espacamentoLinhas')} className="pr-7" />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">m</span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="espP">Espaç. plantas</Label>
+                  <div className="relative w-36">
+                    <Input id="espP" type="number" value={valores.espacamentoPlantas ?? ''} onChange={handleNum('espacamentoPlantas')} className="pr-7" />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">m</span>
+                  </div>
+                </div>
               </>
             ) : (
               <>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {dim.comp || 0} × {dim.larg || 0} m = {(dim.area || 0).toFixed(1)} m² · espaçamento {(dim.spacingL || 0).toFixed(2)} × {(dim.spacingP || 0).toFixed(2)} m
-                </Typography>
-                <Typography variant="body2" fontWeight={700}>
-                  {dim.linhas || 0} fileiras × {dim.porLinha || 0} plantas ={' '}
-                  <span style={{ color: '#1e4d2b' }}>{(dim.totalPlantas || 0).toLocaleString('pt-BR')} plantas/canteiro</span>
-                </Typography>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="comp">Comprimento</Label>
+                  <div className="relative w-32">
+                    <Input id="comp" type="number" value={valores.comprimento ?? ''} onChange={handleNum('comprimento')} className="pr-7" />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">m</span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="larg">Largura</Label>
+                  <div className="relative w-28">
+                    <Input id="larg" type="number" value={valores.largura ?? ''} onChange={handleNum('largura')} className="pr-7" />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">m</span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="espL2">Espaç. linhas</Label>
+                  <div className="relative w-32">
+                    <Input id="espL2" type="number" value={valores.espacamentoLinhas ?? ''} onChange={handleNum('espacamentoLinhas')} className="pr-7" />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">m</span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="espP2">Espaç. plantas</Label>
+                  <div className="relative w-32">
+                    <Input id="espP2" type="number" value={valores.espacamentoPlantas ?? ''} onChange={handleNum('espacamentoPlantas')} className="pr-7" />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">m</span>
+                  </div>
+                </div>
               </>
             )}
-          </Box>
+          </div>
+
+          {/* Live plant calc */}
+          <div className="bg-papel border border-borda rounded px-4 py-2.5 mb-5 text-sm">
+            {isCampo ? (
+              <>
+                <span className="text-gray-400 text-xs">{(dim.areaHa || 0)} ha · {(parseFloat(valores.espacamentoLinhas) || cultura.espacamento.linhas).toFixed(2)} × {(parseFloat(valores.espacamentoPlantas) || cultura.espacamento.plantas).toFixed(2)} m</span>
+                <div className="font-semibold mt-0.5">
+                  {(dim.plantasPorHa || 0).toLocaleString('pt-BR')} plantas/ha →{' '}
+                  <span className="text-verde-800">{(dim.totalPlantas || 0).toLocaleString('pt-BR')} plantas no total</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="text-gray-400 text-xs">{dim.comp || 0} × {dim.larg || 0} m = {(dim.area || 0).toFixed(1)} m² · espaçamento {(dim.spacingL || 0).toFixed(2)} × {(dim.spacingP || 0).toFixed(2)} m</span>
+                <div className="font-semibold mt-0.5">
+                  {dim.linhas || 0} fileiras × {dim.porLinha || 0} plantas ={' '}
+                  <span className="text-verde-800">{(dim.totalPlantas || 0).toLocaleString('pt-BR')} plantas/canteiro</span>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* INSUMOS */}
-          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5, color: 'primary.main', textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.72rem' }}>
-            Insumos {isCampo ? '(valores por ha)' : '(por canteiro)'}
-          </Typography>
+          <p className="text-[11px] font-bold text-verde-800 uppercase tracking-widest mb-3">
+            Insumos {isCampo ? '(por hectare — recalcula automaticamente com a área)' : '(recalcula automaticamente com as dimensões)'}
+          </p>
 
           <InsumoField label={`Calcário (${ins.calcareo.unidade})`} campo="calcareo" culturaId={cultura.id}
             valor={valores.calcareo} valorPadrao={ins.calcareo.padrao} params={ins.calcareo}
             unidade={ins.calcareo.unidade} onChange={handleChange} />
-          <InsumoField label={`Esterco (${ins.esterco.unidade})`} campo="esterco" culturaId={cultura.id}
+          <InsumoField label={`Esterco bovino (${ins.esterco.unidade})`} campo="esterco" culturaId={cultura.id}
             valor={valores.esterco} valorPadrao={ins.esterco.padrao} params={ins.esterco}
             unidade={ins.esterco.unidade} onChange={handleChange} />
           <InsumoField label={`NPK ${ins.npk.formula} (${ins.npk.unidade})`} campo="npk" culturaId={cultura.id}
@@ -169,29 +220,39 @@ export default function SimuladorFinanceiro({ cultura }) {
             valor={valores.nitratoCalcio} valorPadrao={ins.nitratoCalcio.padrao} params={ins.nitratoCalcio}
             unidade={ins.nitratoCalcio.unidade} onChange={handleChange} />
 
-          <Divider sx={{ my: 2 }} />
-          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5, color: 'primary.main', textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.72rem' }}>
-            Venda e Mão de Obra
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <TextField label={`Preço / ${cultura.venda.unidade}`} type="number" value={valores.precoVenda ?? ''} size="small" sx={{ width: 175 }}
-              onChange={handleNum('precoVenda')}
-              InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }} />
-            <TextField label="Sobrevivência" type="number" value={valores.sobrevivencia ?? ''} size="small" sx={{ width: 145 }}
-              onChange={handleNum('sobrevivencia')}
-              InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }} />
-            <TextField label={`Mão de obra${isCampo ? ' / ha' : ' / ciclo'}`} type="number" value={valores.modObra ?? ''} size="small" sx={{ width: 190 }}
-              onChange={handleNum('modObra')}
-              InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }} />
-          </Box>
-        </Grid>
+          <Separator className="my-4" />
+          <p className="text-[11px] font-bold text-verde-800 uppercase tracking-widest mb-3">Venda e Mão de Obra</p>
 
-        <Grid item xs={12} md={5}>
-          <Box sx={{ position: { md: 'sticky' }, top: { md: 24 } }}>
-            <ResultadoPanel resultado={resultado} cultura={cultura} />
-          </Box>
-        </Grid>
-      </Grid>
-    </Box>
+          <div className="flex flex-wrap gap-3">
+            <div className="flex flex-col gap-1">
+              <Label>Preço / {cultura.venda.unidade}</Label>
+              <div className="relative w-36">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">R$</span>
+                <Input type="number" value={valores.precoVenda ?? ''} onChange={handleNum('precoVenda')} className="pl-8" />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label>Sobrevivência</Label>
+              <div className="relative w-32">
+                <Input type="number" value={valores.sobrevivencia ?? ''} onChange={handleNum('sobrevivencia')} className="pr-7" />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label>Mão de obra{isCampo ? ' / ha' : ' / ciclo'}</Label>
+              <div className="relative w-36">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">R$</span>
+                <Input type="number" value={valores.modObra ?? ''} onChange={handleNum('modObra')} className="pl-8" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* RESULTADO PANEL */}
+        <div className="md:sticky md:top-6 self-start">
+          <ResultadoPanel resultado={resultado} cultura={cultura} />
+        </div>
+      </div>
+    </div>
   );
 }
