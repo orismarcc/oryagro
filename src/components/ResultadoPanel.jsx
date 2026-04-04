@@ -1,79 +1,148 @@
 import React from 'react';
-import { Card } from './ui/card';
 import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-
-function MetricRow({ label, value, highlight }) {
-  return (
-    <div className="flex justify-between py-2 border-b border-borda/60 last:border-0">
-      <span className="text-sm text-gray-500">{label}</span>
-      <span className={`text-sm font-semibold ${highlight ? 'text-verde-800' : 'text-gray-800'}`}>{value}</span>
-    </div>
-  );
-}
+import { TrendingUp, TrendingDown, DollarSign, Package, Scale } from 'lucide-react';
 
 export default function ResultadoPanel({ resultado, cultura }) {
-  const { totalPlantas, plantasViaveis, custoTotal, custoPlanta, receita, lucro, margem, pontoEquilibrio, composicaoCustos, formatBRL, isCampo } = resultado;
+  const {
+    totalPlantas, plantasViaveis, custoTotal, custoPlanta,
+    receita, lucro, margem, pontoEquilibrio, composicaoCustos, formatBRL, isCampo,
+  } = resultado;
+
+  const isProfit = lucro >= 0;
   const margemColor = margem >= 50 ? '#1e4d2b' : margem >= 20 ? '#d4a017' : '#c0392b';
 
-  const barData = [
-    { name: 'Custo', valor: +custoTotal.toFixed(2), fill: '#b5451b' },
-    { name: 'Receita', valor: +receita.toFixed(2), fill: '#52b788' },
-    { name: 'Lucro', valor: +Math.max(0, lucro).toFixed(2), fill: '#1e4d2b' },
-  ];
-
-  const plantasLabel = isCampo
-    ? (cultura.id === 'mandioca' ? 'Produção estimada (kg)' : 'Plantas viáveis')
-    : 'Plantas comercializáveis';
-  const plantasValue = isCampo && cultura.id === 'mandioca'
-    ? ((cultura.venda.producaoKgPorHa || 20000) * (resultado.areaHa || 1)).toLocaleString('pt-BR') + ' kg'
+  const plantasLabel = isCampo && cultura.venda.producaoKgPorHa
+    ? 'Produção estimada'
+    : isCampo ? 'Plantas viáveis' : 'Comercializáveis';
+  const plantasValue = isCampo && cultura.venda.producaoKgPorHa
+    ? `${(cultura.venda.producaoKgPorHa * (resultado.areaHa || 1)).toLocaleString('pt-BR')} kg`
     : plantasViaveis.toLocaleString('pt-BR');
 
+  const barData = [
+    { name: 'Custo',   valor: +custoTotal.toFixed(2), fill: '#b5451b' },
+    { name: 'Receita', valor: +receita.toFixed(2),    fill: '#2d6a4f' },
+    { name: 'Lucro',   valor: +Math.max(0, lucro).toFixed(2), fill: '#52b788' },
+  ];
+
   return (
-    <Card className="p-4">
-      <h3 className="font-display font-semibold text-verde-800 text-base mb-3">Resumo Financeiro</h3>
+    <div className="flex flex-col gap-3">
 
-      <MetricRow label={isCampo ? 'Área' : 'Área calculada'} value={isCampo ? `${(resultado.areaHa || 1).toLocaleString('pt-BR')} ha` : `${(resultado.area || 0).toFixed(1)} m²`} />
-      <MetricRow label={isCampo ? 'Plantas/ha → total' : 'Total de plantas'} value={isCampo ? `${(resultado.plantasPorHa || 0).toLocaleString('pt-BR')} → ${totalPlantas.toLocaleString('pt-BR')}` : totalPlantas.toLocaleString('pt-BR')} />
-      <MetricRow label={plantasLabel} value={plantasValue} />
-      <MetricRow label="Custo total de produção" value={formatBRL(custoTotal)} />
-      <MetricRow label="Custo por planta/unid." value={formatBRL(custoPlanta)} />
-      <MetricRow label="Receita estimada" value={formatBRL(receita)} />
-      <MetricRow label="Lucro estimado" value={formatBRL(lucro)} highlight />
-      <MetricRow label="Ponto de equilíbrio" value={`${pontoEquilibrio} unidades`} />
-
-      {/* Margem */}
-      <div className="mt-3">
-        <div className="flex justify-between mb-1">
-          <span className="text-xs text-gray-500">Margem bruta</span>
-          <span className="text-xs font-bold" style={{ color: margemColor }}>{margem.toFixed(1)}%</span>
+      {/* ── Lucro card (hero) ── */}
+      <div
+        className="rounded-xl p-5 border anim-scale-in"
+        style={{
+          background: isProfit
+            ? 'linear-gradient(135deg, #1e4d2b14, #52b78808)'
+            : 'linear-gradient(135deg, #c0392b14, #e07b5608)',
+          borderColor: isProfit ? '#52b78830' : '#c0392b30',
+        }}
+      >
+        <div className="flex items-start justify-between mb-1">
+          <span className="text-[10px] font-bold uppercase tracking-[2px] text-gray-400">
+            {isProfit ? 'Lucro estimado' : 'Prejuízo estimado'}
+          </span>
+          {isProfit
+            ? <TrendingUp size={16} color="#52b788" />
+            : <TrendingDown size={16} color="#c0392b" />
+          }
         </div>
-        <div className="w-full h-2 bg-papel-dark rounded-full overflow-hidden">
-          <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, Math.max(0, margem))}%`, backgroundColor: margemColor }} />
+        <div
+          className="num-highlight text-3xl anim-count-up"
+          style={{ color: isProfit ? '#1e4d2b' : '#c0392b' }}
+        >
+          {formatBRL(lucro)}
+        </div>
+        <div className="text-[11px] text-gray-400 mt-1">
+          Margem bruta: <strong style={{ color: margemColor }}>{margem.toFixed(1)}%</strong>
+        </div>
+
+        {/* Margin bar */}
+        <div className="mt-2.5 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className="metric-bar-fill"
+            style={{
+              '--bar-w': `${Math.min(100, Math.max(0, margem))}%`,
+              width: `${Math.min(100, Math.max(0, margem))}%`,
+              background: margemColor,
+            }}
+          />
         </div>
       </div>
 
-      {/* Charts */}
-      <div className="mt-4 border-t border-borda pt-3">
-        <p className="text-xs text-gray-400 font-semibold mb-2">Composição dos custos</p>
-        <ResponsiveContainer width="100%" height={150}>
-          <PieChart>
-            <Pie data={composicaoCustos} cx="50%" cy="50%" innerRadius={38} outerRadius={65} dataKey="value" paddingAngle={2}>
-              {composicaoCustos.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-            </Pie>
-            <Tooltip formatter={(v) => formatBRL(v)} />
-          </PieChart>
-        </ResponsiveContainer>
-        <ResponsiveContainer width="100%" height={100}>
-          <BarChart data={barData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+      {/* ── Key metrics ── */}
+      <div className="bg-white border border-borda rounded-xl overflow-hidden anim-fade-up delay-50">
+        <div className="px-4 py-2.5 border-b border-borda bg-gray-50/50">
+          <span className="text-[10px] font-bold uppercase tracking-[2px] text-gray-400">Resumo</span>
+        </div>
+        <div className="divide-y divide-borda/60">
+          {[
+            { label: isCampo ? 'Área' : 'Área/canteiro', value: isCampo ? `${(resultado.areaHa||1).toLocaleString('pt-BR')} ha` : `${(resultado.area||0).toFixed(1)} m²` },
+            { label: isCampo ? 'Plantas/ha → total' : 'Total de plantas', value: isCampo ? `${(resultado.plantasPorHa||0).toLocaleString('pt-BR')} → ${totalPlantas.toLocaleString('pt-BR')}` : totalPlantas.toLocaleString('pt-BR') },
+            { label: plantasLabel, value: plantasValue },
+            { label: 'Custo total', value: formatBRL(custoTotal) },
+            { label: 'Custo/planta', value: formatBRL(custoPlanta) },
+            { label: 'Receita estimada', value: formatBRL(receita), highlight: true },
+            { label: 'Ponto de equilíbrio', value: `${pontoEquilibrio} un.` },
+          ].map(({ label, value, highlight }) => (
+            <div key={label} className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-[12px] text-gray-500">{label}</span>
+              <span className={`text-[12px] font-semibold ${highlight ? 'text-verde-700' : 'text-gray-800'}`}>
+                {value}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Charts ── */}
+      {composicaoCustos.length > 0 && (
+        <div className="bg-white border border-borda rounded-xl p-4 anim-fade-up delay-100">
+          <div className="text-[10px] font-bold uppercase tracking-[2px] text-gray-400 mb-3">
+            Composição dos Custos
+          </div>
+          <ResponsiveContainer width="100%" height={130}>
+            <PieChart>
+              <Pie data={composicaoCustos} cx="50%" cy="50%" innerRadius={32} outerRadius={58} dataKey="value" paddingAngle={2}>
+                {composicaoCustos.map((e, i) => <Cell key={i} fill={e.fill} />)}
+              </Pie>
+              <Tooltip
+                formatter={(v) => formatBRL(v)}
+                contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e8e4de' }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+
+          {/* Legend */}
+          <div className="flex flex-wrap gap-x-3 gap-y-1 justify-center mt-1">
+            {composicaoCustos.map(e => (
+              <div key={e.name} className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full" style={{ background: e.fill }} />
+                <span className="text-[10px] text-gray-500">{e.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Bar comparison ── */}
+      <div className="bg-white border border-borda rounded-xl p-4 anim-fade-up delay-150">
+        <div className="text-[10px] font-bold uppercase tracking-[2px] text-gray-400 mb-2">
+          Custo × Receita × Lucro
+        </div>
+        <ResponsiveContainer width="100%" height={90}>
+          <BarChart data={barData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+            <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#999' }} axisLine={false} tickLine={false} />
             <YAxis hide />
-            <Bar dataKey="valor" radius={[3, 3, 0, 0]}>
+            <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
               {barData.map((e, i) => <Cell key={i} fill={e.fill} />)}
             </Bar>
-            <Tooltip formatter={(v) => formatBRL(v)} />
+            <Tooltip
+              formatter={(v) => formatBRL(v)}
+              contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e8e4de' }}
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </Card>
+    </div>
   );
 }

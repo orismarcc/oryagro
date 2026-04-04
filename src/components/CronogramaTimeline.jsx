@@ -3,21 +3,18 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
-import { Badge } from './ui/badge';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
-import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
-import { Plus, Printer, Trash2 } from 'lucide-react';
+import { Plus, Printer, Trash2, CheckCircle2, Clock3, ChevronRight } from 'lucide-react';
 
-const TIPO_COR = {
-  plantio:  '#1e4d2b',
-  adubo:    '#d4a017',
-  foliar:   '#1a6b9a',
-  colheita: '#b5451b',
-  manejo:   '#52b788',
-  especial: '#7b1fa2',
+const TIPO_META = {
+  plantio:  { color: '#2d6a4f', bg: '#2d6a4f14', label: 'Plantio' },
+  adubo:    { color: '#d4a017', bg: '#d4a01714', label: 'Adubação' },
+  foliar:   { color: '#1a6b9a', bg: '#1a6b9a14', label: 'Foliar' },
+  colheita: { color: '#b5451b', bg: '#b5451b14', label: 'Colheita' },
+  manejo:   { color: '#52b788', bg: '#52b78814', label: 'Manejo' },
+  especial: { color: '#7b1fa2', bg: '#7b1fa214', label: 'Especial' },
 };
-
-const TIPOS = ['plantio', 'adubo', 'foliar', 'colheita', 'manejo', 'especial'];
+const TIPOS = Object.keys(TIPO_META);
 
 const todayISO = () => new Date().toISOString().split('T')[0];
 const formatDate = (iso) => {
@@ -38,27 +35,25 @@ export default function CronogramaTimeline({ cultura }) {
   });
 
   const [confirmDialog, setConfirmDialog] = useState({ open: false, idx: null, etapa: '' });
-  const [undoDialog, setUndoDialog]       = useState({ open: false, idx: null, etapa: '' });
-  const [addDialog, setAddDialog]         = useState(false);
-  const [confirmDate, setConfirmDate]     = useState(todayISO());
-  const [confirmObs, setConfirmObs]       = useState('');
-  const [newRow, setNewRow]               = useState({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo' });
-  const [popEvento, setPopEvento]         = useState(null);
-  const [popOpen, setPopOpen]             = useState(false);
-  const [popAnchor, setPopAnchor]         = useState(null);
+  const [undoDialog,    setUndoDialog]    = useState({ open: false, idx: null, etapa: '' });
+  const [addDialog,     setAddDialog]     = useState(false);
+  const [confirmDate,   setConfirmDate]   = useState(todayISO());
+  const [confirmObs,    setConfirmObs]    = useState('');
+  const [newRow, setNewRow] = useState({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo' });
 
   useEffect(() => { localStorage.setItem(statusKey, JSON.stringify(status)); }, [statusKey, status]);
   useEffect(() => { localStorage.setItem(customKey, JSON.stringify(customRows)); }, [customKey, customRows]);
 
   const allEvents = [
     ...cultura.cronograma.map((e, i) => ({ ...e, _id: `default_${i}`, _custom: false })),
-    ...customRows.map((e, i) => ({ ...e, _id: `custom_${i}`, _custom: true })),
+    ...customRows.map((e, i)         => ({ ...e, _id: `custom_${i}`,  _custom: true  })),
   ].sort((a, b) => a.dia - b.dia);
 
-  const maxDia = allEvents.length > 0 ? Math.max(...allEvents.map(e => e.dia)) : 1;
+  const feitos = allEvents.filter(e => status[e._id]?.status === 'feito').length;
+  const progress = allEvents.length > 0 ? Math.round((feitos / allEvents.length) * 100) : 0;
 
-  const handleChipClick = (id, etapa, currentStatus) => {
-    if (currentStatus === 'feito') {
+  const handleChipClick = (id, etapa, st) => {
+    if (st === 'feito') {
       setUndoDialog({ open: true, idx: id, etapa });
     } else {
       setConfirmDate(todayISO());
@@ -84,146 +79,172 @@ export default function CronogramaTimeline({ cultura }) {
     setAddDialog(false);
   };
 
-  const handleDeleteCustom = (customIdx) => {
-    setCustomRows(r => r.filter((_, i) => i !== customIdx));
-  };
-
   return (
-    <div className="p-4 md:p-6">
-      {/* Header */}
-      <div className="flex justify-between mb-5 flex-wrap gap-2">
-        <h2 className="font-display font-semibold text-lg text-gray-900">
-          Cronograma — {cultura.nome}
-        </h2>
+    <div className="p-6 md:p-8 max-w-4xl">
+
+      {/* ── Header ── */}
+      <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
+        <div>
+          <h2 className="font-display font-bold text-xl text-gray-900 leading-tight">
+            Cronograma de Atividades
+          </h2>
+          <p className="text-sm text-gray-400 mt-0.5">
+            {feitos} de {allEvents.length} etapas concluídas
+          </p>
+        </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setAddDialog(true)}>
-            <Plus size={14} />
-            Adicionar etapa
+            <Plus size={13} /> Adicionar etapa
           </Button>
           <Button variant="outline" size="sm" onClick={() => window.print()}>
-            <Printer size={14} />
-            Exportar PDF
+            <Printer size={13} /> Imprimir
           </Button>
         </div>
       </div>
 
-      {/* Timeline horizontal — hidden on mobile */}
-      <div className="hidden md:block relative mx-4 mb-8">
-        <div className="relative h-1 bg-borda rounded-full mt-8">
-          {allEvents.map((ev) => {
-            const pct = maxDia > 0 ? (ev.dia / maxDia) * 100 : 0;
+      {/* ── Progress bar ── */}
+      <div className="mb-7">
+        <div className="flex justify-between mb-1.5">
+          <span className="text-[11px] text-gray-400 font-medium">Progresso do ciclo</span>
+          <span className="text-[11px] font-bold" style={{ color: cultura.cor }}>{progress}%</span>
+        </div>
+        <div className="h-2 bg-borda rounded-full overflow-hidden">
+          <div
+            className="metric-bar-fill"
+            style={{
+              '--bar-w': `${progress}%`,
+              width: `${progress}%`,
+              background: `linear-gradient(90deg, ${cultura.cor}aa, ${cultura.cor})`,
+            }}
+          />
+        </div>
+      </div>
+
+      {/* ── Vertical Timeline ── */}
+      <div className="relative">
+        {/* Vertical line */}
+        <div
+          className="absolute left-[30px] top-4 bottom-4 w-px"
+          style={{ background: `linear-gradient(to bottom, ${cultura.cor}40, ${cultura.cor}10)` }}
+        />
+
+        <div className="space-y-3">
+          {allEvents.map((ev, rowIdx) => {
             const st = status[ev._id];
+            const isDone = st?.status === 'feito';
+            const meta = TIPO_META[ev.tipo] || TIPO_META.manejo;
+            const customIdx = ev._custom
+              ? customRows.findIndex((_, i) => `custom_${i}` === ev._id)
+              : -1;
+
             return (
               <div
                 key={ev._id}
-                className="absolute"
-                style={{ left: `${pct}%`, transform: 'translateX(-50%)', top: '-5px' }}
+                className={`relative pl-[60px] anim-fade-up`}
+                style={{ animationDelay: `${rowIdx * 30}ms` }}
               >
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button
-                      className="w-3 h-3 rounded-full border-2 border-white cursor-pointer transition-transform hover:scale-150 focus:outline-none"
-                      style={{
-                        backgroundColor: st ? '#2d6a4f' : (TIPO_COR[ev.tipo] || '#999'),
-                        boxShadow: `0 0 0 2px ${st ? '#2d6a4f' : (TIPO_COR[ev.tipo] || '#999')}`,
-                      }}
-                    />
-                  </PopoverTrigger>
-                  <PopoverContent className="w-64 p-3">
-                    <p className="font-bold text-sm mb-1">{ev.etapa}</p>
-                    <p className="text-xs text-gray-500">Produto: {ev.produto}</p>
-                    <p className="text-xs text-gray-500">Dose: {ev.dose}</p>
-                    <p className="text-xs text-gray-500 mt-1">{ev.forma}</p>
-                  </PopoverContent>
-                </Popover>
-                <span
-                  className="absolute whitespace-nowrap text-[0.62rem] text-gray-500"
-                  style={{ top: '16px', left: '50%', transform: 'translateX(-50%)' }}
+                {/* Dot on timeline */}
+                <div
+                  className="absolute left-[22px] top-4 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center z-10 transition-all duration-300"
+                  style={{
+                    background: isDone ? '#1e4d2b' : meta.color,
+                    boxShadow: `0 0 0 3px ${isDone ? '#1e4d2b20' : meta.color + '20'}`,
+                  }}
+                >
+                  {isDone && <CheckCircle2 size={8} color="white" />}
+                </div>
+
+                {/* Day label */}
+                <div
+                  className="absolute left-0 top-4 -translate-y-[3px] text-[9px] font-bold text-gray-300 w-[18px] text-right"
+                  style={{ fontSize: 9 }}
                 >
                   D{ev.dia}
-                </span>
+                </div>
+
+                {/* Card */}
+                <div
+                  className={`rounded-xl border transition-all duration-200 ${isDone ? 'opacity-70' : ''}`}
+                  style={{
+                    borderColor: isDone ? '#e8e4de' : `${meta.color}30`,
+                    background: isDone ? '#fafaf8' : 'white',
+                  }}
+                >
+                  <div className="flex items-start gap-3 px-4 py-3">
+                    {/* Type badge */}
+                    <span
+                      className="text-[9px] font-bold uppercase tracking-[1.5px] px-2 py-1 rounded flex-shrink-0 mt-0.5"
+                      style={{ background: meta.bg, color: meta.color }}
+                    >
+                      {meta.label}
+                    </span>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2 flex-wrap">
+                        <div>
+                          <div className={`text-[13px] font-semibold leading-tight ${isDone ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                            {ev.etapa}
+                          </div>
+                          {ev.produto && ev.produto !== '—' && (
+                            <div className="text-[11px] text-gray-500 mt-0.5">
+                              {ev.produto}
+                              {ev.dose && ev.dose !== '—' && <> · <strong>{ev.dose}</strong></>}
+                            </div>
+                          )}
+                          {ev.forma && ev.forma !== '—' && (
+                            <div className="text-[10px] text-gray-400 mt-0.5 leading-relaxed">
+                              {ev.forma}
+                            </div>
+                          )}
+                          {isDone && st?.data && (
+                            <div className="flex items-center gap-1 mt-1">
+                              <CheckCircle2 size={10} color="#1e4d2b" />
+                              <span className="text-[10px] text-verde-700 font-medium">
+                                {formatDate(st.data)}{st.obs ? ` · ${st.obs}` : ''}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button
+                            onClick={() => handleChipClick(ev._id, ev.etapa, st?.status)}
+                            className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all duration-200"
+                            style={isDone ? {
+                              background: '#1e4d2b12',
+                              color: '#1e4d2b',
+                              borderColor: '#1e4d2b30',
+                            } : {
+                              background: meta.bg,
+                              color: meta.color,
+                              borderColor: `${meta.color}30`,
+                            }}
+                          >
+                            {isDone ? <CheckCircle2 size={11} /> : <Clock3 size={11} />}
+                            {isDone ? 'Feito' : 'Pendente'}
+                          </button>
+                          {ev._custom && (
+                            <button
+                              onClick={() => setCustomRows(r => r.filter((_, i) => i !== customIdx))}
+                              className="p-1.5 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             );
           })}
         </div>
-        <div className="flex justify-between mt-6">
-          <span className="text-xs text-gray-400">Dia 0</span>
-          <span className="text-xs text-gray-400">Dia {maxDia}</span>
-        </div>
       </div>
 
-      {/* TABLE */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-verde-800 text-white text-xs">
-              <th className="text-left px-3 py-2.5 rounded-tl">Etapa</th>
-              <th className="text-left px-3 py-2.5">Dia</th>
-              <th className="text-left px-3 py-2.5">Produto</th>
-              <th className="text-left px-3 py-2.5">Dose</th>
-              <th className="hidden md:table-cell text-left px-3 py-2.5">Forma de Aplicação</th>
-              <th className="text-left px-3 py-2.5">Status</th>
-              <th className="px-3 py-2.5 rounded-tr w-10"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {allEvents.map((ev, rowIdx) => {
-              const st = status[ev._id];
-              const customIdx = ev._custom
-                ? customRows.findIndex((_, i) => `custom_${i}` === ev._id)
-                : -1;
-              return (
-                <tr key={ev._id} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-papel'}>
-                  <td className="px-3 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: TIPO_COR[ev.tipo] || '#999' }}
-                      />
-                      <span className="font-medium">{ev.etapa}</span>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2.5 text-gray-500">D{ev.dia}</td>
-                  <td className="px-3 py-2.5">{ev.produto}</td>
-                  <td className="px-3 py-2.5">{ev.dose}</td>
-                  <td className="hidden md:table-cell px-3 py-2.5 text-xs text-gray-600 max-w-[200px]">{ev.forma}</td>
-                  <td className="px-3 py-2.5">
-                    <div>
-                      <button
-                        onClick={() => handleChipClick(ev._id, ev.etapa, st?.status)}
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border cursor-pointer transition-colors ${
-                          st
-                            ? 'bg-verde-100 text-verde-800 border-verde-400/30 hover:bg-verde-100'
-                            : 'bg-dourado-100 text-terra-600 border-dourado-400/30 hover:bg-dourado-100'
-                        }`}
-                      >
-                        {st ? 'Feito ✓' : 'Pendente'}
-                      </button>
-                      {st?.data && (
-                        <div className="text-[0.65rem] text-gray-400 mt-0.5">
-                          {formatDate(st.data)}{st.obs ? ` · ${st.obs}` : ''}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    {ev._custom && (
-                      <button
-                        onClick={() => handleDeleteCustom(customIdx)}
-                        className="text-gray-300 hover:text-red-500 transition-colors p-1 rounded"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* CONFIRM DONE DIALOG */}
+      {/* ── CONFIRM DONE DIALOG ── */}
       <Dialog open={confirmDialog.open} onOpenChange={(o) => !o && setConfirmDialog({ open: false, idx: null, etapa: '' })}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -234,19 +255,14 @@ export default function CronogramaTimeline({ cultura }) {
           </p>
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
-              <Label htmlFor="confDate">Data de execução</Label>
-              <Input id="confDate" type="date" value={confirmDate} onChange={(e) => setConfirmDate(e.target.value)} />
+              <Label>Data de execução</Label>
+              <Input type="date" value={confirmDate} onChange={(e) => setConfirmDate(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1">
-              <Label htmlFor="confObs">Observação (opcional)</Label>
-              <textarea
-                id="confObs"
-                value={confirmObs}
-                onChange={(e) => setConfirmObs(e.target.value)}
-                placeholder="Ex: Aplicado às 6h, após irrigação..."
-                rows={2}
-                className="flex w-full rounded border border-borda bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-verde-800 resize-none"
-              />
+              <Label>Observação (opcional)</Label>
+              <textarea value={confirmObs} onChange={(e) => setConfirmObs(e.target.value)}
+                placeholder="Ex: Aplicado às 6h, após irrigação..." rows={2}
+                className="flex w-full rounded border border-borda bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-verde-800 resize-none" />
             </div>
           </div>
           <DialogFooter>
@@ -256,14 +272,12 @@ export default function CronogramaTimeline({ cultura }) {
         </DialogContent>
       </Dialog>
 
-      {/* UNDO DIALOG */}
+      {/* ── UNDO DIALOG ── */}
       <Dialog open={undoDialog.open} onOpenChange={(o) => !o && setUndoDialog({ open: false, idx: null, etapa: '' })}>
         <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Desfazer execução?</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Desfazer execução?</DialogTitle></DialogHeader>
           <p className="text-sm text-gray-500">
-            Isso irá remover o registro de conclusão da etapa <strong className="text-gray-800">{undoDialog.etapa}</strong>.
+            Remove o registro de conclusão de <strong className="text-gray-800">{undoDialog.etapa}</strong>.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setUndoDialog({ open: false, idx: null, etapa: '' })}>Cancelar</Button>
@@ -272,29 +286,24 @@ export default function CronogramaTimeline({ cultura }) {
         </DialogContent>
       </Dialog>
 
-      {/* ADD ROW DIALOG */}
+      {/* ── ADD ROW DIALOG ── */}
       <Dialog open={addDialog} onOpenChange={(o) => !o && setAddDialog(false)}>
         <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Adicionar etapa ao cronograma</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Adicionar etapa</DialogTitle></DialogHeader>
           <div className="flex flex-col gap-3 mt-1">
             <div className="flex gap-3">
               <div className="flex flex-col gap-1 w-24">
-                <Label htmlFor="newDia">Dia</Label>
-                <Input id="newDia" type="number" value={newRow.dia}
-                  onChange={(e) => setNewRow(r => ({ ...r, dia: e.target.value }))} />
+                <Label>Dia</Label>
+                <Input type="number" value={newRow.dia} onChange={(e) => setNewRow(r => ({ ...r, dia: e.target.value }))} />
               </div>
               <div className="flex flex-col gap-1 flex-1">
-                <Label htmlFor="newTipo">Tipo</Label>
+                <Label>Tipo</Label>
                 <Select value={newRow.tipo} onValueChange={(v) => setNewRow(r => ({ ...r, tipo: v }))}>
-                  <SelectTrigger id="newTipo">
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {TIPOS.map(t => (
                       <SelectItem key={t} value={t}>
-                        {t.charAt(0).toUpperCase() + t.slice(1)}
+                        {TIPO_META[t].label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -302,29 +311,23 @@ export default function CronogramaTimeline({ cultura }) {
               </div>
             </div>
             <div className="flex flex-col gap-1">
-              <Label htmlFor="newEtapa">Etapa *</Label>
-              <Input id="newEtapa" value={newRow.etapa}
-                onChange={(e) => setNewRow(r => ({ ...r, etapa: e.target.value }))} />
+              <Label>Etapa *</Label>
+              <Input value={newRow.etapa} onChange={(e) => setNewRow(r => ({ ...r, etapa: e.target.value }))} />
+            </div>
+            <div className="flex gap-3">
+              <div className="flex flex-col gap-1 flex-1">
+                <Label>Produto</Label>
+                <Input value={newRow.produto} onChange={(e) => setNewRow(r => ({ ...r, produto: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1 w-28">
+                <Label>Dose</Label>
+                <Input value={newRow.dose} onChange={(e) => setNewRow(r => ({ ...r, dose: e.target.value }))} />
+              </div>
             </div>
             <div className="flex flex-col gap-1">
-              <Label htmlFor="newProduto">Produto</Label>
-              <Input id="newProduto" value={newRow.produto}
-                onChange={(e) => setNewRow(r => ({ ...r, produto: e.target.value }))} />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="newDose">Dose</Label>
-              <Input id="newDose" value={newRow.dose}
-                onChange={(e) => setNewRow(r => ({ ...r, dose: e.target.value }))} />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="newForma">Forma de aplicação</Label>
-              <textarea
-                id="newForma"
-                value={newRow.forma}
-                onChange={(e) => setNewRow(r => ({ ...r, forma: e.target.value }))}
-                rows={2}
-                className="flex w-full rounded border border-borda bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-verde-800 resize-none"
-              />
+              <Label>Forma de aplicação</Label>
+              <textarea value={newRow.forma} onChange={(e) => setNewRow(r => ({ ...r, forma: e.target.value }))} rows={2}
+                className="flex w-full rounded border border-borda bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-verde-800 resize-none" />
             </div>
           </div>
           <DialogFooter>

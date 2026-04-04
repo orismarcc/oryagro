@@ -119,7 +119,7 @@ export default function SimuladorFinanceiro({ cultura }) {
     : cultura.canteiro.comprimento * cultura.canteiro.largura;
 
   return (
-    <div className="p-6">
+    <div className="p-6 md:p-8 max-w-5xl">
       <div className="flex items-start justify-between mb-5 flex-wrap gap-2">
         <div>
           <h2 className="text-lg font-display font-semibold text-gray-900">Simulador Financeiro</h2>
@@ -209,21 +209,21 @@ export default function SimuladorFinanceiro({ cultura }) {
           </div>
 
           {/* Live plant calc */}
-          <div className="bg-papel border border-borda rounded px-4 py-2.5 mb-5 text-sm">
+          <div className="bg-verde-800 rounded-lg px-4 py-3 mb-5 text-sm border border-verde-700">
             {isCampo ? (
               <>
-                <span className="text-gray-400 text-xs">{(dim.areaHa || 0)} ha · {(parseFloat(valores.espacamentoLinhas) || cultura.espacamento.linhas).toFixed(2)} × {(parseFloat(valores.espacamentoPlantas) || cultura.espacamento.plantas).toFixed(2)} m</span>
-                <div className="font-semibold mt-0.5">
+                <span className="text-verde-400 text-xs opacity-70">{(dim.areaHa || 0)} ha · {(parseFloat(valores.espacamentoLinhas) || cultura.espacamento.linhas).toFixed(2)} × {(parseFloat(valores.espacamentoPlantas) || cultura.espacamento.plantas).toFixed(2)} m</span>
+                <div className="font-bold mt-0.5 text-white">
                   {(dim.plantasPorHa || 0).toLocaleString('pt-BR')} plantas/ha →{' '}
-                  <span className="text-verde-800">{(dim.totalPlantas || 0).toLocaleString('pt-BR')} plantas no total</span>
+                  <span className="text-verde-400">{(dim.totalPlantas || 0).toLocaleString('pt-BR')} plantas no total</span>
                 </div>
               </>
             ) : (
               <>
-                <span className="text-gray-400 text-xs">{dim.comp || 0} × {dim.larg || 0} m = {(dim.area || 0).toFixed(1)} m² · espaçamento {(dim.spacingL || 0).toFixed(2)} × {(dim.spacingP || 0).toFixed(2)} m</span>
-                <div className="font-semibold mt-0.5">
+                <span className="text-verde-400 text-xs opacity-70">{dim.comp || 0} × {dim.larg || 0} m = {(dim.area || 0).toFixed(1)} m² · espaçamento {(dim.spacingL || 0).toFixed(2)} × {(dim.spacingP || 0).toFixed(2)} m</span>
+                <div className="font-bold mt-0.5 text-white">
                   {dim.linhas || 0} fileiras × {dim.porLinha || 0} plantas ={' '}
-                  <span className="text-verde-800">{(dim.totalPlantas || 0).toLocaleString('pt-BR')} plantas/canteiro</span>
+                  <span className="text-verde-400">{(dim.totalPlantas || 0).toLocaleString('pt-BR')} plantas/canteiro</span>
                 </div>
               </>
             )}

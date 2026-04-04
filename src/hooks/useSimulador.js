@@ -64,8 +64,8 @@ export function useSimulador(cultura, valores) {
     const plantasViaveis = Math.round(dim.totalPlantas * sobrevivencia / 100);
 
     let receita;
-    if (isCampo && cultura.id === 'mandioca') {
-      receita = (cultura.venda.producaoKgPorHa || 20000) * (dim.areaHa || 1) * precoVenda;
+    if (isCampo && cultura.venda.producaoKgPorHa) {
+      receita = cultura.venda.producaoKgPorHa * (dim.areaHa || 1) * precoVenda;
     } else {
       receita = plantasViaveis * precoVenda;
     }
