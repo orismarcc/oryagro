@@ -1,20 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Droplets, Thermometer, Leaf, FlaskConical, Clock, ArrowUpRight, MapPin, Ruler, Sprout, Grid3x3, Calculator } from 'lucide-react';
 
-function CountUp({ to, duration = 0.9, format = v => Math.round(v).toLocaleString('pt-BR') }) {
-  const [val, setVal] = useState(0);
+function CountUp({ to, duration = 0.6, format = v => Math.round(v).toLocaleString('pt-BR') }) {
+  const [val, setVal] = useState(to);
   const raf = useRef(null);
+  const prev = useRef(to);
   useEffect(() => {
+    const from = prev.current;
+    prev.current = to;
     const start = performance.now();
     const tick = (now) => {
       const p = Math.min((now - start) / (duration * 1000), 1);
       const ease = 1 - Math.pow(1 - p, 3);
-      setVal(ease * to);
+      setVal(from + (to - from) * ease);
       if (p < 1) raf.current = requestAnimationFrame(tick);
     };
+    cancelAnimationFrame(raf.current);
     raf.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf.current);
-  }, [to, duration]);
+  }, [to]);
   return <span>{format(val)}</span>;
 }
 
@@ -30,7 +34,7 @@ function CalcInput({ label, value, onChange, unit, step = '0.01', min = '0' }) {
           value={value}
           onChange={e => onChange(e.target.value)}
           className="flex-1 rounded-xl border px-3 py-2 text-sm font-semibold text-foreground bg-background focus:outline-none focus:ring-2 min-w-0"
-          style={{ borderColor: 'hsl(214 20% 88%)', '--tw-ring-color': 'var(--color-primary)' }}
+          style={{ borderColor: 'hsl(214 20% 88%)' }}
         />
         {unit && <span className="text-[11px] text-muted-foreground font-medium flex-shrink-0">{unit}</span>}
       </div>
@@ -39,11 +43,11 @@ function CalcInput({ label, value, onChange, unit, step = '0.01', min = '0' }) {
 }
 
 const INFO_FIELDS = [
-  { key: 'soloTipo',           label: 'Solo',   Icon: Leaf,        circle: 'icon-circle-success' },
-  { key: 'pH',                 label: 'pH',     Icon: FlaskConical,circle: 'icon-circle-secondary' },
-  { key: 'necessidadeHidrica', label: 'Água',   Icon: Droplets,    circle: 'icon-circle-accent' },
-  { key: 'clima',              label: 'Clima',  Icon: Thermometer, circle: 'icon-circle-warning' },
-  { key: 'ciclo',              label: 'Ciclo',  Icon: Clock,       circle: 'icon-circle-primary' },
+  { key: 'soloTipo',           label: 'Solo',   Icon: Leaf },
+  { key: 'pH',                 label: 'pH',     Icon: FlaskConical },
+  { key: 'necessidadeHidrica', label: 'Água',   Icon: Droplets },
+  { key: 'clima',              label: 'Clima',  Icon: Thermometer },
+  { key: 'ciclo',              label: 'Ciclo',  Icon: Clock },
 ];
 
 export default function VisaoGeral({ cultura }) {
@@ -52,11 +56,7 @@ export default function VisaoGeral({ cultura }) {
   // ── Calculator state ──
   const [calc, setCalc] = useState(
     isCampo
-      ? {
-          area: 1,
-          linhas: cultura.espacamento.linhas,
-          plantas: cultura.espacamento.plantas,
-        }
+      ? { area: 1, linhas: cultura.espacamento.linhas, plantas: cultura.espacamento.plantas }
       : {
           comprimento: cultura.canteiro.comprimento,
           largura: cultura.canteiro.largura,
@@ -71,50 +71,49 @@ export default function VisaoGeral({ cultura }) {
   let totalPlantas = 0;
   let sublabel = '';
 
+  const comp = parseFloat(calc.comprimento) || 0;
+  const larg = parseFloat(calc.largura) || 0;
+  const el   = parseFloat(calc.linhas) || 0;
+  const ep   = parseFloat(calc.plantas) || 0;
+  const a    = parseFloat(calc.area) || 0;
+
   if (isCampo) {
-    const l = parseFloat(calc.linhas) || 0;
-    const p = parseFloat(calc.plantas) || 0;
-    const a = parseFloat(calc.area) || 0;
-    const pph = l > 0 && p > 0 ? Math.floor(10000 / (l * p)) : 0;
+    const pph = el > 0 && ep > 0 ? Math.floor(10000 / (el * ep)) : 0;
     totalPlantas = Math.round(pph * a);
     sublabel = `${pph.toLocaleString('pt-BR')} plantas/ha × ${a} ha`;
   } else {
-    const comp = parseFloat(calc.comprimento) || 0;
-    const larg = parseFloat(calc.largura) || 0;
-    const el   = parseFloat(calc.linhas) || 0;
-    const ep   = parseFloat(calc.plantas) || 0;
     const nLinhas  = el > 0 ? Math.floor(larg / el) : 0;
     const porLinha = ep > 0 ? Math.floor(comp / ep) : 0;
     totalPlantas = nLinhas * porLinha;
     sublabel = `${nLinhas} linhas × ${porLinha} plantas/linha`;
   }
 
-  // ── Summary stat cards ──
+  // ── Reactive stat cards ──
   let stats;
   if (isCampo) {
-    const pph = Math.floor(10000 / (cultura.espacamento.linhas * cultura.espacamento.plantas));
+    const pph = el > 0 && ep > 0 ? Math.floor(10000 / (el * ep)) : 0;
     stats = [
-      { label: 'Área base',   value: cultura.areaPadrao,          Icon: MapPin,    numericTo: null },
-      { label: 'Espaçamento', value: cultura.espacamentoPadrao,   Icon: Ruler,     numericTo: null },
-      { label: 'Plantas/ha',  value: null, numericTo: pph,        Icon: Sprout,    suffix: '' },
-      { label: 'Sistema',     value: 'Campo aberto',              Icon: Grid3x3,   numericTo: null },
+      { label: 'Área',         value: `${a} ha`,                            Icon: MapPin,  numericTo: null },
+      { label: 'Espaçamento',  value: el && ep ? `${el}×${ep} m` : '—',    Icon: Ruler,   numericTo: null },
+      { label: 'Plantas/ha',   numericTo: pph,    suffix: '',               Icon: Sprout   },
+      { label: 'Total plantas',numericTo: Math.round(pph * a), suffix: '',  Icon: Grid3x3  },
     ];
   } else {
-    const area   = cultura.canteiro.comprimento * cultura.canteiro.largura;
-    const linhas = Math.floor(cultura.canteiro.largura / cultura.canteiro.espacamentoLinhas);
-    const porL   = Math.floor(cultura.canteiro.comprimento / cultura.canteiro.espacamentoPlantas);
+    const area    = comp * larg;
+    const nLinhas = el > 0 ? Math.floor(larg / el) : 0;
+    const porL    = ep > 0 ? Math.floor(comp / ep) : 0;
     stats = [
-      { label: 'Área/canteiro',    value: `${area} m²`,                              Icon: MapPin,  numericTo: null },
-      { label: 'Dimensões',        value: `${cultura.canteiro.comprimento}×${cultura.canteiro.largura} m`, Icon: Ruler, numericTo: null },
-      { label: 'Plantas/canteiro', value: null, numericTo: linhas * porL,             Icon: Sprout,  suffix: '' },
-      { label: 'Equiv. em ha',     value: null, numericTo: Math.round(10000 / area),  Icon: Grid3x3, suffix: ' cant.' },
+      { label: 'Área/canteiro',    value: area > 0 ? `${area.toFixed(1)} m²` : '—',   Icon: MapPin,  numericTo: null },
+      { label: 'Dimensões',        value: comp && larg ? `${comp}×${larg} m` : '—',   Icon: Ruler,   numericTo: null },
+      { label: 'Plantas/canteiro', numericTo: nLinhas * porL,                          Icon: Sprout,  suffix: '' },
+      { label: 'Equiv. em ha',     numericTo: area > 0 ? Math.round(10000 / area) : 0, Icon: Grid3x3, suffix: ' cant.' },
     ];
   }
 
   return (
     <div className="px-4 pt-5 pb-4 max-w-2xl mx-auto">
 
-      {/* ── Stat cards ── */}
+      {/* ── Stat cards (reativos) ── */}
       <div className="grid grid-cols-2 gap-3 mb-5">
         {stats.map((s, i) => (
           <div key={s.label} className={`card-interactive p-4 animate-enter-${i}`}>
@@ -124,7 +123,7 @@ export default function VisaoGeral({ cultura }) {
             {s.numericTo != null ? (
               <p className="font-display text-2xl font-black leading-none mb-0.5" style={{ color: cultura.cor }}>
                 <CountUp to={s.numericTo} />
-                {s.suffix && <span className="text-sm font-sans font-semibold ml-1" style={{ color: cultura.cor }}>{s.suffix}</span>}
+                {s.suffix && <span className="text-sm font-sans font-semibold ml-1">{s.suffix}</span>}
               </p>
             ) : (
               <p className="font-display text-lg font-bold text-foreground leading-tight mb-0.5">{s.value}</p>
@@ -136,7 +135,6 @@ export default function VisaoGeral({ cultura }) {
 
       {/* ── Calculadora de Plantio ── */}
       <div className="card-elevated p-5 mb-4 animate-enter-2">
-        {/* Header */}
         <div className="flex items-center gap-2 mb-4">
           <div className="icon-circle w-8 h-8" style={{ background: `${cultura.cor}15`, color: cultura.cor }}>
             <Calculator size={14} />
@@ -151,23 +149,21 @@ export default function VisaoGeral({ cultura }) {
           </div>
         </div>
 
-        {/* Inputs */}
         {isCampo ? (
           <div className="grid grid-cols-3 gap-3 mb-4">
-            <CalcInput label="Área" value={calc.area}    onChange={set('area')}    unit="ha"   step="0.5" min="0.1" />
-            <CalcInput label="Espaç. linhas" value={calc.linhas}  onChange={set('linhas')}  unit="m"    step="0.1" />
-            <CalcInput label="Espaç. plantas" value={calc.plantas} onChange={set('plantas')} unit="m"    step="0.1" />
+            <CalcInput label="Área"           value={calc.area}    onChange={set('area')}    unit="ha"  step="0.5" min="0.1" />
+            <CalcInput label="Espaç. linhas"  value={calc.linhas}  onChange={set('linhas')}  unit="m"   step="0.1" />
+            <CalcInput label="Espaç. plantas" value={calc.plantas} onChange={set('plantas')} unit="m"   step="0.1" />
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 mb-4">
-            <CalcInput label="Comprimento" value={calc.comprimento} onChange={set('comprimento')} unit="m"   step="1"    min="1" />
-            <CalcInput label="Largura"     value={calc.largura}     onChange={set('largura')}     unit="m"   step="0.1"  min="0.5" />
-            <CalcInput label="Espaç. linhas"  value={calc.linhas}  onChange={set('linhas')}  unit="m"   step="0.05" />
-            <CalcInput label="Espaç. plantas" value={calc.plantas} onChange={set('plantas')} unit="m"   step="0.05" />
+            <CalcInput label="Comprimento"    value={calc.comprimento} onChange={set('comprimento')} unit="m"   step="1"    min="1" />
+            <CalcInput label="Largura"        value={calc.largura}     onChange={set('largura')}     unit="m"   step="0.1"  min="0.5" />
+            <CalcInput label="Espaç. linhas"  value={calc.linhas}      onChange={set('linhas')}      unit="m"   step="0.05" />
+            <CalcInput label="Espaç. plantas" value={calc.plantas}     onChange={set('plantas')}     unit="m"   step="0.05" />
           </div>
         )}
 
-        {/* Result */}
         <div
           className="rounded-2xl px-4 py-3 flex items-center justify-between"
           style={{ background: `${cultura.cor}12`, border: `1px solid ${cultura.cor}25` }}
@@ -178,7 +174,7 @@ export default function VisaoGeral({ cultura }) {
           </div>
           <div className="text-right">
             <p className="font-display text-3xl font-black leading-none" style={{ color: cultura.cor }}>
-              {totalPlantas.toLocaleString('pt-BR')}
+              <CountUp to={totalPlantas} />
             </p>
             <p className="section-label mt-0.5">{isCampo ? 'plantas/total' : 'plantas/canteiro'}</p>
           </div>
@@ -189,9 +185,7 @@ export default function VisaoGeral({ cultura }) {
       <div className="card-elevated p-5 mb-4 animate-enter-3">
         <div className="flex items-start justify-between mb-3">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: cultura.cor }}>
-              Sobre a Cultura
-            </p>
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: cultura.cor }}>Sobre a Cultura</p>
             <p className="text-xs italic text-muted-foreground">{cultura.nomesCientifico}</p>
           </div>
           <ArrowUpRight size={14} className="text-muted-foreground mt-1 flex-shrink-0" />

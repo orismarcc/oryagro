@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
-import { Plus, Printer, Trash2, CheckCircle2, Circle, ChevronRight } from 'lucide-react';
+import { Plus, Printer, Trash2, CheckCircle2, Circle, ChevronRight, CalendarDays, X } from 'lucide-react';
 
 const TIPO_META = {
   plantio:  { color: '#059669', bg: 'hsl(152 69% 93%)', label: 'Plantio',   emoji: '🌱' },
@@ -28,14 +28,14 @@ export default function CronogramaTimeline({ cultura }) {
   const statusKey = `cronograma_status_${cultura.id}`;
   const customKey  = `cronograma_custom_${cultura.id}`;
 
-  const [status, setStatus]       = useState(() => { try { return JSON.parse(localStorage.getItem(statusKey)) || {}; } catch { return {}; } });
+  const [status, setStatus]         = useState(() => { try { return JSON.parse(localStorage.getItem(statusKey)) || {}; } catch { return {}; } });
   const [customRows, setCustomRows] = useState(() => { try { return JSON.parse(localStorage.getItem(customKey)) || []; } catch { return []; } });
 
-  const [confirmDialog, setConfirmDialog] = useState({ open: false, idx: null, etapa: '' });
-  const [undoDialog,    setUndoDialog]    = useState({ open: false, idx: null, etapa: '' });
-  const [addDialog,     setAddDialog]     = useState(false);
-  const [confirmDate,   setConfirmDate]   = useState(todayISO());
-  const [confirmObs,    setConfirmObs]    = useState('');
+  // Inline confirm state (replaces dialog)
+  const [confirming, setConfirming] = useState(null); // { id, etapa }
+  const [confirmDate, setConfirmDate] = useState(todayISO());
+
+  const [addDialog, setAddDialog] = useState(false);
   const [newRow, setNewRow] = useState({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo' });
 
   useEffect(() => { localStorage.setItem(statusKey, JSON.stringify(status)); }, [statusKey, status]);
@@ -50,9 +50,13 @@ export default function CronogramaTimeline({ cultura }) {
   const progress = allEvents.length > 0 ? feitos / allEvents.length : 0;
   const cor = cultura.cor;
 
-  const handleChipClick = (id, etapa, st) => {
-    if (st === 'feito') setUndoDialog({ open: true, idx: id, etapa });
-    else { setConfirmDate(todayISO()); setConfirmObs(''); setConfirmDialog({ open: true, idx: id, etapa }); }
+  const confirmStep = (id) => {
+    setStatus(s => ({ ...s, [id]: { status: 'feito', data: confirmDate } }));
+    setConfirming(null);
+  };
+
+  const undoStep = (id) => {
+    setStatus(s => { const n = { ...s }; delete n[id]; return n; });
   };
 
   return (
@@ -82,9 +86,7 @@ export default function CronogramaTimeline({ cultura }) {
           <div className="flex-1">
             <div className="flex justify-between mb-2">
               <span className="text-[11px] text-muted-foreground font-medium">Progresso do ciclo</span>
-              <span className="text-[11px] font-bold" style={{ color: cor }}>
-                {Math.round(progress * 100)}%
-              </span>
+              <span className="text-[11px] font-bold" style={{ color: cor }}>{Math.round(progress * 100)}%</span>
             </div>
             <div className="h-2 bg-muted rounded-full overflow-hidden">
               <motion.div
@@ -111,6 +113,7 @@ export default function CronogramaTimeline({ cultura }) {
           const meta   = TIPO_META[ev.tipo] || TIPO_META.manejo;
           const cidx   = ev._custom ? customRows.findIndex((_, i) => `custom_${i}` === ev._id) : -1;
           const isLast = rowIdx === allEvents.length - 1;
+          const isConfirming = confirming?.id === ev._id;
 
           return (
             <motion.div
@@ -120,16 +123,14 @@ export default function CronogramaTimeline({ cultura }) {
               transition={{ delay: rowIdx * 0.045, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
               className="flex gap-3"
             >
-              {/* ── Left: day indicator + connector ── */}
+              {/* ── Left: day + connector ── */}
               <div className="flex flex-col items-center flex-shrink-0" style={{ width: 48 }}>
-                {/* Day circle */}
-                <motion.div
+                <div
                   className="w-12 h-12 rounded-2xl flex flex-col items-center justify-center flex-shrink-0 border"
                   style={isDone
                     ? { background: meta.color, borderColor: meta.color, boxShadow: `0 4px 12px ${meta.color}40` }
                     : { background: meta.bg, borderColor: `${meta.color}30` }
                   }
-                  whileTap={{ scale: 0.92 }}
                 >
                   {isDone
                     ? <CheckCircle2 size={20} color="#fff" />
@@ -138,30 +139,25 @@ export default function CronogramaTimeline({ cultura }) {
                         <span className="font-display font-black text-sm leading-none mt-0.5" style={{ color: meta.color }}>{ev.dia}</span>
                       </>
                   }
-                </motion.div>
-
-                {/* Connector line */}
+                </div>
                 {!isLast && (
-                  <div
-                    className="w-0.5 flex-1 mt-1 mb-1 min-h-[20px]"
-                    style={{ background: isDone ? `${meta.color}50` : 'hsl(214 20% 88%)' }}
-                  />
+                  <div className="w-0.5 flex-1 mt-1 mb-1 min-h-[20px]"
+                    style={{ background: isDone ? `${meta.color}50` : 'hsl(214 20% 88%)' }} />
                 )}
               </div>
 
-              {/* ── Right: event card ── */}
+              {/* ── Right: card ── */}
               <div className={`flex-1 ${!isLast ? 'mb-3' : ''}`}>
                 <div
-                  className="rounded-2xl overflow-hidden border transition-all duration-200"
+                  className="rounded-2xl overflow-hidden border"
                   style={{
-                    borderColor: isDone ? `${meta.color}35` : 'hsl(214 20% 88%)',
-                    background: isDone ? `${meta.bg}` : '#fff',
+                    borderColor: isDone ? `${meta.color}35` : isConfirming ? `${meta.color}60` : 'hsl(214 20% 88%)',
+                    background: isDone ? meta.bg : '#fff',
                     boxShadow: isDone ? 'none' : '0 1px 4px rgba(0,0,0,0.05)',
                   }}
                 >
                   {/* Card content */}
                   <div className="px-4 pt-3.5 pb-3">
-                    {/* Type badge */}
                     <div className="flex items-center justify-between mb-2">
                       <span
                         className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full"
@@ -181,60 +177,109 @@ export default function CronogramaTimeline({ cultura }) {
                       )}
                     </div>
 
-                    {/* Title */}
                     <p className={`text-[14px] font-bold leading-snug ${isDone ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                       {ev.etapa}
                     </p>
 
-                    {/* Produto / dose */}
                     {ev.produto && ev.produto !== '—' && (
                       <p className="text-[12px] text-muted-foreground mt-1.5 flex items-center gap-1">
                         <span>{ev.produto}</span>
                         {ev.dose && ev.dose !== '—' && (
-                          <>
-                            <span className="opacity-40">·</span>
-                            <span className="font-semibold text-foreground">{ev.dose}</span>
-                          </>
+                          <><span className="opacity-40">·</span><span className="font-semibold text-foreground">{ev.dose}</span></>
                         )}
                       </p>
                     )}
 
-                    {/* Forma */}
                     {ev.forma && ev.forma !== '—' && (
                       <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{ev.forma}</p>
                     )}
-
-                    {/* Done badge */}
-                    {isDone && st?.data && (
-                      <div
-                        className="inline-flex items-center gap-1.5 mt-2.5 px-2.5 py-1 rounded-full text-[10px] font-semibold"
-                        style={{ background: `${meta.color}15`, color: meta.color }}
-                      >
-                        <CheckCircle2 size={10} />
-                        {formatDate(st.data)}{st.obs ? ` · ${st.obs}` : ''}
-                      </div>
-                    )}
                   </div>
 
-                  {/* ── Bottom CTA ── */}
-                  <motion.button
-                    whileTap={{ scale: 0.985 }}
-                    onClick={() => handleChipClick(ev._id, ev.etapa, st?.status)}
-                    className="w-full flex items-center justify-between px-4 py-3 text-[12px] font-semibold transition-colors"
-                    style={isDone
-                      ? { background: `${meta.color}18`, color: meta.color, borderTop: `1px solid ${meta.color}25` }
-                      : { background: 'hsl(210 16% 97%)', color: 'hsl(215 16% 42%)', borderTop: '1px solid hsl(214 20% 91%)' }
-                    }
-                  >
-                    <span className="flex items-center gap-2">
-                      {isDone
-                        ? <CheckCircle2 size={13} />
-                        : <Circle size={13} />
-                      }
-                      {isDone ? 'Concluído — toque para desfazer' : 'Marcar como concluído'}
-                    </span>
-                    {!isDone && <ChevronRight size={13} className="opacity-50" />}
-                  </motion.button>
+                  {/* ── Done: date badge strip ── */}
+                  {isDone && st?.data && (
+                    <div
+                      className="px-4 py-2 flex items-center justify-between"
+                      style={{ background: `${meta.color}12`, borderTop: `1px solid ${meta.color}25` }}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <CalendarDays size={13} style={{ color: meta.color }} />
+                        <span className="text-[13px] font-bold" style={{ color: meta.color }}>
+                          {formatDate(st.data)}
+                        </span>
+                        <span className="text-[10px] font-semibold text-muted-foreground ml-1">concluído</span>
+                      </div>
+                      <button
+                        onClick={() => undoStep(ev._id)}
+                        className="text-[10px] font-semibold flex items-center gap-0.5 text-muted-foreground hover:text-red-500 transition-colors"
+                      >
+                        <X size={10} /> desfazer
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ── Inline confirm form ── */}
+                  <AnimatePresence>
+                    {isConfirming && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        style={{ overflow: 'hidden' }}
+                      >
+                        <div
+                          className="px-4 py-3 flex flex-col gap-3"
+                          style={{ background: `${meta.color}08`, borderTop: `1px solid ${meta.color}25` }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <CalendarDays size={13} style={{ color: meta.color }} />
+                            <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: meta.color }}>
+                              Data de execução
+                            </span>
+                          </div>
+                          <input
+                            type="date"
+                            value={confirmDate}
+                            onChange={e => setConfirmDate(e.target.value)}
+                            className="w-full rounded-xl border px-3 py-2 text-sm font-semibold text-foreground bg-white focus:outline-none"
+                            style={{ borderColor: `${meta.color}40` }}
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setConfirming(null)}
+                              className="flex-1 py-2 rounded-xl text-[12px] font-semibold border transition-colors"
+                              style={{ borderColor: 'hsl(214 20% 88%)', color: 'hsl(215 16% 45%)' }}
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              onClick={() => confirmStep(ev._id)}
+                              className="flex-1 py-2 rounded-xl text-[12px] font-bold text-white transition-colors"
+                              style={{ background: meta.color }}
+                            >
+                              ✓ Confirmar
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* ── CTA button (only when not done and not confirming) ── */}
+                  {!isDone && !isConfirming && (
+                    <motion.button
+                      whileTap={{ scale: 0.985 }}
+                      onClick={() => { setConfirmDate(todayISO()); setConfirming({ id: ev._id, etapa: ev.etapa }); }}
+                      className="w-full flex items-center justify-between px-4 py-3 text-[12px] font-semibold transition-colors"
+                      style={{ background: 'hsl(210 16% 97%)', color: 'hsl(215 16% 42%)', borderTop: '1px solid hsl(214 20% 91%)' }}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Circle size={13} />
+                        Marcar como concluído
+                      </span>
+                      <ChevronRight size={13} className="opacity-50" />
+                    </motion.button>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -242,53 +287,7 @@ export default function CronogramaTimeline({ cultura }) {
         })}
       </div>
 
-      {/* ── Confirm Dialog ── */}
-      <Dialog open={confirmDialog.open} onOpenChange={(o) => !o && setConfirmDialog({ open: false, idx: null, etapa: '' })}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Confirmar execução</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground mb-3">
-            Etapa: <strong className="text-foreground">{confirmDialog.etapa}</strong>
-          </p>
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
-              <Label>Data de execução</Label>
-              <Input type="date" value={confirmDate} onChange={e => setConfirmDate(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label>Observação (opcional)</Label>
-              <textarea
-                value={confirmObs}
-                onChange={e => setConfirmObs(e.target.value)}
-                placeholder="Ex: Aplicado às 6h..."
-                rows={2}
-                className="flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDialog({ open: false, idx: null, etapa: '' })}>Cancelar</Button>
-            <Button onClick={() => {
-              setStatus(s => ({ ...s, [confirmDialog.idx]: { status: 'feito', data: confirmDate, obs: confirmObs } }));
-              setConfirmDialog({ open: false, idx: null, etapa: '' });
-            }}>Confirmar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={undoDialog.open} onOpenChange={(o) => !o && setUndoDialog({ open: false, idx: null, etapa: '' })}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Desfazer?</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">Remove conclusão de <strong>{undoDialog.etapa}</strong>.</p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setUndoDialog({ open: false, idx: null, etapa: '' })}>Cancelar</Button>
-            <Button variant="destructive" onClick={() => {
-              setStatus(s => { const n = { ...s }; delete n[undoDialog.idx]; return n; });
-              setUndoDialog({ open: false, idx: null, etapa: '' });
-            }}>Desfazer</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
+      {/* ── Add Dialog ── */}
       <Dialog open={addDialog} onOpenChange={o => !o && setAddDialog(false)}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Nova etapa</DialogTitle></DialogHeader>

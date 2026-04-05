@@ -7,7 +7,7 @@ import InsumoField from './InsumoField';
 import ResultadoPanel from './ResultadoPanel';
 import { useSimulador, calcularPlantas } from '../hooks/useSimulador';
 import { useSimuladorSync, loadSimuladorConfig, registrarPlantio } from '../hooks/useSupabaseSync';
-import { RotateCcw, Database, CheckCircle2 } from 'lucide-react';
+import { RotateCcw, Database, CheckCircle2, Pencil, Check } from 'lucide-react';
 
 const loadFromStorage = (key, def) => {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; }
@@ -38,6 +38,7 @@ export default function SimuladorFinanceiro({ cultura }) {
   }, [cultura, isCampo, ins]);
 
   const [valores, setValores] = useState(() => loadFromStorage(storageKey, getDefaults()));
+  const [editInsumos, setEditInsumos] = useState(false);
   const [plantioDialog, setPlantioDialog] = useState(false);
   const [plantioNome, setPlantioNome] = useState('');
   const [plantioData, setPlantioData] = useState(new Date().toISOString().split('T')[0]);
@@ -212,19 +213,65 @@ export default function SimuladorFinanceiro({ cultura }) {
 
           {/* Insumos card */}
           <div className="card-elevated p-4">
-            <p className="section-label mb-3" style={{ color: cor }}>
-              Insumos {isCampo ? '(por ha — recalcula com a área)' : '(recalcula com as dimensões)'}
-            </p>
-            <InsumoField label={`Calcário (${ins.calcareo.unidade})`} campo="calcareo" culturaId={cultura.id}
-              valor={valores.calcareo} valorPadrao={ins.calcareo.padrao} params={ins.calcareo} unidade={ins.calcareo.unidade} onChange={handleChange} />
-            <InsumoField label={`Esterco bovino (${ins.esterco.unidade})`} campo="esterco" culturaId={cultura.id}
-              valor={valores.esterco} valorPadrao={ins.esterco.padrao} params={ins.esterco} unidade={ins.esterco.unidade} onChange={handleChange} />
-            <InsumoField label={`NPK ${ins.npk.formula} (${ins.npk.unidade})`} campo="npk" culturaId={cultura.id}
-              valor={valores.npk} valorPadrao={ins.npk.padrao} params={ins.npk} unidade={ins.npk.unidade} onChange={handleChange} />
-            <InsumoField label={`Ureia 46% (${ins.ureia.unidade})`} campo="ureia" culturaId={cultura.id}
-              valor={valores.ureia} valorPadrao={ins.ureia.padrao} params={ins.ureia} unidade={ins.ureia.unidade} onChange={handleChange} />
-            <InsumoField label={`Nitrato de Cálcio (${ins.nitratoCalcio.unidade})`} campo="nitratoCalcio" culturaId={cultura.id}
-              valor={valores.nitratoCalcio} valorPadrao={ins.nitratoCalcio.padrao} params={ins.nitratoCalcio} unidade={ins.nitratoCalcio.unidade} onChange={handleChange} />
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="section-label" style={{ color: cor }}>Insumos</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {editInsumos ? 'Ajuste manual ativo' : 'Calculado automaticamente pelas dimensões'}
+                </p>
+              </div>
+              <button
+                onClick={() => setEditInsumos(e => !e)}
+                className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl border transition-colors"
+                style={editInsumos
+                  ? { background: cor, color: '#fff', borderColor: cor }
+                  : { background: 'transparent', color: cor, borderColor: `${cor}40` }
+                }
+              >
+                {editInsumos ? <><Check size={11} /> Concluir</> : <><Pencil size={11} /> Editar</>}
+              </button>
+            </div>
+
+            {editInsumos ? (
+              <>
+                <InsumoField label={`Calcário (${ins.calcareo.unidade})`} campo="calcareo" culturaId={cultura.id}
+                  valor={valores.calcareo} valorPadrao={ins.calcareo.padrao} params={ins.calcareo} unidade={ins.calcareo.unidade} onChange={handleChange} />
+                <InsumoField label={`Esterco bovino (${ins.esterco.unidade})`} campo="esterco" culturaId={cultura.id}
+                  valor={valores.esterco} valorPadrao={ins.esterco.padrao} params={ins.esterco} unidade={ins.esterco.unidade} onChange={handleChange} />
+                <InsumoField label={`NPK ${ins.npk.formula} (${ins.npk.unidade})`} campo="npk" culturaId={cultura.id}
+                  valor={valores.npk} valorPadrao={ins.npk.padrao} params={ins.npk} unidade={ins.npk.unidade} onChange={handleChange} />
+                <InsumoField label={`Ureia 46% (${ins.ureia.unidade})`} campo="ureia" culturaId={cultura.id}
+                  valor={valores.ureia} valorPadrao={ins.ureia.padrao} params={ins.ureia} unidade={ins.ureia.unidade} onChange={handleChange} />
+                <InsumoField label={`Nitrato de Cálcio (${ins.nitratoCalcio.unidade})`} campo="nitratoCalcio" culturaId={cultura.id}
+                  valor={valores.nitratoCalcio} valorPadrao={ins.nitratoCalcio.padrao} params={ins.nitratoCalcio} unidade={ins.nitratoCalcio.unidade} onChange={handleChange} />
+              </>
+            ) : (
+              <div className="flex flex-col gap-0">
+                {[
+                  { label: 'Calcário',          value: valores.calcareo,      unit: ins.calcareo.unidade },
+                  { label: 'Esterco bovino',     value: valores.esterco,       unit: ins.esterco.unidade },
+                  { label: `NPK ${ins.npk.formula}`, value: valores.npk,      unit: ins.npk.unidade },
+                  { label: 'Ureia 46%',          value: valores.ureia,         unit: ins.ureia.unidade },
+                  { label: 'Nitrato de Cálcio',  value: valores.nitratoCalcio, unit: ins.nitratoCalcio.unidade },
+                ].map((row, i, arr) => (
+                  <div
+                    key={row.label}
+                    className="flex items-center justify-between py-2.5"
+                    style={{ borderBottom: i < arr.length - 1 ? '1px solid hsl(214 20% 92%)' : 'none' }}
+                  >
+                    <span className="text-[13px] text-muted-foreground">{row.label}</span>
+                    <span className="font-display text-[15px] font-bold" style={{ color: cor }}>
+                      {typeof row.value === 'number'
+                        ? row.value % 1 === 0
+                          ? row.value.toLocaleString('pt-BR')
+                          : row.value.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
+                        : row.value}
+                      <span className="text-[11px] font-normal text-muted-foreground ml-1">{row.unit}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Venda card */}
