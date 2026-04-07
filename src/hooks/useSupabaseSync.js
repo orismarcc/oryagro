@@ -48,6 +48,38 @@ export async function registrarPlantio(payload) {
 }
 
 /**
+ * Load all plantio lots for a specific cultura.
+ */
+export async function loadLotes(culturaId) {
+  const { data } = await supabase
+    .from('plantios')
+    .select('*')
+    .eq('cultura_id', culturaId)
+    .order('data_plantio', { ascending: false });
+  return data || [];
+}
+
+/**
+ * Load recent lots across all cultures (for Dashboard).
+ */
+export async function loadTodosLotes(limit = 8) {
+  const { data } = await supabase
+    .from('plantios')
+    .select('*')
+    .order('data_plantio', { ascending: false })
+    .limit(limit);
+  return data || [];
+}
+
+/**
+ * Delete a plantio lot by id. Returns true on success.
+ */
+export async function deleteLote(id) {
+  const { error } = await supabase.from('plantios').delete().eq('id', id);
+  return !error;
+}
+
+/**
  * Upsert a cronograma activity status.
  * Used when the user marks a step as done.
  */
