@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Layers, FlaskConical, CalendarDays, Droplets, Clock } from 'lucide-react';
 import LotesPage from './LotesPage';
 import ManejoAdubacao from './ManejoAdubacao';
 import CronogramaTimeline from './CronogramaTimeline';
+import { loadLotes } from '../hooks/useSupabaseSync';
 
 const TABS = [
-  { value: 'lotes',     label: 'Lotes',       Icon: Layers },
+  { value: 'lotes',      label: 'Lotes',      Icon: Layers },
   { value: 'manejo',     label: 'Manejo',      Icon: FlaskConical },
   { value: 'cronograma', label: 'Cronograma',  Icon: CalendarDays },
 ];
@@ -32,6 +33,21 @@ export default function CulturaPage({ cultura, onBack }) {
           plantas: cultura.canteiro.espacamentoPlantas,
         }
   );
+
+  // ── Shared lotes state (used by LotesPage and CronogramaTimeline) ──
+  const [lotes, setLotes] = useState([]);
+  const [loadingLotes, setLoadingLotes] = useState(true);
+
+  useEffect(() => {
+    setLoadingLotes(true);
+    loadLotes(cultura.id).then(data => {
+      setLotes(data);
+      setLoadingLotes(false);
+    });
+  }, [cultura.id]);
+
+  const handleLoteAdded = (novoLote) => setLotes(prev => [novoLote, ...prev]);
+  const handleLoteDeleted = (id) => setLotes(prev => prev.filter(l => l.id !== id));
 
   return (
     <div className="min-h-screen bg-background">
@@ -92,13 +108,12 @@ export default function CulturaPage({ cultura, onBack }) {
         </div>
       </div>
 
-      {/* ── Sticky tab bar — SOLID background (no backdrop-filter to avoid mobile GPU glitch) ── */}
+      {/* ── Sticky tab bar ── */}
       <div
         className="sticky top-0 z-20 px-4 py-2.5"
         style={{
           background: 'rgb(244, 246, 248)',
           borderBottom: '1px solid hsl(214 20% 88%)',
-          // transform: translateZ(0) forces a new compositing layer, fixing the Android scroll glitch
           transform: 'translateZ(0)',
         }}
       >
@@ -140,9 +155,19 @@ export default function CulturaPage({ cultura, onBack }) {
           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           style={{ willChange: 'opacity, transform' }}
         >
-          {tab === 'lotes'      && <LotesPage      cultura={cultura} calc={calc} onCalcChange={setCalc} />}
+          {tab === 'lotes' && (
+            <LotesPage
+              cultura={cultura}
+              calc={calc}
+              onCalcChange={setCalc}
+              lotes={lotes}
+              loadingLotes={loadingLotes}
+              onLoteAdded={handleLoteAdded}
+              onLoteDeleted={handleLoteDeleted}
+            />
+          )}
           {tab === 'manejo'     && <ManejoAdubacao  cultura={cultura} calc={calc} />}
-          {tab === 'cronograma' && <CronogramaTimeline cultura={cultura} />}
+          {tab === 'cronograma' && <CronogramaTimeline cultura={cultura} lotes={lotes} />}
         </motion.div>
       </AnimatePresence>
     </div>

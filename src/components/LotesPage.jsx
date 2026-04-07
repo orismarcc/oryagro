@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, CalendarDays, Sprout, CheckCircle2 } from 'lucide-react';
 import { calcularPlantas } from '../hooks/useSimulador';
-import { registrarPlantio, loadLotes, deleteLote } from '../hooks/useSupabaseSync';
+import { registrarPlantio, deleteLote } from '../hooks/useSupabaseSync';
 
 function parseCicloDias(cicloStr) {
   const match = cicloStr?.match(/\d+/g);
@@ -129,26 +129,16 @@ function LoteCard({ lote, cor, cicloDias, isCampo, onDelete, deleting }) {
 
 // ── Main component ──────────────────────────────────────────────────────────
 
-export default function LotesPage({ cultura, calc, onCalcChange }) {
+export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingLotes, onLoteAdded, onLoteDeleted }) {
   const isCampo = cultura.tipo === 'campo';
   const cor = cultura.cor;
   const cicloDias = parseCicloDias(cultura.ciclo);
 
-  const [lotes, setLotes] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [nome, setNome] = useState('');
   const [dataPlantio, setDataPlantio] = useState(today);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
-
-  useEffect(() => {
-    setLoading(true);
-    loadLotes(cultura.id).then(data => {
-      setLotes(data);
-      setLoading(false);
-    });
-  }, [cultura.id]);
 
   // Map calc state to valores format expected by calcularPlantas
   const calcValores = {
@@ -182,7 +172,7 @@ export default function LotesPage({ cultura, calc, onCalcChange }) {
 
     const novo = await registrarPlantio(payload);
     if (novo) {
-      setLotes(prev => [novo, ...prev]);
+      onLoteAdded(novo);
       setNome('');
       setDataPlantio(today());
       setShowForm(false);
@@ -193,7 +183,7 @@ export default function LotesPage({ cultura, calc, onCalcChange }) {
   const handleDelete = async (id) => {
     setDeletingId(id);
     const ok = await deleteLote(id);
-    if (ok) setLotes(prev => prev.filter(l => l.id !== id));
+    if (ok) onLoteDeleted(id);
     setDeletingId(null);
   };
 
@@ -328,7 +318,7 @@ export default function LotesPage({ cultura, calc, onCalcChange }) {
       <div>
         <p className="section-label mb-3 px-1">Lotes Cadastrados</p>
 
-        {loading ? (
+        {loadingLotes ? (
           <div className="flex items-center justify-center py-10 text-muted-foreground text-[13px] gap-2">
             <motion.div
               animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
