@@ -129,12 +129,12 @@ function LoteCard({ lote, cor, cicloDias, isCampo, onDelete, deleting }) {
 
 // ── Main component ──────────────────────────────────────────────────────────
 
-export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingLotes, onLoteAdded, onLoteDeleted }) {
+export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingLotes, onLoteAdded, onLoteDeleted, autoOpenForm = false }) {
   const isCampo = cultura.tipo === 'campo';
   const cor = cultura.cor;
   const cicloDias = parseCicloDias(cultura.ciclo);
 
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(autoOpenForm);
   const [nome, setNome] = useState('');
   const [dataPlantio, setDataPlantio] = useState(today);
   const [saving, setSaving] = useState(false);

@@ -112,7 +112,9 @@ export default function SimuladorFinanceiro({ cultura }) {
 
   useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(valores)); }, [storageKey, valores]);
 
+  // Called by NumField: onChange(campo, parsedValue)
   const handleChange = useCallback((campo, val) => setValores(v => ({ ...v, [campo]: val })), []);
+  // Called by raw <Input> elements: onChange={handleNum('campo')}
   const handleNum = (campo) => (e) => {
     const raw = e.target.value;
     setValores(prev => ({ ...prev, [campo]: raw === '' ? '' : parseFloat(raw) || 0 }));
@@ -180,16 +182,16 @@ export default function SimuladorFinanceiro({ cultura }) {
             <div className="flex flex-wrap gap-3">
               {isCampo ? (
                 <>
-                  <NumField label="Área (ha)"       field="areaHa"            valores={valores} onChange={handleNum} suffix="ha" />
-                  <NumField label="Espaç. linhas"   field="espacamentoLinhas" valores={valores} onChange={handleNum} suffix="m"  />
-                  <NumField label="Espaç. plantas"  field="espacamentoPlantas"valores={valores} onChange={handleNum} suffix="m"  />
+                  <NumField label="Área (ha)"       field="areaHa"            valores={valores} onChange={handleChange} suffix="ha" />
+                  <NumField label="Espaç. linhas"   field="espacamentoLinhas" valores={valores} onChange={handleChange} suffix="m"  />
+                  <NumField label="Espaç. plantas"  field="espacamentoPlantas"valores={valores} onChange={handleChange} suffix="m"  />
                 </>
               ) : (
                 <>
-                  <NumField label="Comprimento"     field="comprimento"       valores={valores} onChange={handleNum} suffix="m" width="w-28" />
-                  <NumField label="Largura"         field="largura"           valores={valores} onChange={handleNum} suffix="m" width="w-24" />
-                  <NumField label="Espaç. linhas"   field="espacamentoLinhas" valores={valores} onChange={handleNum} suffix="m" width="w-28" />
-                  <NumField label="Espaç. plantas"  field="espacamentoPlantas"valores={valores} onChange={handleNum} suffix="m" width="w-28" />
+                  <NumField label="Comprimento"     field="comprimento"       valores={valores} onChange={handleChange} suffix="m" width="w-28" />
+                  <NumField label="Largura"         field="largura"           valores={valores} onChange={handleChange} suffix="m" width="w-24" />
+                  <NumField label="Espaç. linhas"   field="espacamentoLinhas" valores={valores} onChange={handleChange} suffix="m" width="w-28" />
+                  <NumField label="Espaç. plantas"  field="espacamentoPlantas"valores={valores} onChange={handleChange} suffix="m" width="w-28" />
                 </>
               )}
             </div>
@@ -253,12 +255,12 @@ export default function SimuladorFinanceiro({ cultura }) {
                 <div className="mt-4 pt-3" style={{ borderTop: '1px solid hsl(214 20% 90%)' }}>
                   <p className="section-label mb-3" style={{ color: cor }}>Preço por unidade (R$)</p>
                   <div className="grid grid-cols-2 gap-3">
-                    <NumField label="Calcário / kg"        field="precoCalcareo"  valores={valores} onChange={handleNum} prefix="R$" width="w-full" />
-                    <NumField label="Esterco / kg"         field="precoEsterco"   valores={valores} onChange={handleNum} prefix="R$" width="w-full" />
-                    <NumField label="NPK / kg"             field="precoNPK"       valores={valores} onChange={handleNum} prefix="R$" width="w-full" />
-                    <NumField label="Ureia / kg"           field="precoUreia"     valores={valores} onChange={handleNum} prefix="R$" width="w-full" />
-                    <NumField label="Nitrato de Cálcio/kg" field="precoNitratoCa" valores={valores} onChange={handleNum} prefix="R$" width="w-full" />
-                    {!isCampo && <NumField label="Mulching / m²"   field="precoMulching"  valores={valores} onChange={handleNum} prefix="R$" width="w-full" />}
+                    <NumField label="Calcário / kg"        field="precoCalcareo"  valores={valores} onChange={handleChange} prefix="R$" width="w-full" />
+                    <NumField label="Esterco / kg"         field="precoEsterco"   valores={valores} onChange={handleChange} prefix="R$" width="w-full" />
+                    <NumField label="NPK / kg"             field="precoNPK"       valores={valores} onChange={handleChange} prefix="R$" width="w-full" />
+                    <NumField label="Ureia / kg"           field="precoUreia"     valores={valores} onChange={handleChange} prefix="R$" width="w-full" />
+                    <NumField label="Nitrato de Cálcio/kg" field="precoNitratoCa" valores={valores} onChange={handleChange} prefix="R$" width="w-full" />
+                    {!isCampo && <NumField label="Mulching / m²"   field="precoMulching"  valores={valores} onChange={handleChange} prefix="R$" width="w-full" />}
                   </div>
                 </div>
               </div>
@@ -329,9 +331,9 @@ export default function SimuladorFinanceiro({ cultura }) {
           <div className="card-elevated p-4">
             <p className="section-label mb-3" style={{ color: cor }}>Venda e Mão de Obra</p>
             <div className="flex flex-wrap gap-3">
-              <NumField label={`Preço / ${cultura.venda.unidade}`} field="precoVenda"   valores={valores} onChange={handleNum} prefix="R$" width="w-32" />
-              <NumField label="Sobrevivência"                       field="sobrevivencia"valores={valores} onChange={handleNum} suffix="%"   width="w-28" />
-              <NumField label={`Mão de obra${isCampo ? ' / ha' : ' / ciclo'}`} field="modObra" valores={valores} onChange={handleNum} prefix="R$" width="w-32" />
+              <NumField label={`Preço / ${cultura.venda.unidade}`} field="precoVenda"   valores={valores} onChange={handleChange} prefix="R$" width="w-32" />
+              <NumField label="Sobrevivência"                       field="sobrevivencia"valores={valores} onChange={handleChange} suffix="%"   width="w-28" />
+              <NumField label={`Mão de obra${isCampo ? ' / ha' : ' / ciclo'}`} field="modObra" valores={valores} onChange={handleChange} prefix="R$" width="w-32" />
             </div>
           </div>
         </div>

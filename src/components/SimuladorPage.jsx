@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+
 import { CULTURAS, CULTURAS_LIST } from '../data/culturas';
 import SimuladorFinanceiro from './SimuladorFinanceiro';
 import { TrendingUp, ChevronDown } from 'lucide-react';
@@ -108,14 +109,17 @@ export default function SimuladorPage() {
       </div>
 
       {/* ── Simulator ── */}
-      <motion.div
-        key={culturaId}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <SimuladorFinanceiro cultura={cultura} />
-      </motion.div>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={culturaId}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+        >
+          <SimuladorFinanceiro cultura={cultura} />
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }

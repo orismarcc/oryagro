@@ -1,63 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CULTURAS_LIST, CULTURAS } from '../data/culturas';
+import { CULTURAS } from '../data/culturas';
 import { loadTodosLotes } from '../hooks/useSupabaseSync';
-import { ChevronRight, Sprout, Clock, Droplets, MapPin, Plus, CalendarDays, X, CheckCircle2 } from 'lucide-react';
-
-const TYPE_BADGE = {
-  campo:    { label: 'Campo · ha',  bg: 'hsl(38 90% 93%)',  color: 'hsl(38 70% 32%)' },
-  canteiro: { label: 'Canteiro',    bg: 'hsl(221 90% 95%)', color: 'hsl(221 60% 40%)' },
-};
+import { Plus, CalendarDays, Sprout, CheckCircle2, LogOut, Layers } from 'lucide-react';
 
 function parseCicloDias(cicloStr) {
   const match = cicloStr?.match(/\d+/g);
   return match ? parseInt(match[match.length - 1]) : 60;
 }
 
-// ── Quick "Novo Lote" picker ───────────────────────────────────────────────
+// ── Lot card ─────────────────────────────────────────────────────────────────
 
-function NovoLotePicker({ onSelect, onClose }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 8 }}
-      transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-      className="card overflow-hidden"
-      style={{ border: '1px solid hsl(214 20% 88%)' }}
-    >
-      <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid hsl(214 20% 90%)' }}>
-        <p className="text-[13px] font-bold text-foreground">Qual cultura?</p>
-        <button onClick={onClose} className="text-muted-foreground p-0.5">
-          <X size={16} />
-        </button>
-      </div>
-      <div style={{ maxHeight: 280, overflowY: 'auto' }}>
-        {CULTURAS_LIST.map(c => (
-          <button
-            key={c.id}
-            onClick={() => onSelect(c.id)}
-            className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors"
-            style={{ borderBottom: '1px solid hsl(214 20% 93%)' }}
-          >
-            <span className="text-xl flex-shrink-0">{c.emoji}</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-foreground leading-none">{c.nome}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5 capitalize">{c.tipo}</p>
-            </div>
-            <ChevronRight size={14} className="text-muted-foreground flex-shrink-0" />
-          </button>
-        ))}
-      </div>
-    </motion.div>
-  );
-}
-
-// ── Recent lots mini-card ──────────────────────────────────────────────────
-
-function LoteMini({ lote, onSelectCultura }) {
+function LoteCard({ lote, onSelect, index }) {
   const cultura = CULTURAS[lote.cultura_id];
   if (!cultura) return null;
+
   const cor = cultura.cor;
   const cicloDias = parseCicloDias(cultura.ciclo);
   const diasDecorridos = Math.floor(
@@ -65,78 +22,145 @@ function LoteMini({ lote, onSelectCultura }) {
   );
   const progresso = Math.min((diasDecorridos / cicloDias) * 100, 100);
   const concluido = diasDecorridos >= cicloDias;
+  const diasRestantes = Math.max(cicloDias - diasDecorridos, 0);
+  const isCampo = cultura.tipo === 'campo';
+
+  const dimensao = isCampo
+    ? `${lote.area_ha ?? '?'} ha`
+    : lote.comprimento_m && lote.largura_m
+      ? `${lote.comprimento_m}×${lote.largura_m} m`
+      : '—';
 
   return (
-    <button
-      onClick={() => onSelectCultura(lote.cultura_id)}
-      className="card-interactive w-full p-3 flex items-center gap-3 text-left"
+    <motion.button
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.055, duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+      onClick={() => onSelect(lote)}
+      className="card-interactive w-full text-left p-4"
       style={{ borderLeft: `3px solid ${cor}` }}
     >
-      <div className="flex-shrink-0 text-xl w-8 text-center">{cultura.emoji}</div>
-      <div className="flex-1 min-w-0">
-        <p className="text-[12px] font-bold text-foreground leading-none truncate">{lote.nome}</p>
-        <div className="flex items-center gap-1.5 mt-0.5">
-          <CalendarDays size={9} style={{ color: cor }} />
-          <span className="text-[10px] text-muted-foreground">
-            {new Date(lote.data_plantio + 'T12:00:00').toLocaleDateString('pt-BR')}
-          </span>
+      {/* Header */}
+      <div className="flex items-start gap-3 mb-3">
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+          style={{ background: `${cor}15` }}
+        >
+          {cultura.emoji}
         </div>
-        {/* progress bar */}
-        <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ background: 'hsl(210 16% 93%)' }}>
-          <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${progresso}%`, background: concluido ? '#16a34a' : cor }}
-          />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-[14px] font-bold text-foreground leading-tight truncate">{lote.nome}</p>
+            {concluido && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1"
+                style={{ background: '#dcfce7', color: '#16a34a' }}>
+                <CheckCircle2 size={9} /> Colheita
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+            <span className="text-[11px] text-muted-foreground font-medium">{cultura.nome}</span>
+            <span className="text-[11px] text-muted-foreground">{dimensao}</span>
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <CalendarDays size={9} style={{ color: cor }} />
+              {new Date(lote.data_plantio + 'T12:00:00').toLocaleDateString('pt-BR')}
+            </span>
+          </div>
+        </div>
+        <div className="flex-shrink-0 text-right ml-1">
+          <p className="text-[13px] font-black leading-none" style={{ color: cor }}>D{diasDecorridos}</p>
+          <p className="text-[9px] text-muted-foreground mt-0.5">
+            {concluido ? 'pronto' : `${diasRestantes}d`}
+          </p>
         </div>
       </div>
-      <div className="flex-shrink-0 text-right">
-        {concluido ? (
-          <CheckCircle2 size={16} style={{ color: '#16a34a' }} />
-        ) : (
-          <span className="text-[11px] font-bold" style={{ color: cor }}>
-            D{diasDecorridos}
-          </span>
-        )}
+
+      {/* Stats row */}
+      <div className="flex items-center gap-3 mb-2.5">
+        <span className="text-[11px] text-muted-foreground">
+          {(lote.total_plantas || 0).toLocaleString('pt-BR')} plantas
+        </span>
+        <span className="text-[10px] text-muted-foreground opacity-50">·</span>
+        <span className="text-[11px] font-bold" style={{ color: concluido ? '#16a34a' : cor }}>
+          {Math.round(progresso)}% do ciclo
+        </span>
       </div>
-    </button>
+
+      {/* Progress bar */}
+      <div className="h-2 rounded-full overflow-hidden" style={{ background: 'hsl(210 16% 93%)' }}>
+        <div
+          className="h-full rounded-full transition-all duration-700"
+          style={{ width: `${progresso}%`, background: concluido ? '#16a34a' : cor }}
+        />
+      </div>
+    </motion.button>
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────
+// ── Empty state ───────────────────────────────────────────────────────────────
 
-export default function Dashboard({ onSelectCultura }) {
-  const [showLotePicker, setShowLotePicker] = useState(false);
-  const [lotes, setLotes] = useState([]);
-  const [loadingLotes, setLoadingLotes] = useState(true);
-  const pickerRef = useRef(null);
+function EmptyLotes({ onAdd }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      className="card p-8 flex flex-col items-center gap-3 text-center"
+    >
+      <div className="icon-circle w-16 h-16 text-3xl"
+        style={{ background: 'hsl(160 84% 27% / 0.1)' }}>
+        <Layers size={24} style={{ color: 'hsl(160 84% 27%)' }} />
+      </div>
+      <div>
+        <p className="text-[14px] font-bold text-foreground">Nenhum lote cadastrado</p>
+        <p className="text-[12px] text-muted-foreground mt-1">
+          Comece registrando seu primeiro lote de plantio
+        </p>
+      </div>
+      <button
+        onClick={onAdd}
+        className="mt-1 flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[13px] font-bold text-white transition-all active:scale-[0.98]"
+        style={{ background: 'hsl(160 84% 27%)' }}
+      >
+        <Plus size={15} /> Novo Lote
+      </button>
+    </motion.div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+export default function Dashboard({ onAddLote, onSelectLote, onSignOut, userName }) {
+  const [lotes, setLotes]           = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    loadTodosLotes(6).then(data => {
+    setLoading(true);
+    loadTodosLotes(50).then(data => {
       setLotes(data);
-      setLoadingLotes(false);
+      setLoading(false);
     });
-  }, []);
+  }, [refreshKey]);
 
-  // Close picker on outside click
-  useEffect(() => {
-    if (!showLotePicker) return;
-    const handler = e => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target)) setShowLotePicker(false);
-    };
-    document.addEventListener('mousedown', handler);
-    document.addEventListener('touchstart', handler);
-    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('touchstart', handler); };
-  }, [showLotePicker]);
-
-  const handleNovoLote = (culturaId) => {
-    setShowLotePicker(false);
-    onSelectCultura(culturaId);
-  };
+  // Group active vs ready-for-harvest
+  const ativos    = lotes.filter(l => {
+    const cultura = CULTURAS[l.cultura_id];
+    if (!cultura) return false;
+    const dias = Math.floor((Date.now() - new Date(l.data_plantio + 'T12:00:00')) / 86_400_000);
+    return dias < parseCicloDias(cultura.ciclo);
+  });
+  const prontos   = lotes.filter(l => {
+    const cultura = CULTURAS[l.cultura_id];
+    if (!cultura) return false;
+    const dias = Math.floor((Date.now() - new Date(l.data_plantio + 'T12:00:00')) / 86_400_000);
+    return dias >= parseCicloDias(cultura.ciclo);
+  });
 
   return (
     <div className="min-h-screen bg-background">
 
-      {/* ── Hero header ── */}
+      {/* ── Hero ── */}
       <div className="gradient-hero relative overflow-hidden">
         <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full pointer-events-none"
           style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.06) 0%, transparent 70%)' }} />
@@ -146,142 +170,118 @@ export default function Dashboard({ onSelectCultura }) {
           <Sprout size={120} color="white" />
         </div>
 
-        <div className="relative z-10 px-5 pt-6 pb-7">
-          <div className="flex items-center gap-3 mb-4">
-            <div
-              className="h-11 w-11 rounded-xl flex items-center justify-center border flex-shrink-0"
-              style={{ background: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.28)' }}
+        <div className="relative z-10 px-5 pt-5 pb-6">
+          {/* Title row */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl flex items-center justify-center border flex-shrink-0"
+                style={{ background: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.28)' }}>
+                <Sprout size={18} color="white" />
+              </div>
+              <div>
+                <p className="text-white/60 text-xs font-medium">
+                  {userName ? `Olá, ${userName.split('@')[0]}` : 'Guia Hortícola'}
+                </p>
+                <h1 className="font-display text-white text-xl font-extrabold leading-tight">OryAgro</h1>
+              </div>
+            </div>
+            <button
+              onClick={onSignOut}
+              className="flex items-center gap-1.5 text-white/50 hover:text-white/80 transition-colors p-1.5"
             >
-              <Sprout size={20} color="white" />
-            </div>
-            <div>
-              <p className="text-white/60 text-xs font-medium">Guia Hortícola</p>
-              <h1 className="font-display text-white text-xl font-extrabold leading-tight">OryAgro</h1>
-            </div>
+              <LogOut size={15} />
+            </button>
           </div>
 
-          {/* Stats row */}
-          <div className="glass rounded-2xl p-4" style={{ borderColor: 'rgba(255,255,255,0.18)' }}>
+          {/* Stats glass */}
+          <div className="glass rounded-2xl p-4 mb-3" style={{ borderColor: 'rgba(255,255,255,0.18)' }}>
             <div className="grid grid-cols-3 divide-x" style={{ divideColor: 'rgba(255,255,255,0.15)' }}>
               <div className="pr-4">
-                <p className="font-display text-white text-2xl font-black leading-none">{CULTURAS_LIST.length}</p>
-                <p className="text-white/55 text-[10px] font-semibold uppercase tracking-widest mt-0.5">Culturas</p>
-              </div>
-              <div className="px-4">
                 <p className="font-display text-white text-2xl font-black leading-none">
-                  {CULTURAS_LIST.filter(c => c.tipo === 'campo').length}
-                </p>
-                <p className="text-white/55 text-[10px] font-semibold uppercase tracking-widest mt-0.5">Campo</p>
-              </div>
-              <div className="pl-4">
-                <p className="font-display text-white text-2xl font-black leading-none">
-                  {loadingLotes ? '…' : lotes.length}
+                  {loading ? '…' : lotes.length}
                 </p>
                 <p className="text-white/55 text-[10px] font-semibold uppercase tracking-widest mt-0.5">Lotes</p>
               </div>
+              <div className="px-4">
+                <p className="font-display text-white text-2xl font-black leading-none">
+                  {loading ? '…' : ativos.length}
+                </p>
+                <p className="text-white/55 text-[10px] font-semibold uppercase tracking-widest mt-0.5">Ativos</p>
+              </div>
+              <div className="pl-4">
+                <p className="font-display text-white text-2xl font-black leading-none text-emerald-300">
+                  {loading ? '…' : prontos.length}
+                </p>
+                <p className="text-white/55 text-[10px] font-semibold uppercase tracking-widest mt-0.5">P/ Colheita</p>
+              </div>
             </div>
           </div>
 
-          {/* Novo Lote CTA */}
-          <div className="mt-3" ref={pickerRef}>
-            <button
-              onClick={() => setShowLotePicker(o => !o)}
-              className="glass w-full flex items-center justify-center gap-2 py-3 rounded-xl transition-all active:scale-[0.98]"
-              style={{ borderColor: 'rgba(255,255,255,0.22)' }}
-            >
-              <Plus size={15} color="white" />
-              <span className="text-white text-[13px] font-semibold">Novo Lote</span>
-            </button>
-
-            <AnimatePresence>
-              {showLotePicker && (
-                <div className="mt-2">
-                  <NovoLotePicker onSelect={handleNovoLote} onClose={() => setShowLotePicker(false)} />
-                </div>
-              )}
-            </AnimatePresence>
-          </div>
+          {/* Add button */}
+          <button
+            onClick={onAddLote}
+            className="glass w-full flex items-center justify-center gap-2 py-3 rounded-xl transition-all active:scale-[0.98]"
+            style={{ borderColor: 'rgba(255,255,255,0.22)' }}
+          >
+            <Plus size={15} color="white" />
+            <span className="text-white text-[13px] font-bold">Novo Lote</span>
+          </button>
         </div>
       </div>
 
-      {/* ── Recent lots ── */}
-      {!loadingLotes && lotes.length > 0 && (
-        <div className="px-4 pt-5 pb-1">
-          <p className="section-label mb-3 px-1">Lotes Recentes</p>
-          <div className="space-y-2">
-            {lotes.map((lote, i) => (
-              <motion.div
-                key={lote.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05, duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              >
-                <LoteMini lote={lote} onSelectCultura={onSelectCultura} />
-              </motion.div>
-            ))}
+      {/* ── Content ── */}
+      <div className="px-4 pt-5 pb-4 max-w-2xl mx-auto">
+        {loading ? (
+          <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground text-[13px]">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+              className="w-4 h-4 rounded-full border-2"
+              style={{ borderColor: 'hsl(160 84% 27% / 0.4)', borderTopColor: 'hsl(160 84% 27%)' }}
+            />
+            Carregando lotes…
           </div>
-        </div>
-      )}
-
-      {/* ── Culture list ── */}
-      <div className="px-4 pt-5 pb-4">
-        <p className="section-label mb-3 px-1">Selecione uma cultura</p>
-
-        <div className="space-y-3">
-          {CULTURAS_LIST.map((c, i) => {
-            const badge = TYPE_BADGE[c.tipo] || TYPE_BADGE.canteiro;
-            return (
-              <motion.button
-                key={c.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.06, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                onClick={() => onSelectCultura(c.id)}
-                className="card-interactive w-full text-left p-4 flex items-center gap-4"
-              >
-                <div
-                  className="icon-circle w-14 h-14 text-2xl flex-shrink-0 rounded-2xl"
-                  style={{ background: `${c.cor}15` }}
+        ) : lotes.length === 0 ? (
+          <EmptyLotes onAdd={onAddLote} />
+        ) : (
+          <>
+            {/* Ready for harvest */}
+            <AnimatePresence>
+              {prontos.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  className="mb-5"
                 >
-                  {c.emoji}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="font-display text-[15px] font-bold text-foreground">{c.nome}</span>
-                    <span
-                      className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
-                      style={{ background: badge.bg, color: badge.color }}
-                    >
-                      {badge.label}
-                    </span>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <p className="section-label" style={{ color: '#16a34a' }}>
+                      Prontos para colheita ({prontos.length})
+                    </p>
                   </div>
-
-                  <p className="text-[11px] text-muted-foreground italic mb-2 leading-none">{c.nomesCientifico}</p>
-
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                      <Clock size={10} style={{ color: c.cor }} />
-                      {c.ciclo}
-                    </span>
-                    <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                      <Droplets size={10} style={{ color: c.cor }} />
-                      {c.necessidadeHidrica}
-                    </span>
-                    {c.tipo === 'campo' && (
-                      <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                        <MapPin size={10} style={{ color: c.cor }} />
-                        {c.areaPadrao}
-                      </span>
-                    )}
+                  <div className="space-y-3">
+                    {prontos.map((l, i) => (
+                      <LoteCard key={l.id} lote={l} onSelect={onSelectLote} index={i} />
+                    ))}
                   </div>
-                </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-                <ChevronRight size={18} className="text-muted-foreground flex-shrink-0" />
-              </motion.button>
-            );
-          })}
-        </div>
+            {/* Active lots */}
+            {ativos.length > 0 && (
+              <div>
+                <p className="section-label mb-3 px-1">
+                  Lotes ativos ({ativos.length})
+                </p>
+                <div className="space-y-3">
+                  {ativos.map((l, i) => (
+                    <LoteCard key={l.id} lote={l} onSelect={onSelectLote} index={i} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

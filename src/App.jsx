@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Dashboard from './components/Dashboard';
+import CulturaPicker from './components/CulturaPicker';
 import CulturaPage from './components/CulturaPage';
 import SimuladorPage from './components/SimuladorPage';
 import ComparacaoCulturas from './components/ComparacaoCulturas';
+import LoginPage from './components/LoginPage';
 import { CULTURAS } from './data/culturas';
-import { Home, TrendingUp, BarChart2 } from 'lucide-react';
+import { useAuth } from './hooks/useAuth';
+import { Home, TrendingUp, BarChart2, Loader2 } from 'lucide-react';
 
 const BOTTOM_NAV = [
   { value: 'dashboard',  label: 'Início',    Icon: Home },
@@ -14,42 +17,108 @@ const BOTTOM_NAV = [
 ];
 
 export default function App() {
-  const [mainView, setMainView]   = useState('dashboard'); // 'dashboard' | 'cultura' | 'simulador' | 'comparacao'
-  const [culturaId, setCulturaId] = useState(null);
+  const { session, loading: authLoading, user, signOut } = useAuth();
 
-  const handleSelectCultura = (id) => {
-    setCulturaId(id);
+  // Navigation state
+  // mainView: 'dashboard' | 'cultura-picker' | 'cultura' | 'simulador' | 'comparacao'
+  const [mainView, setMainView]             = useState('dashboard');
+  const [culturaId, setCulturaId]           = useState(null);
+  const [autoOpenLoteForm, setAutoOpenLoteForm] = useState(false);
+
+  // ── Navigation handlers ──
+
+  // From Dashboard: user clicks "+ Novo Lote"
+  const handleAddLote = () => {
+    setMainView('cultura-picker');
+  };
+
+  // From Dashboard: user clicks an existing lot card
+  const handleSelectLote = (lote) => {
+    setCulturaId(lote.cultura_id);
+    setAutoOpenLoteForm(false);
     setMainView('cultura');
   };
 
+  // From CulturaPicker: user selects a culture → go to CulturaPage with form open
+  const handlePickCultura = (id) => {
+    setCulturaId(id);
+    setAutoOpenLoteForm(true);
+    setMainView('cultura');
+  };
+
+  // Back from CulturaPage → dashboard
   const handleBack = () => {
     setMainView('dashboard');
     setCulturaId(null);
+    setAutoOpenLoteForm(false);
   };
 
+  // Back from CulturaPicker → dashboard
+  const handleBackFromPicker = () => {
+    setMainView('dashboard');
+  };
+
+  // Bottom nav
   const handleNav = (view) => {
     setMainView(view);
     setCulturaId(null);
+    setAutoOpenLoteForm(false);
   };
 
   const cultura = culturaId ? CULTURAS[culturaId] : null;
+  const isInCultura = mainView === 'cultura' && cultura;
 
-  // In cultura view, bottom nav shows culture sections instead
-  const isCulturaView = mainView === 'cultura' && cultura;
+  // ── Auth loading ──
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 size={28} className="animate-spin" style={{ color: 'hsl(160 84% 27%)' }} />
+      </div>
+    );
+  }
 
+  // ── Auth gate ──
+  if (!session) {
+    return <LoginPage />;
+  }
+
+  // ── App ──
   return (
     <div className="min-h-screen bg-background">
       <main className="pb-28">
         <AnimatePresence mode="wait">
           <motion.div
-            key={mainView === 'cultura' ? `cultura-${culturaId}` : mainView}
+            key={
+              mainView === 'cultura'        ? `cultura-${culturaId}` :
+              mainView === 'cultura-picker' ? 'cultura-picker' :
+              mainView
+            }
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
           >
-            {mainView === 'dashboard'  && <Dashboard onSelectCultura={handleSelectCultura} />}
-            {mainView === 'cultura'    && cultura && <CulturaPage cultura={cultura} onBack={handleBack} />}
+            {mainView === 'dashboard' && (
+              <Dashboard
+                onAddLote={handleAddLote}
+                onSelectLote={handleSelectLote}
+                onSignOut={signOut}
+                userName={user?.email}
+              />
+            )}
+            {mainView === 'cultura-picker' && (
+              <CulturaPicker
+                onSelectCultura={handlePickCultura}
+                onBack={handleBackFromPicker}
+              />
+            )}
+            {mainView === 'cultura' && cultura && (
+              <CulturaPage
+                cultura={cultura}
+                onBack={handleBack}
+                autoOpenLoteForm={autoOpenLoteForm}
+              />
+            )}
             {mainView === 'simulador'  && <SimuladorPage />}
             {mainView === 'comparacao' && <ComparacaoCulturas />}
           </motion.div>
@@ -73,8 +142,10 @@ export default function App() {
         >
           <div className="flex items-center h-[60px] px-1">
             {BOTTOM_NAV.map(({ value, label, Icon }) => {
-              const isActive = mainView === value || (value === 'dashboard' && mainView === 'cultura');
-              const activeCor = isCulturaView && value === 'dashboard' ? cultura.cor : 'hsl(160 84% 27%)';
+              const dashboardActive = value === 'dashboard' &&
+                (mainView === 'dashboard' || mainView === 'cultura' || mainView === 'cultura-picker');
+              const isActive = mainView === value || dashboardActive;
+              const activeCor = isInCultura && value === 'dashboard' ? cultura.cor : 'hsl(160 84% 27%)';
 
               return (
                 <button

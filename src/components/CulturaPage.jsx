@@ -18,7 +18,7 @@ const GLASS_STATS = (c) => [
   { Icon: Droplets,     label: 'Água',  value: c.necessidadeHidrica },
 ];
 
-export default function CulturaPage({ cultura, onBack }) {
+export default function CulturaPage({ cultura, onBack, autoOpenLoteForm = false }) {
   const [tab, setTab] = useState('lotes');
   const isCampo = cultura.tipo === 'campo';
 
@@ -164,6 +164,7 @@ export default function CulturaPage({ cultura, onBack }) {
               loadingLotes={loadingLotes}
               onLoteAdded={handleLoteAdded}
               onLoteDeleted={handleLoteDeleted}
+              autoOpenForm={autoOpenLoteForm}
             />
           )}
           {tab === 'manejo'     && <ManejoAdubacao  cultura={cultura} calc={calc} />}

@@ -3,15 +3,27 @@ import { CULTURAS_LIST } from '../data/culturas';
 import { useSimulador } from '../hooks/useSimulador';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
-function CulturaRow({ cultura }) {
-  const storageKey = `sim_${cultura.id}`;
-  let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(storageKey)); } catch {}
+// Comparar always uses standard technical defaults (1 ha / 20×1.6 m) — ignores localStorage
+function buildDefaults(cultura) {
   const isCampo = cultura.tipo === 'campo';
-  const defaults = isCampo
-    ? { areaHa: cultura.area.padrao, espacamentoLinhas: cultura.espacamento.linhas, espacamentoPlantas: cultura.espacamento.plantas, calcareo: cultura.insumos.calcareo.padrao, esterco: cultura.insumos.esterco.padrao, npk: cultura.insumos.npk.padrao, ureia: cultura.insumos.ureia.padrao, nitratoCalcio: cultura.insumos.nitratoCalcio.padrao, modObra: cultura.insumos.modObra.padrao, precoVenda: cultura.venda.precoUnitario, sobrevivencia: cultura.venda.sobrevivencia }
-    : { comprimento: cultura.canteiro.comprimento, largura: cultura.canteiro.largura, espacamentoLinhas: cultura.canteiro.espacamentoLinhas, espacamentoPlantas: cultura.canteiro.espacamentoPlantas, calcareo: cultura.insumos.calcareo.padrao, esterco: cultura.insumos.esterco.padrao, npk: cultura.insumos.npk.padrao, ureia: cultura.insumos.ureia.padrao, nitratoCalcio: cultura.insumos.nitratoCalcio.padrao, modObra: cultura.insumos.modObra.padrao, precoVenda: cultura.venda.precoUnitario, sobrevivencia: cultura.venda.sobrevivencia };
-  const r = useSimulador(cultura, saved || defaults);
+  const ins = cultura.insumos;
+  const base = isCampo
+    ? { areaHa: 1, espacamentoLinhas: cultura.espacamento.linhas, espacamentoPlantas: cultura.espacamento.plantas }
+    : { comprimento: 20, largura: 1.6, espacamentoLinhas: cultura.canteiro.espacamentoLinhas, espacamentoPlantas: cultura.canteiro.espacamentoPlantas };
+  return {
+    ...base,
+    calcareo: ins.calcareo.padrao, esterco: ins.esterco.padrao,
+    npk: ins.npk.padrao, ureia: ins.ureia.padrao, nitratoCalcio: ins.nitratoCalcio.padrao,
+    modObra: ins.modObra.padrao, precoVenda: cultura.venda.precoUnitario,
+    sobrevivencia: cultura.venda.sobrevivencia,
+    custoEmbalagem: isCampo ? 0 : 18, custoTransporte: 20,
+    custoDefensivos: isCampo ? 80 : 35, custoEnergia: 25,
+  };
+}
+
+function CulturaRow({ cultura }) {
+  const isCampo = cultura.tipo === 'campo';
+  const r = useSimulador(cultura, buildDefaults(cultura));
 
   const isPositive = r.lucro >= 0;
   const margemColor = r.margem >= 50 ? '#059669' : r.margem >= 20 ? '#d97706' : '#dc2626';
@@ -95,7 +107,9 @@ export default function ComparacaoCulturas() {
       <div className="gradient-hero px-5 pt-6 pb-6">
         <p className="text-white/55 text-xs font-semibold uppercase tracking-widest mb-1">Análise</p>
         <h1 className="font-display text-white text-2xl font-extrabold leading-tight">Comparar Culturas</h1>
-        <p className="text-white/50 text-[12px] mt-1">Baseado nos parâmetros do simulador de cada cultura</p>
+        <p className="text-white/50 text-[12px] mt-1">
+          Base padrão: campo = 1 ha · canteiro = 20×1,6 m
+        </p>
       </div>
 
       <div className="px-4 pt-5 pb-4 space-y-3 max-w-2xl mx-auto">
