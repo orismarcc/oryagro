@@ -11,7 +11,14 @@ function parseCicloDias(cicloStr) {
 }
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function addDays(dateStr, days) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + days);
+  return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
@@ -45,9 +52,9 @@ function Metric({ label, value, cor }) {
 }
 
 function LoteCard({ lote, cor, cicloDias, isCampo, onDelete, deleting }) {
-  const diasDecorridos = Math.floor(
+  const diasDecorridos = Math.max(0, Math.floor(
     (Date.now() - new Date(lote.data_plantio + 'T12:00:00')) / 86_400_000
-  );
+  ));
   const progresso = Math.min((diasDecorridos / cicloDias) * 100, 100);
   const concluido = diasDecorridos >= cicloDias;
   const diasRestantes = Math.max(cicloDias - diasDecorridos, 0);
@@ -137,6 +144,7 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
   const [showForm, setShowForm] = useState(autoOpenForm);
   const [nome, setNome] = useState('');
   const [dataPlantio, setDataPlantio] = useState(today);
+  const [usaMudas, setUsaMudas] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
@@ -172,9 +180,11 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
 
     const novo = await registrarPlantio(payload);
     if (novo) {
+      localStorage.setItem(`lote_mudas_${novo.id}`, usaMudas ? '1' : '0');
       onLoteAdded(novo);
       setNome('');
       setDataPlantio(today());
+      setUsaMudas(false);
       setShowForm(false);
     }
     setSaving(false);
@@ -267,9 +277,34 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
                   className="w-full px-3 py-2.5 rounded-xl text-[13px] outline-none"
                   style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 88%)' }}
                 />
+
+                {cultura.suportaMudas && (
+                  <div className="flex items-center justify-between py-1">
+                    <span className="text-[12px] font-semibold text-foreground">Tipo de plantio</span>
+                    <div className="flex rounded-xl overflow-hidden" style={{ background: 'hsl(210 16% 93%)' }}>
+                      <button
+                        type="button"
+                        onClick={() => setUsaMudas(false)}
+                        className="px-3 py-1.5 text-[11px] font-semibold rounded-xl transition-all"
+                        style={!usaMudas ? { background: cor, color: '#fff' } : { color: 'hsl(215 16% 45%)' }}
+                      >
+                        Direto
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setUsaMudas(true)}
+                        className="px-3 py-1.5 text-[11px] font-semibold rounded-xl transition-all"
+                        style={usaMudas ? { background: cor, color: '#fff' } : { color: 'hsl(215 16% 45%)' }}
+                      >
+                        Mudas
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    Data do plantio
+                    {usaMudas ? 'Data da semeadura em bandeja' : 'Data do plantio'}
                   </label>
                   <input
                     type="date"
@@ -278,6 +313,11 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
                     className="w-full px-3 py-2.5 rounded-xl text-[13px] outline-none"
                     style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 88%)' }}
                   />
+                  {usaMudas && dataPlantio && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Transplante previsto: {addDays(dataPlantio, 15)}
+                    </p>
+                  )}
                 </div>
               </div>
 

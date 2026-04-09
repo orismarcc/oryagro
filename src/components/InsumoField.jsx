@@ -64,7 +64,7 @@ export default function InsumoField({
         </div>
       </div>
       <div className="flex items-center gap-1.5 mt-4">
-        <AlertaBadge alerta={alerta} />
+        <AlertaBadge alerta={alerta} showOk={true} />
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>

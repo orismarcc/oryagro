@@ -17,7 +17,10 @@ const TIPO_META = {
 };
 const TIPOS = Object.keys(TIPO_META);
 
-const todayISO = () => new Date().toISOString().split('T')[0];
+const todayISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 const formatDate = (iso) => {
   if (!iso) return '';
@@ -142,9 +145,14 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
   const fator = loteArea / baseArea;
   const isScaled = Math.abs(fator - 1) > 0.02;
 
+  // ── Mudas flag ──
+  const usaMudas = selectedLote
+    ? localStorage.getItem(`lote_mudas_${selectedLote.id}`) === '1'
+    : false;
+
   // ── Days elapsed for selected lote ──
   const diasDecorridos = selectedLote
-    ? Math.floor((Date.now() - new Date(selectedLote.data_plantio + 'T12:00:00')) / 86_400_000)
+    ? Math.max(0, Math.floor((Date.now() - new Date(selectedLote.data_plantio + 'T12:00:00')) / 86_400_000))
     : null;
 
   // Pre-fill confirm date for lote steps
@@ -154,9 +162,21 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
     return d.toISOString().split('T')[0];
   };
 
+  const semeaduraBandeja = {
+    dia: 0, _id: 'semeadura_bandeja', _custom: false,
+    etapa: 'Semeadura em bandeja', produto: 'Sementes', dose: '—',
+    forma: 'Semeadura em bandeja/viveiro. Transplante previsto em ~15 dias.', tipo: 'plantio',
+  };
+
   const allEvents = [
-    ...cultura.cronograma.map((e, i) => ({ ...e, _id: `default_${i}`, _custom: false })),
-    ...customRows.map((e, i)         => ({ ...e, _id: `custom_${i}`,  _custom: true })),
+    ...(usaMudas ? [semeaduraBandeja] : []),
+    ...cultura.cronograma.map((e, i) => ({
+      ...e,
+      dia: usaMudas ? e.dia + 15 : e.dia,
+      _id: `default_${i}`,
+      _custom: false,
+    })),
+    ...customRows.map((e, i) => ({ ...e, _id: `custom_${i}`, _custom: true })),
   ].sort((a, b) => a.dia - b.dia);
 
   const feitos   = allEvents.filter(e => status[e._id]?.status === 'feito').length;

@@ -17,9 +17,9 @@ function LoteCard({ lote, onSelect, index }) {
 
   const cor = cultura.cor;
   const cicloDias = parseCicloDias(cultura.ciclo);
-  const diasDecorridos = Math.floor(
+  const diasDecorridos = Math.max(0, Math.floor(
     (Date.now() - new Date(lote.data_plantio + 'T12:00:00')) / 86_400_000
-  );
+  ));
   const progresso = Math.min((diasDecorridos / cicloDias) * 100, 100);
   const concluido = diasDecorridos >= cicloDias;
   const diasRestantes = Math.max(cicloDias - diasDecorridos, 0);
@@ -147,13 +147,13 @@ export default function Dashboard({ onAddLote, onSelectLote, onSignOut, userName
   const ativos    = lotes.filter(l => {
     const cultura = CULTURAS[l.cultura_id];
     if (!cultura) return false;
-    const dias = Math.floor((Date.now() - new Date(l.data_plantio + 'T12:00:00')) / 86_400_000);
+    const dias = Math.max(0, Math.floor((Date.now() - new Date(l.data_plantio + 'T12:00:00')) / 86_400_000));
     return dias < parseCicloDias(cultura.ciclo);
   });
   const prontos   = lotes.filter(l => {
     const cultura = CULTURAS[l.cultura_id];
     if (!cultura) return false;
-    const dias = Math.floor((Date.now() - new Date(l.data_plantio + 'T12:00:00')) / 86_400_000);
+    const dias = Math.max(0, Math.floor((Date.now() - new Date(l.data_plantio + 'T12:00:00')) / 86_400_000));
     return dias >= parseCicloDias(cultura.ciclo);
   });
 
