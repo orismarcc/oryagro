@@ -5,14 +5,16 @@ import CulturaPicker from './components/CulturaPicker';
 import CulturaPage from './components/CulturaPage';
 import SimuladorPage from './components/SimuladorPage';
 import ComparacaoCulturas from './components/ComparacaoCulturas';
+import AnalysePage from './components/AnalysePage';
 import LoginPage from './components/LoginPage';
 import { CULTURAS } from './data/culturas';
 import { useAuth } from './hooks/useAuth';
-import { Home, TrendingUp, BarChart2, Loader2 } from 'lucide-react';
+import { Home, TrendingUp, BarChart2, Activity, Loader2 } from 'lucide-react';
 
 const BOTTOM_NAV = [
   { value: 'dashboard',  label: 'Início',    Icon: Home },
   { value: 'simulador',  label: 'Simulador', Icon: TrendingUp },
+  { value: 'analise',    label: 'Análise',   Icon: Activity },
   { value: 'comparacao', label: 'Comparar',  Icon: BarChart2 },
 ];
 
@@ -85,7 +87,7 @@ export default function App() {
   // ── App ──
   return (
     <div className="min-h-screen bg-background">
-      <main className="pb-28">
+      <main className="pb-36">
         <AnimatePresence mode="wait">
           <motion.div
             key={
@@ -120,6 +122,7 @@ export default function App() {
               />
             )}
             {mainView === 'simulador'  && <SimuladorPage />}
+            {mainView === 'analise'    && <AnalysePage onSignOut={signOut} userName={user?.email} />}
             {mainView === 'comparacao' && <ComparacaoCulturas />}
           </motion.div>
         </AnimatePresence>
@@ -128,7 +131,12 @@ export default function App() {
       {/* ── Bottom nav ── */}
       <nav
         className="fixed bottom-0 left-0 right-0 z-50"
-        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 8px)' }}
+        style={{
+          paddingBottom: 'max(env(safe-area-inset-bottom), 8px)',
+          willChange: 'transform',
+          transform: 'translateZ(0)',
+          WebkitTransform: 'translateZ(0)',
+        }}
       >
         <div
           className="mx-3 mb-1 rounded-2xl overflow-hidden border"
