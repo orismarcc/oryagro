@@ -74,14 +74,21 @@ export function useSimulador(cultura, valores) {
                        custoEmbalagem + custoTransporte + custoDefensivos + custoEnergia;
 
     const precoVenda    = parseFloat(valores.precoVenda)    || cultura.venda.precoUnitario;
-    const sobrevivencia = parseFloat(valores.sobrevivencia) || cultura.venda.sobrevivencia;
+    const sobrevivencia = parseFloat(valores.sobrevivencia) != null && valores.sobrevivencia !== ''
+      ? parseFloat(valores.sobrevivencia)
+      : cultura.venda.sobrevivencia;
     const plantasViaveis = Math.round(dim.totalPlantas * sobrevivencia / 100);
 
-    let receita;
-    if (isCampo && cultura.venda.producaoKgPorHa) {
-      receita = cultura.venda.producaoKgPorHa * (dim.areaHa || 1) * precoVenda;
+    // producaoBase: overrideable kg/ha for campo cultures, or unit production for canteiro
+    let receita, producaoTotal;
+    if (isCampo && (cultura.venda.producaoKgPorHa || valores.producaoKgPorHa)) {
+      const baseKgHa = parseFloat(valores.producaoKgPorHa) || cultura.venda.producaoKgPorHa || 0;
+      // Apply sobrevivência as a yield-efficiency factor so it's always meaningful
+      producaoTotal = baseKgHa * (dim.areaHa || 1) * (sobrevivencia / 100);
+      receita       = producaoTotal * precoVenda;
     } else {
-      receita = plantasViaveis * precoVenda;
+      producaoTotal = plantasViaveis;
+      receita       = plantasViaveis * precoVenda;
     }
 
     const lucro   = receita - custoTotal;
@@ -106,6 +113,7 @@ export function useSimulador(cultura, valores) {
     return {
       ...dim,
       plantasViaveis,
+      producaoTotal,
       custoTotal, custoPlanta,
       receita, lucro, margem,
       pontoEquilibrio,

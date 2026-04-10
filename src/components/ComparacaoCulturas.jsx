@@ -27,6 +27,8 @@ function buildDefaults(cultura) {
         areaHa: 1,
         espacamentoLinhas:  cultura.espacamento.linhas,
         espacamentoPlantas: cultura.espacamento.plantas,
+        ...(cultura.venda.producaoKgPorHa != null
+          ? { producaoKgPorHa: cultura.venda.producaoKgPorHa } : {}),
       }
     : {
         comprimento:        cultura.canteiro.comprimento,
@@ -113,7 +115,10 @@ function CulturaRow({ cultura, rank, areaHa }) {
   const receitaHa  = r.receita   * scale;
   const lucroHa    = receitaHa - custoHa;
   const margemHa   = receitaHa > 0 ? (lucroHa / receitaHa) * 100 : 0;
-  const plantasHa  = (r.totalPlantas || 0) * scale;
+
+  // Produção real (aplica sobrevivência): kg para campo, unidades para canteiro
+  const producaoHa = (r.producaoTotal ?? r.plantasViaveis ?? 0) * scale;
+  const producaoUnidade = isCampo && cultura.venda.producaoKgPorHa ? 'kg' : cultura.venda.unidade;
 
   const isPositive   = lucroHa >= 0;
   const margemColor  = margemHa >= 50 ? '#059669' : margemHa >= 20 ? '#d97706' : '#dc2626';
@@ -176,7 +181,7 @@ function CulturaRow({ cultura, rank, areaHa }) {
         </div>
 
         {/* ── Metrics ── */}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2 mb-2">
           <div className="rounded-xl p-3 text-center" style={{ background: 'hsl(210 16% 97%)' }}>
             <p className="section-label mb-0.5">Custo / {areaHa} ha</p>
             <p className="text-[12px] font-bold text-foreground">{fmtBRL(custoHa)}</p>
@@ -185,6 +190,8 @@ function CulturaRow({ cultura, rank, areaHa }) {
             <p className="section-label mb-0.5">Receita / {areaHa} ha</p>
             <p className="text-[12px] font-bold text-foreground">{fmtBRL(receitaHa)}</p>
           </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
           <div
             className="rounded-xl p-3 text-center"
             style={{ background: isPositive ? 'hsl(152 69% 95%)' : 'hsl(4 80% 96%)' }}
@@ -192,6 +199,15 @@ function CulturaRow({ cultura, rank, areaHa }) {
             <p className="section-label mb-0.5">Lucro / {areaHa} ha</p>
             <p className="text-[12px] font-bold" style={{ color: isPositive ? '#059669' : '#dc2626' }}>
               {fmtBRL(lucroHa)}
+            </p>
+          </div>
+          <div className="rounded-xl p-3 text-center" style={{ background: `${cultura.cor}0d` }}>
+            <p className="section-label mb-0.5">Produção / {areaHa} ha</p>
+            <p className="text-[12px] font-bold" style={{ color: cultura.cor }}>
+              {producaoHa >= 1000
+                ? `${(producaoHa / 1000).toFixed(1)} k`
+                : Math.round(producaoHa).toLocaleString('pt-BR')}{' '}
+              <span className="text-[10px] font-semibold opacity-70">{producaoUnidade}</span>
             </p>
           </div>
         </div>
@@ -209,10 +225,10 @@ function CulturaRow({ cultura, rank, areaHa }) {
           </div>
           <div className="flex justify-between mt-1">
             <span className="text-[9px] text-muted-foreground">
-              {plantasHa.toLocaleString('pt-BR')} plantas/{areaHa} ha
+              sobreviv. {valores.sobrevivencia}% · {Math.round(producaoHa).toLocaleString('pt-BR')} {producaoUnidade}/{areaHa} ha
             </span>
             <span className="text-[9px] text-muted-foreground">
-              {!isCampo && `${nCanteiros}×${cultura.canteiro.comprimento}×${cultura.canteiro.largura}m · `}
+              {!isCampo && `${nCanteiros} ctrs · `}
               margem {margemHa.toFixed(1)}%
             </span>
           </div>
@@ -250,6 +266,14 @@ function CulturaRow({ cultura, rank, areaHa }) {
                 onChange={v => set('sobrevivencia', v)}
                 suffix="%"
               />
+              {isCampo && cultura.venda.producaoKgPorHa != null && (
+                <EditField
+                  label="Produção base (kg/ha)"
+                  value={valores.producaoKgPorHa ?? cultura.venda.producaoKgPorHa}
+                  onChange={v => set('producaoKgPorHa', v)}
+                  suffix="kg"
+                />
+              )}
               <EditField
                 label={`Mão de obra${isCampo ? ' / ha' : ' / ciclo'}`}
                 value={valores.modObra}
@@ -432,7 +456,7 @@ function staticCalc(cultura) {
     (isCampo ? ins.ureia.padrao : ins.ureia.padrao / 1000) * 4.00 + modObra + 80;
 
   if (isCampo && cultura.venda.producaoKgPorHa) {
-    r.receita = cultura.venda.producaoKgPorHa * precoV;
+    r.receita = cultura.venda.producaoKgPorHa * (sobreviv / 100) * precoV;
   } else {
     const dim = isCampo
       ? Math.floor(10000 / (cultura.espacamento.linhas * cultura.espacamento.plantas))
