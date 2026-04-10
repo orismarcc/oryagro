@@ -24,7 +24,7 @@ function buildDefaults(cultura) {
   const ins = cultura.insumos;
   const base = isCampo
     ? {
-        areaHa: AREA_HA,
+        areaHa: 1,
         espacamentoLinhas:  cultura.espacamento.linhas,
         espacamentoPlantas: cultura.espacamento.plantas,
       }
