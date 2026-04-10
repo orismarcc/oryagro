@@ -2,11 +2,31 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CULTURAS } from '../data/culturas';
 import { loadTodosLotes } from '../hooks/useSupabaseSync';
-import { Plus, CalendarDays, Sprout, CheckCircle2, LogOut, Layers } from 'lucide-react';
+import { Plus, CalendarDays, Sprout, CheckCircle2, LogOut, Layers, AlertCircle, Clock, ArrowRight } from 'lucide-react';
 
 function parseCicloDias(cicloStr) {
   const match = cicloStr?.match(/\d+/g);
   return match ? parseInt(match[match.length - 1]) : 60;
+}
+
+function getStatusEtapas(cultura, diasDecorridos, loteId) {
+  if (!cultura?.cronograma) return { atrasadas: 0, hoje: null, amanha: null, proxima: null };
+  try {
+    const doneStatus = JSON.parse(localStorage.getItem(`cronograma_status_lote_${loteId}`)) || {};
+    const usaMudas = localStorage.getItem(`lote_mudas_${loteId}`) === '1';
+    const shift = usaMudas ? 15 : 0;
+    const steps = cultura.cronograma.map((e, i) => ({
+      ...e,
+      dia: e.dia + shift,
+      done: doneStatus[`default_${i}`]?.status === 'feito',
+    }));
+    const pending = steps.filter(s => !s.done);
+    const atrasadas = pending.filter(s => s.dia < diasDecorridos).length;
+    const hoje   = pending.find(s => s.dia === diasDecorridos) || null;
+    const amanha = pending.find(s => s.dia === diasDecorridos + 1) || null;
+    const proxima = pending.find(s => s.dia > diasDecorridos + 1) || null;
+    return { atrasadas, hoje, amanha, proxima };
+  } catch { return { atrasadas: 0, hoje: null, amanha: null, proxima: null }; }
 }
 
 // ── Lot card ─────────────────────────────────────────────────────────────────
@@ -93,6 +113,40 @@ function LoteCard({ lote, onSelect, index }) {
           style={{ width: `${progresso}%`, background: concluido ? '#16a34a' : cor }}
         />
       </div>
+
+      {/* ── Próxima etapa / alertas ── */}
+      {!concluido && (() => {
+        const { atrasadas, hoje, amanha, proxima } = getStatusEtapas(cultura, diasDecorridos, lote.id);
+        if (!atrasadas && !hoje && !amanha && !proxima) return null;
+        return (
+          <div className="mt-2.5 pt-2.5 flex flex-wrap gap-1.5" style={{ borderTop: '1px solid hsl(214 20% 92%)' }}>
+            {atrasadas > 0 && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ background: '#fee2e2', color: '#dc2626' }}>
+                <AlertCircle size={9} /> {atrasadas} atrasada{atrasadas > 1 ? 's' : ''}
+              </span>
+            )}
+            {hoje && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ background: '#fff7ed', color: '#ea580c' }}>
+                <Clock size={9} /> Hoje: {hoje.etapa}
+              </span>
+            )}
+            {amanha && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ background: '#dbeafe', color: '#2563eb' }}>
+                ↗ Amanhã: {amanha.etapa}
+              </span>
+            )}
+            {!hoje && !amanha && proxima && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                style={{ background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }}>
+                <ArrowRight size={9} /> Próxima: {proxima.etapa} · D{proxima.dia}
+              </span>
+            )}
+          </div>
+        );
+      })()}
     </motion.button>
   );
 }

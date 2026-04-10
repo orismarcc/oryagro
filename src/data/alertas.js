@@ -59,6 +59,16 @@ export const ALERTAS = {
       { condicao: (v, p) => v > (p.max ?? 12000) * 0.8 && v <= (p.max ?? 12000), nivel: 'warning', msg: 'Atenção: doses altas de matéria orgânica podem interferir no ciclo do abacaxi.' },
     ],
   },
+  acerola: {
+    ureia: [
+      { condicao: (v, p) => v > (p.max ?? 160),                                nivel: 'error',   msg: 'DOSE CRÍTICA: Excesso de N reduz teor de vitamina C e favorece crescimento vegetativo excessivo.' },
+      { condicao: (v, p) => v > (p.max ?? 160) * 0.8 && v <= (p.max ?? 160),  nivel: 'warning', msg: 'Acima do ideal. Monitorar para não comprometer qualidade dos frutos.' },
+    ],
+    calcareo: [
+      { condicao: (v, p) => v > (p.max ?? 3000),                               nivel: 'error',   msg: 'DOSE CRÍTICA: pH > 6.5 pode causar deficiência de ferro e zinco na acerola.' },
+      { condicao: (v, p) => v < (p.min ?? 600),                                nivel: 'info',    msg: 'Dose baixa. pH abaixo de 5.5 limita absorção de fósforo e cálcio.' },
+    ],
+  },
   rucula: {
     ureia: [
       { condicao: (v, p) => v > (p.max ?? 400),                                 nivel: 'error',   msg: 'DOSE CRÍTICA: Excesso de N torna as folhas amargas e perde o sabor característico da rúcula.' },

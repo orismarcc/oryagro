@@ -281,8 +281,9 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
           const isConfirming = confirming?.id === ev._id;
 
           // Date-aware states
-          const isPast    = diasDecorridos !== null && diasDecorridos > ev.dia && !isDone;
-          const isToday   = diasDecorridos !== null && diasDecorridos === ev.dia && !isDone;
+          const isPast     = diasDecorridos !== null && diasDecorridos > ev.dia && !isDone;
+          const isToday    = diasDecorridos !== null && diasDecorridos === ev.dia && !isDone;
+          const isTomorrow = diasDecorridos !== null && ev.dia - diasDecorridos === 1 && !isDone;
           const stepDateStr = selectedLote ? formatStepDate(selectedLote.data_plantio, ev.dia) : null;
           const scaledDose  = scaleDose(ev.dose, fator);
 
@@ -306,6 +307,8 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
                       ? { background: '#fef2f2', borderColor: '#fca5a5' }
                       : isToday
                       ? { background: meta.color + '25', borderColor: meta.color, boxShadow: `0 0 0 2px ${meta.color}40` }
+                      : isTomorrow
+                      ? { background: '#eff6ff', borderColor: '#93c5fd', boxShadow: '0 0 0 2px #bfdbfe' }
                       : { background: meta.bg, borderColor: `${meta.color}30` }
                     )
                   }}
@@ -315,16 +318,16 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
                   ) : (
                     <>
                       <span className="text-[8px] font-black uppercase tracking-widest leading-none"
-                        style={{ color: isPast ? '#ef4444' : meta.color }}>
-                        {isPast ? '!' : isToday ? 'HOJE' : 'DIA'}
+                        style={{ color: isPast ? '#ef4444' : isTomorrow ? '#2563eb' : meta.color }}>
+                        {isPast ? '!' : isToday ? 'HOJE' : isTomorrow ? 'AMHÃ' : 'DIA'}
                       </span>
                       <span className="font-display font-black text-sm leading-none mt-0.5"
-                        style={{ color: isPast ? '#ef4444' : meta.color }}>
+                        style={{ color: isPast ? '#ef4444' : isTomorrow ? '#2563eb' : meta.color }}>
                         {ev.dia}
                       </span>
                       {stepDateStr && (
                         <span className="text-[8px] font-bold leading-none mt-0.5"
-                          style={{ color: isPast ? '#ef4444' : meta.color, opacity: 0.75 }}>
+                          style={{ color: isPast ? '#ef4444' : isTomorrow ? '#2563eb' : meta.color, opacity: 0.75 }}>
                           {stepDateStr}
                         </span>
                       )}
@@ -350,8 +353,10 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
                       ? '#fca5a530'
                       : isToday
                       ? `${meta.color}50`
+                      : isTomorrow
+                      ? '#93c5fd50'
                       : 'hsl(214 20% 88%)',
-                    background: isDone ? meta.bg : isPast ? '#fff5f5' : '#fff',
+                    background: isDone ? meta.bg : isPast ? '#fff5f5' : isTomorrow ? '#f0f9ff' : '#fff',
                     boxShadow: isDone ? 'none' : '0 1px 4px rgba(0,0,0,0.05)',
                   }}
                 >
@@ -375,7 +380,13 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
                         {isToday && (
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                             style={{ background: `${meta.color}20`, color: meta.color }}>
-                            Hoje
+                            🕐 Hoje
+                          </span>
+                        )}
+                        {isTomorrow && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                            style={{ background: '#dbeafe', color: '#2563eb' }}>
+                            ↗ Amanhã
                           </span>
                         )}
                         {ev._custom && (
