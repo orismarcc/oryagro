@@ -6,17 +6,16 @@ import { TrendingUp, TrendingDown, Minus, Pencil, Check, ChevronDown } from 'luc
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const CORREDOR_M = 0.5; // passagem padrão entre canteiros (m)
-const AREA_HA    = 1;   // base de comparação = 1 ha
+const CORREDOR_M   = 0.5; // passagem padrão entre canteiros (m)
+const AREA_PRESETS = [0.25, 0.5, 1, 2, 5]; // ha presets
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** How many standard canteiros fit in 1 ha, accounting for walkway corridors */
-function calcNCanteirosPorHa(cultura) {
+/** How many standard canteiros fit in the given area (ha), accounting for walkway corridors */
+function calcNCanteirosPorHa(cultura, areaHa = 1) {
   if (cultura.tipo === 'campo') return 1;
   const { comprimento, largura } = cultura.canteiro;
-  // Each strip: comprimento × (largura + corredor)
-  return Math.max(1, Math.floor(10000 / (comprimento * (largura + CORREDOR_M))));
+  return Math.max(1, Math.floor((areaHa * 10000) / (comprimento * (largura + CORREDOR_M))));
 }
 
 /** Insumo defaults for one canteiro / 1 ha */
@@ -97,9 +96,9 @@ function EditField({ label, value, onChange, prefix, suffix }) {
 
 // ── CulturaRow ────────────────────────────────────────────────────────────────
 
-function CulturaRow({ cultura, rank }) {
+function CulturaRow({ cultura, rank, areaHa }) {
   const isCampo      = cultura.tipo === 'campo';
-  const nCanteiros   = calcNCanteirosPorHa(cultura);
+  const nCanteiros   = calcNCanteirosPorHa(cultura, areaHa);
   const [editOpen, setEditOpen]   = useState(false);
   const [overrides, setOverrides] = useState({});
 
@@ -108,8 +107,8 @@ function CulturaRow({ cultura, rank }) {
   const valores  = { ...buildDefaults(cultura), ...overrides };
   const r        = useSimulador(cultura, valores);
 
-  // ── Scale to 1 ha ──
-  const scale      = isCampo ? 1 : nCanteiros;
+  // ── Scale to selected area ──
+  const scale      = isCampo ? areaHa : nCanteiros;
   const custoHa    = r.custoTotal * scale;
   const receitaHa  = r.receita   * scale;
   const lucroHa    = receitaHa - custoHa;
@@ -150,7 +149,7 @@ function CulturaRow({ cultura, rank }) {
               <span className="text-[11px] text-muted-foreground">{cultura.ciclo}</span>
               {!isCampo && (
                 <span className="text-[10px] font-semibold text-muted-foreground">
-                  · {nCanteiros} canteiros/ha
+                  · {nCanteiros} canteiros/{areaHa} ha
                 </span>
               )}
             </div>
@@ -179,18 +178,18 @@ function CulturaRow({ cultura, rank }) {
         {/* ── Metrics ── */}
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-xl p-3 text-center" style={{ background: 'hsl(210 16% 97%)' }}>
-            <p className="section-label mb-0.5">Custo / ha</p>
+            <p className="section-label mb-0.5">Custo / {areaHa} ha</p>
             <p className="text-[12px] font-bold text-foreground">{fmtBRL(custoHa)}</p>
           </div>
           <div className="rounded-xl p-3 text-center" style={{ background: 'hsl(210 16% 97%)' }}>
-            <p className="section-label mb-0.5">Receita / ha</p>
+            <p className="section-label mb-0.5">Receita / {areaHa} ha</p>
             <p className="text-[12px] font-bold text-foreground">{fmtBRL(receitaHa)}</p>
           </div>
           <div
             className="rounded-xl p-3 text-center"
             style={{ background: isPositive ? 'hsl(152 69% 95%)' : 'hsl(4 80% 96%)' }}
           >
-            <p className="section-label mb-0.5">Lucro / ha</p>
+            <p className="section-label mb-0.5">Lucro / {areaHa} ha</p>
             <p className="text-[12px] font-bold" style={{ color: isPositive ? '#059669' : '#dc2626' }}>
               {fmtBRL(lucroHa)}
             </p>
@@ -210,7 +209,7 @@ function CulturaRow({ cultura, rank }) {
           </div>
           <div className="flex justify-between mt-1">
             <span className="text-[9px] text-muted-foreground">
-              {plantasHa.toLocaleString('pt-BR')} plantas/ha
+              {plantasHa.toLocaleString('pt-BR')} plantas/{areaHa} ha
             </span>
             <span className="text-[9px] text-muted-foreground">
               {!isCampo && `${nCanteiros}×${cultura.canteiro.comprimento}×${cultura.canteiro.largura}m · `}
@@ -301,7 +300,25 @@ function CulturaRow({ cultura, rank }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ComparacaoCulturas() {
-  const [sortBy, setSortBy] = useState('lucro'); // 'lucro' | 'margem' | 'receita'
+  const [sortBy,    setSortBy]    = useState('lucro');   // 'lucro' | 'margem' | 'receita'
+  const [areaHa,    setAreaHa]    = useState(1);         // selected area in ha
+  const [customArea, setCustomArea] = useState('');      // custom input string
+  const [useCustom, setUseCustom] = useState(false);
+
+  const effectiveArea = useCustom && parseFloat(customArea) > 0
+    ? parseFloat(customArea)
+    : areaHa;
+
+  const handlePreset = (v) => {
+    setAreaHa(v);
+    setUseCustom(false);
+    setCustomArea('');
+  };
+
+  const handleCustomChange = (e) => {
+    setCustomArea(e.target.value);
+    setUseCustom(true);
+  };
 
   const sorted = [...CULTURAS_LIST].sort((a, b) => {
     const getVal = (c) => {
@@ -320,11 +337,11 @@ export default function ComparacaoCulturas() {
         <p className="text-white/55 text-xs font-semibold uppercase tracking-widest mb-1">Análise</p>
         <h1 className="font-display text-white text-2xl font-extrabold leading-tight">Comparar Culturas</h1>
         <p className="text-white/50 text-[11px] mt-1">
-          Escala: 1 ha · canteiro = N canteiros com corredor de {CORREDOR_M * 100} cm
+          Corredor entre canteiros: {CORREDOR_M * 100} cm · base {effectiveArea} ha
         </p>
 
         {/* Sort pills */}
-        <div className="flex gap-2 mt-3">
+        <div className="flex gap-2 mt-3 flex-wrap">
           {[
             { key: 'lucro',   label: 'Maior Lucro' },
             { key: 'margem',  label: 'Maior Margem' },
@@ -342,6 +359,48 @@ export default function ComparacaoCulturas() {
             </button>
           ))}
         </div>
+
+        {/* Area selector */}
+        <div className="mt-3">
+          <p className="text-white/50 text-[10px] font-semibold uppercase tracking-widest mb-1.5">Área de comparação</p>
+          <div className="flex gap-1.5 flex-wrap items-center">
+            {AREA_PRESETS.map(v => (
+              <button
+                key={v}
+                onClick={() => handlePreset(v)}
+                className="text-[11px] font-bold px-2.5 py-1 rounded-full transition-all"
+                style={!useCustom && areaHa === v
+                  ? { background: 'rgba(255,255,255,0.28)', color: '#fff', boxShadow: '0 0 0 1.5px rgba(255,255,255,0.5)' }
+                  : { background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.55)' }}
+              >
+                {v} ha
+              </button>
+            ))}
+            {/* Custom input */}
+            <div className="relative flex items-center">
+              <input
+                type="number"
+                min="0.01"
+                step="0.1"
+                placeholder="outro"
+                value={customArea}
+                onChange={handleCustomChange}
+                className="text-[11px] font-bold w-[68px] rounded-full py-1 px-2.5 outline-none text-white placeholder-white/40"
+                style={{
+                  background: useCustom && parseFloat(customArea) > 0
+                    ? 'rgba(255,255,255,0.28)'
+                    : 'rgba(255,255,255,0.08)',
+                  border: useCustom && parseFloat(customArea) > 0
+                    ? '1.5px solid rgba(255,255,255,0.5)'
+                    : '1.5px solid transparent',
+                }}
+              />
+              {useCustom && parseFloat(customArea) > 0 && (
+                <span className="absolute right-2.5 text-[9px] text-white/60 pointer-events-none">ha</span>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="px-4 pt-5 pb-4 space-y-3 max-w-2xl mx-auto">
@@ -349,7 +408,7 @@ export default function ComparacaoCulturas() {
           Toque em ✏️ para ajustar preço de venda, custos e sobrevivência de cada cultura.
         </p>
         {sorted.map((c, i) => (
-          <CulturaRow key={c.id} cultura={c} rank={i} />
+          <CulturaRow key={c.id} cultura={c} rank={i} areaHa={effectiveArea} />
         ))}
       </div>
     </div>

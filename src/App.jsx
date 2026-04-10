@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import Dashboard from './components/Dashboard';
 import CulturaPicker from './components/CulturaPicker';
 import CulturaPage from './components/CulturaPage';
+import LotePage from './components/LotePage';
 import SimuladorPage from './components/SimuladorPage';
 import ComparacaoCulturas from './components/ComparacaoCulturas';
 import AnalysePage from './components/AnalysePage';
@@ -22,10 +23,11 @@ export default function App() {
   const { session, loading: authLoading, user, signOut } = useAuth();
 
   // Navigation state
-  // mainView: 'dashboard' | 'cultura-picker' | 'cultura' | 'simulador' | 'comparacao'
+  // mainView: 'dashboard' | 'cultura-picker' | 'cultura' | 'lote' | 'simulador' | 'comparacao' | 'analise'
   const [mainView, setMainView]             = useState('dashboard');
   const [culturaId, setCulturaId]           = useState(null);
   const [autoOpenLoteForm, setAutoOpenLoteForm] = useState(false);
+  const [selectedLote, setSelectedLote]     = useState(null);
 
   // ── Navigation handlers ──
 
@@ -34,11 +36,16 @@ export default function App() {
     setMainView('cultura-picker');
   };
 
-  // From Dashboard: user clicks an existing lot card
+  // From Dashboard: user clicks an existing lot card → dedicated LotePage
   const handleSelectLote = (lote) => {
-    setCulturaId(lote.cultura_id);
-    setAutoOpenLoteForm(false);
-    setMainView('cultura');
+    setSelectedLote(lote);
+    setMainView('lote');
+  };
+
+  // Back from LotePage → dashboard
+  const handleBackFromLote = () => {
+    setSelectedLote(null);
+    setMainView('dashboard');
   };
 
   // From CulturaPicker: user selects a culture → go to CulturaPage with form open
@@ -68,7 +75,8 @@ export default function App() {
   };
 
   const cultura = culturaId ? CULTURAS[culturaId] : null;
-  const isInCultura = mainView === 'cultura' && cultura;
+  const isInCultura = (mainView === 'cultura' && cultura) || (mainView === 'lote' && selectedLote);
+  const activeCultura = mainView === 'lote' && selectedLote ? CULTURAS[selectedLote.cultura_id] : cultura;
 
   // ── Auth loading ──
   if (authLoading) {
@@ -92,6 +100,7 @@ export default function App() {
           <motion.div
             key={
               mainView === 'cultura'        ? `cultura-${culturaId}` :
+              mainView === 'lote'           ? `lote-${selectedLote?.id}` :
               mainView === 'cultura-picker' ? 'cultura-picker' :
               mainView
             }
@@ -119,6 +128,13 @@ export default function App() {
                 cultura={cultura}
                 onBack={handleBack}
                 autoOpenLoteForm={autoOpenLoteForm}
+              />
+            )}
+            {mainView === 'lote' && selectedLote && CULTURAS[selectedLote.cultura_id] && (
+              <LotePage
+                lote={selectedLote}
+                cultura={CULTURAS[selectedLote.cultura_id]}
+                onBack={handleBackFromLote}
               />
             )}
             {mainView === 'simulador'  && <SimuladorPage />}
@@ -151,9 +167,9 @@ export default function App() {
           <div className="flex items-center h-[60px] px-1">
             {BOTTOM_NAV.map(({ value, label, Icon }) => {
               const dashboardActive = value === 'dashboard' &&
-                (mainView === 'dashboard' || mainView === 'cultura' || mainView === 'cultura-picker');
+                (mainView === 'dashboard' || mainView === 'cultura' || mainView === 'cultura-picker' || mainView === 'lote');
               const isActive = mainView === value || dashboardActive;
-              const activeCor = isInCultura && value === 'dashboard' ? cultura.cor : 'hsl(160 84% 27%)';
+              const activeCor = isInCultura && value === 'dashboard' && activeCultura ? activeCultura.cor : 'hsl(160 84% 27%)';
 
               return (
                 <button
