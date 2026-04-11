@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-const DEFAULT_CITY = { lat: -16.6864, lon: -49.2643, name: 'Goiânia, GO' };
+const DEFAULT_CITY = { lat: -10.6384, lon: -51.5647, name: 'Confresa, MT' };
 const CACHE_KEY    = 'oryagro_weather_cache';
 const CACHE_TTL    = 60 * 60 * 1000; // 1 hora
 const DAYS_PT      = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
