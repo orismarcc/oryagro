@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CULTURAS_LIST } from '../data/culturas';
 import { useSimulador } from '../hooks/useSimulador';
-import { TrendingUp, TrendingDown, Minus, Pencil, Check, ChevronDown, ChevronUp, FileDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Pencil, Check, ChevronDown, ChevronUp, FileDown, HelpCircle, X } from 'lucide-react';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -354,6 +354,173 @@ function CostBreakdown({ composicao, custoTotal, cor }) {
   );
 }
 
+// ── ModalInstrucoes ───────────────────────────────────────────────────────────
+// Auto-generated from CULTURAS_LIST — adding a new culture automatically appears here
+
+function producaoDesc(c) {
+  const v = c.venda;
+  if (c.tipo === 'campo' && v.producaoKgPorHa) {
+    return `${v.producaoKgPorHa.toLocaleString('pt-BR')} kg/ha × sobrevivência ${v.sobrevivencia}%`;
+  }
+  if (v.producaoBase != null) {
+    const motivo = v.producaoMacosPorPlanta
+      ? `${Math.floor(c.canteiro.largura / c.canteiro.espacamentoLinhas) * Math.floor(c.canteiro.comprimento / c.canteiro.espacamentoPlantas)} plantas × ${v.producaoMacosPorPlanta} maços/planta`
+      : v.producaoKgPorM2
+      ? `${c.canteiro.comprimento * c.canteiro.largura} m² × ${v.producaoKgPorM2} kg/m²`
+      : v.producaoKgPorCorte != null
+      ? `${v.producaoKgPorCorte} kg/corte × ${v.macosPorKg} maços/kg`
+      : `valor de referência`;
+    return `${v.producaoBase} ${v.unidade}/canteiro (${motivo}) × sobreviv. ${v.sobrevivencia}%`;
+  }
+  // plant-count based
+  const linhas   = Math.floor(c.canteiro.largura    / c.canteiro.espacamentoLinhas);
+  const porLinha = Math.floor(c.canteiro.comprimento / c.canteiro.espacamentoPlantas);
+  return `${linhas} linhas × ${porLinha} plantas = ${linhas * porLinha} plantas × sobreviv. ${v.sobrevivencia}%`;
+}
+
+function ModalInstrucoes({ onClose }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex flex-col"
+      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+        className="mt-auto rounded-t-3xl overflow-y-auto"
+        style={{ background: 'hsl(0 0% 100%)', maxHeight: '92vh' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full bg-muted" />
+        </div>
+
+        {/* Header */}
+        <div className="px-5 pt-2 pb-4 flex items-center justify-between sticky top-0 bg-white z-10 border-b" style={{ borderColor: 'hsl(214 20% 92%)' }}>
+          <div>
+            <h2 className="font-display text-[17px] font-extrabold text-foreground">Como os cálculos funcionam</h2>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Metodologia e referências — Mato Grosso 2024/25</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground"
+            style={{ background: 'hsl(210 16% 95%)' }}
+          >
+            <X size={15} />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-6 pb-10">
+
+          {/* ── Base de cálculo ── */}
+          <section>
+            <h3 className="section-label mb-2">Base de comparação</h3>
+            <div className="rounded-2xl p-4 space-y-2.5 text-[12px] text-foreground leading-relaxed" style={{ background: 'hsl(152 40% 97%)' }}>
+              <p>Todas as métricas são normalizadas para a <strong>área selecionada</strong> (padrão: 1 ha).</p>
+              <p><strong>Canteiro padrão:</strong> 20 × 1,6 m = 32 m² por canteiro.</p>
+              <p><strong>Canteiros por ha:</strong> <code className="text-[11px] bg-white px-1.5 py-0.5 rounded">floor(10.000 / (comprimento × (largura + 0,5 m corredor)))</code></p>
+              <p>O corredor de <strong>50 cm</strong> entre canteiros é descontado para simular uma horta real com passagens de trabalho.</p>
+            </div>
+          </section>
+
+          {/* ── Produção por cultura ── */}
+          <section>
+            <h3 className="section-label mb-2">Como a produção de cada cultura é estimada</h3>
+            <div className="space-y-2">
+              {CULTURAS_LIST.map(c => (
+                <div key={c.id} className="rounded-xl p-3" style={{ background: `${c.cor}08`, border: `1px solid ${c.cor}20` }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-base leading-none">{c.emoji}</span>
+                    <span className="text-[12px] font-bold text-foreground">{c.nome}</span>
+                    <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full ml-auto"
+                      style={{ background: c.tipo === 'campo' ? 'hsl(38 90% 93%)' : 'hsl(152 60% 93%)',
+                               color:      c.tipo === 'campo' ? 'hsl(38 70% 32%)' : 'hsl(152 70% 25%)' }}>
+                      {c.tipo}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">{producaoDesc(c)}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* ── Preços de insumos ── */}
+          <section>
+            <h3 className="section-label mb-2">Preços de insumos — médias MT</h3>
+            <div className="rounded-2xl overflow-hidden border" style={{ borderColor: 'hsl(214 20% 90%)' }}>
+              {[
+                ['Calcário dolomítico', 'R$ 0,25/kg', 'R$ 200–300/t a granel'],
+                ['Esterco (canteiro)', 'R$ 0,20/kg', 'Curtido/compostado R$200/t'],
+                ['Esterco (campo)', 'R$ 0,08/kg', 'Granel bovino R$80/t'],
+                ['NPK formulado (canteiro)', 'R$ 3,50/kg', 'Saco 25 kg varejo'],
+                ['NPK formulado (campo)', 'R$ 2,80/kg', 'Compra a granel/safra'],
+                ['Ureia 46%', 'R$ 3,00/kg', 'R$ 2.500–3.200/t MT'],
+                ['Nitrato de Cálcio', 'R$ 5,00/kg', 'R$ 4.000–6.000/t'],
+                ['Mulching plástico', 'R$ 2,00/m²', 'Rolo 30 µm'],
+              ].map(([insumo, preco, obs], i) => (
+                <div key={insumo} className="flex items-center px-3 py-2.5 gap-2" style={{ background: i % 2 === 0 ? 'white' : 'hsl(210 16% 98%)' }}>
+                  <span className="text-[11px] text-foreground flex-1">{insumo}</span>
+                  <span className="text-[11px] font-bold text-foreground whitespace-nowrap">{preco}</span>
+                  <span className="text-[10px] text-muted-foreground whitespace-nowrap hidden sm:block">{obs}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* ── Custos operacionais ── */}
+          <section>
+            <h3 className="section-label mb-2">Custos operacionais</h3>
+            <div className="space-y-3 text-[12px] leading-relaxed text-foreground">
+              <div className="rounded-xl p-3.5" style={{ background: 'hsl(210 16% 97%)' }}>
+                <p className="font-bold mb-1">Mão de obra</p>
+                <p className="text-muted-foreground">Estimativa de diárias totais no ciclo completo × R$130/dia (média diarista MT 2024). Inclui preparo do solo, plantio/transplante, capinas, adubações de cobertura e colheita. Campo inclui meses de colheita contínua (quiabo) ou manutenção perene (acerola, banana).</p>
+              </div>
+              <div className="rounded-xl p-3.5" style={{ background: 'hsl(210 16% 97%)' }}>
+                <p className="font-bold mb-1">Transporte</p>
+                <p className="text-muted-foreground">Frete médio para levar a produção ao ponto de venda (feira, CEASA, intermediário). Para canteiros: fração de um frete compartilhado (R$6–12/canteiro/ciclo). Para campo: cargas completas ao longo do ciclo (R$500–1.200/ha).</p>
+              </div>
+              <div className="rounded-xl p-3.5" style={{ background: 'hsl(210 16% 97%)' }}>
+                <p className="font-bold mb-1">Embalagem</p>
+                <p className="text-muted-foreground">Sacolas, caixas plásticas, bandejas ou big bags conforme a cultura. Para alface: ~100 sacos por canteiro. Para quiabo/mandioca: caixas de 20 kg reutilizáveis amortizadas por ciclo.</p>
+              </div>
+              <div className="rounded-xl p-3.5" style={{ background: 'hsl(210 16% 97%)' }}>
+                <p className="font-bold mb-1">Defensivos</p>
+                <p className="text-muted-foreground">Fungicidas, inseticidas e/ou herbicidas no ciclo. Canteiros de folhosas usam principalmente produtos biológicos (R$8–20). Campo utiliza herbicidas pré/pós emergência e inseticidas conforme necessidade (R$300–1.500/ha dependendo da cultura e pressão de pragas).</p>
+              </div>
+              <div className="rounded-xl p-3.5" style={{ background: 'hsl(210 16% 97%)' }}>
+                <p className="font-bold mb-1">Energia / Irrigação</p>
+                <p className="text-muted-foreground">Custo de energia elétrica para bomba de irrigação (micro-aspersão, gotejamento ou aspersão). Para canteiros: R$10–18/ciclo (bomba de 0,5–1 CV em tempo parcial). Para campo: R$150–500/ha dependendo do sistema e duração do ciclo.</p>
+              </div>
+            </div>
+          </section>
+
+          {/* ── Sobrevivência ── */}
+          <section>
+            <h3 className="section-label mb-2">Sobrevivência / Eficiência de produção</h3>
+            <div className="rounded-2xl p-4 text-[12px] leading-relaxed" style={{ background: 'hsl(38 90% 97%)' }}>
+              <p>Percentual da produção total estimada que efetivamente chega à venda. Engloba perdas por pragas, clima, descarte pós-colheita e problemas de qualidade.</p>
+              <p className="mt-2">Para culturas de campo com <code className="text-[11px] bg-white px-1 rounded">producaoKgPorHa</code>, a sobrevivência funciona como fator de eficiência: <code className="text-[11px] bg-white px-1 rounded">receita = producaoBase × sobrevivência% × preçoVenda</code>.</p>
+            </div>
+          </section>
+
+          {/* ── Aviso ── */}
+          <p className="text-[10px] text-muted-foreground text-center pb-2">
+            Valores são estimativas baseadas em médias regionais de Mato Grosso (2024/25). Consulte fornecedores locais para preços atualizados. Todos os campos são editáveis no painel ✏️ de cada cultura.
+          </p>
+
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // ── CulturaRow ────────────────────────────────────────────────────────────────
 
 function CulturaRow({ cultura, rank, areaHa }) {
@@ -638,6 +805,7 @@ export default function ComparacaoCulturas() {
   const [customArea, setCustomArea] = useState('');
   const [useCustom, setUseCustom] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [showInstrucoes, setShowInstrucoes] = useState(false);
 
   const effectiveArea = useCustom && parseFloat(customArea) > 0
     ? parseFloat(customArea)
@@ -685,16 +853,27 @@ export default function ComparacaoCulturas() {
               Preços médios MT · corredor {CORREDOR_M * 100} cm · base {effectiveArea} ha
             </p>
           </div>
-          <button
-            onClick={handleDownloadPDF}
-            disabled={pdfLoading}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition-all flex-shrink-0 mt-1 active:scale-95 disabled:opacity-60"
-            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)' }}
-            title="Baixar comparação em PDF"
-          >
-            <FileDown size={14} />
-            {pdfLoading ? 'Gerando…' : 'PDF'}
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0 mt-1">
+            <button
+              onClick={() => setShowInstrucoes(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition-all active:scale-95"
+              style={{ background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)' }}
+              title="Ver instruções e metodologia"
+            >
+              <HelpCircle size={14} />
+              Instruções
+            </button>
+            <button
+              onClick={handleDownloadPDF}
+              disabled={pdfLoading}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition-all active:scale-95 disabled:opacity-60"
+              style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)' }}
+              title="Baixar comparação em PDF"
+            >
+              <FileDown size={14} />
+              {pdfLoading ? 'Gerando…' : 'PDF'}
+            </button>
+          </div>
         </div>
 
         {/* Sort pills */}
@@ -767,6 +946,10 @@ export default function ComparacaoCulturas() {
           <CulturaRow key={c.id} cultura={c} rank={i} areaHa={effectiveArea} />
         ))}
       </div>
+
+      <AnimatePresence>
+        {showInstrucoes && <ModalInstrucoes onClose={() => setShowInstrucoes(false)} />}
+      </AnimatePresence>
     </div>
   );
 }
