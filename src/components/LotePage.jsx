@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import CronogramaTimeline from './CronogramaTimeline';
 import { useWeather, weatherAlert } from '../hooks/useWeather';
+import { PRECOS_INSUMOS } from '../data/precos';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -145,14 +146,14 @@ function TabInsumos({ cultura, lote }) {
   const PRECO_KEY = `lote_precos_${lote.id}`;
 
   const defaultPrecos = {
-    calcareo: 0.55,
-    esterco: isCampo ? 0.08 : 0.80,
-    npk: isCampo ? 2.50 : 8.00,
-    ureia: 4.00,
-    nitratoCalcio: 12.00,
-    fte: 15.00,
-    sementes: ins.sementes?.precoUnitario ?? 0,
-    modObra: 0,
+    calcareo:    PRECOS_INSUMOS.calcareo,
+    esterco:     isCampo ? PRECOS_INSUMOS.estercoCampo : PRECOS_INSUMOS.estercoCanteiro,
+    npk:         isCampo ? PRECOS_INSUMOS.npkCampo     : PRECOS_INSUMOS.npkCanteiro,
+    ureia:       PRECOS_INSUMOS.ureia,
+    nitratoCalcio: PRECOS_INSUMOS.nitratoCalcio,
+    fte:         PRECOS_INSUMOS.fte,
+    sementes:    ins.sementes?.precoUnitario ?? 0,
+    modObra:     0,
   };
 
   const [precos, setPrecos] = useState(() => {

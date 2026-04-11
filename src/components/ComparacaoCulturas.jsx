@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CULTURAS_LIST } from '../data/culturas';
+import { getPrecosPadrao, getOpCosts, OP_COSTS } from '../data/precos';
 import { useSimulador } from '../hooks/useSimulador';
 import { TrendingUp, TrendingDown, Minus, Pencil, Check, ChevronDown, ChevronUp, FileDown, HelpCircle, X } from 'lucide-react';
 
@@ -8,24 +9,6 @@ import { TrendingUp, TrendingDown, Minus, Pencil, Check, ChevronDown, ChevronUp,
 
 const CORREDOR_M   = 0.5;
 const AREA_PRESETS = [0.25, 0.5, 1, 2, 5];
-
-// ── Per-culture operational costs (MT averages, 2024-2025) ──────────────────
-// Canteiro: per canteiro (20×1.6m) per ciclo
-// Campo: per ha per ciclo completo
-const OP_COSTS = {
-  // canteiro
-  alface:    { transporte: 8,    embalagem: 12,  defensivos: 15,   energia: 15 },
-  cebolinha: { transporte: 6,    embalagem: 10,  defensivos: 8,    energia: 12 },
-  coentro:   { transporte: 6,    embalagem: 10,  defensivos: 8,    energia: 10 },
-  rucula:    { transporte: 6,    embalagem: 10,  defensivos: 8,    energia: 10 },
-  couve:     { transporte: 12,   embalagem: 15,  defensivos: 20,   energia: 18 },
-  // campo
-  quiabo:    { transporte: 600,  embalagem: 400, defensivos: 800,  energia: 400 },
-  mandioca:  { transporte: 500,  embalagem: 150, defensivos: 300,  energia: 150 },
-  abacaxi:   { transporte: 1200, embalagem: 800, defensivos: 1500, energia: 500 },
-  acerola:   { transporte: 800,  embalagem: 500, defensivos: 600,  energia: 400 },
-  banana_ana:{ transporte: 800,  embalagem: 400, defensivos: 700,  energia: 500 },
-};
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -39,7 +22,7 @@ function calcNCanteirosPorHa(cultura, areaHa = 1) {
 function buildDefaults(cultura) {
   const isCampo = cultura.tipo === 'campo';
   const ins = cultura.insumos;
-  const op  = OP_COSTS[cultura.id] || {};
+  const op  = getOpCosts(cultura.id, isCampo);
 
   const base = isCampo
     ? {
@@ -69,18 +52,13 @@ function buildDefaults(cultura) {
     precoVenda:     cultura.venda.precoUnitario,
     sobrevivencia:  cultura.venda.sobrevivencia,
     precoSementes:  ins.sementes.precoUnitario,
-    // ── Preços de insumos — médias MT 2024/2025 ──
-    precoCalcareo:  0.25,                     // Calcário dolomítico: R$200-300/t
-    precoEsterco:   isCampo ? 0.08 : 0.20,    // Granel R$80/t; Curtido canteiro R$200/t
-    precoNPK:       isCampo ? 2.80 : 3.50,    // Formulados bulk vs saco
-    precoUreia:     3.00,                     // Ureia 46%: R$2.500-3.200/t
-    precoNitratoCa: 5.00,                     // Nitrato Ca: R$4.000-6.000/t
-    precoMulching:  2.00,                     // Mulching plástico: R$1.80-2.50/m²
-    // ── Custos operacionais — per cultura, médias MT ──
-    custoTransporte: op.transporte ?? (isCampo ? 500 : 8),
-    custoEmbalagem:  op.embalagem  ?? (isCampo ? 300 : 12),
-    custoDefensivos: op.defensivos ?? (isCampo ? 500 : 15),
-    custoEnergia:    op.energia    ?? (isCampo ? 300 : 12),
+    // Preços de insumos — fonte: src/data/precos.js
+    ...getPrecosPadrao(isCampo),
+    // Custos operacionais — por cultura, fonte: src/data/precos.js
+    custoTransporte: op.transporte,
+    custoEmbalagem:  op.embalagem,
+    custoDefensivos: op.defensivos,
+    custoEnergia:    op.energia,
   };
 }
 
@@ -960,35 +938,29 @@ function staticCalc(cultura) {
   const isCampo   = cultura.tipo === 'campo';
   const ins       = cultura.insumos;
   const nC        = calcNCanteirosPorHa(cultura);
-  const op        = OP_COSTS[cultura.id] || {};
+  const op        = getOpCosts(cultura.id, isCampo);
+  const pp        = getPrecosPadrao(isCampo);
   const r         = { custoTotal: 0, receita: 0 };
 
   const modObra   = ins.modObra.padrao;
   const precoV    = cultura.venda.precoUnitario;
   const sobreviv  = cultura.venda.sobrevivencia;
 
-  // Insumo costs with MT prices
-  const precoCalcareo  = 0.25;
-  const precoEsterco   = isCampo ? 0.08 : 0.20;
-  const precoNPK       = isCampo ? 2.80 : 3.50;
-  const precoUreia     = 3.00;
-  const precoNitratoCa = 5.00;
-
-  const custoInsumos = ins.calcareo.padrao * precoCalcareo +
-    ins.esterco.padrao * precoEsterco +
-    ins.npk.padrao * precoNPK +
-    (isCampo ? ins.ureia.padrao : ins.ureia.padrao / 1000) * precoUreia +
-    (isCampo ? (ins.nitratoCalcio?.padrao || 0) : ((ins.nitratoCalcio?.padrao || 0) / 1000)) * precoNitratoCa +
+  const custoInsumos = ins.calcareo.padrao * pp.precoCalcareo +
+    ins.esterco.padrao * pp.precoEsterco +
+    ins.npk.padrao * pp.precoNPK +
+    (isCampo ? ins.ureia.padrao : ins.ureia.padrao / 1000) * pp.precoUreia +
+    (isCampo ? (ins.nitratoCalcio?.padrao || 0) : ((ins.nitratoCalcio?.padrao || 0) / 1000)) * pp.precoNitratoCa +
     ins.sementes.padrao * ins.sementes.precoUnitario;
 
   const custoMulching = (!isCampo && ins.mulching.multiplicador > 0)
-    ? (cultura.canteiro.comprimento * cultura.canteiro.largura) * ins.mulching.multiplicador * 2.00
+    ? (cultura.canteiro.comprimento * cultura.canteiro.largura) * ins.mulching.multiplicador * pp.precoMulching
     : 0;
 
-  const custoTransporte = op.transporte ?? (isCampo ? 500 : 8);
-  const custoEmbalagem  = op.embalagem  ?? (isCampo ? 300 : 12);
-  const custoDefensivos = op.defensivos ?? (isCampo ? 500 : 15);
-  const custoEnergia    = op.energia    ?? (isCampo ? 300 : 12);
+  const custoTransporte = op.transporte;
+  const custoEmbalagem  = op.embalagem;
+  const custoDefensivos = op.defensivos;
+  const custoEnergia    = op.energia;
 
   r.custoTotal = custoInsumos + custoMulching + modObra +
     custoTransporte + custoEmbalagem + custoDefensivos + custoEnergia;

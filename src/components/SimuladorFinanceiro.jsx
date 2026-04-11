@@ -7,6 +7,7 @@ import InsumoField from './InsumoField';
 import ResultadoPanel from './ResultadoPanel';
 import { useSimulador, calcularPlantas } from '../hooks/useSimulador';
 import { useSimuladorSync, loadSimuladorConfig, registrarPlantio } from '../hooks/useSupabaseSync';
+import { getPrecosPadrao, getOpCosts } from '../data/precos';
 import { RotateCcw, Database, CheckCircle2, Pencil, Check, Package, Truck, Zap, ShieldCheck } from 'lucide-react';
 
 const loadFromStorage = (key, def) => {
@@ -52,18 +53,10 @@ export default function SimuladorFinanceiro({ cultura }) {
       modObra: ins.modObra.padrao,
       precoVenda: cultura.venda.precoUnitario,
       sobrevivencia: cultura.venda.sobrevivencia,
-      // Preços dos insumos
-      precoCalcareo: 0.55,
-      precoEsterco: isCampo ? 0.08 : 0.80,
-      precoNPK: isCampo ? 2.50 : 8.00,
-      precoUreia: 4.00,
-      precoNitratoCa: 12.00,
-      precoMulching: 2.10,
-      // Custos de produção
-      custoEmbalagem: isCampo ? 0 : 18,
-      custoTransporte: 20,
-      custoDefensivos: isCampo ? 80 : 35,
-      custoEnergia: 25,
+      // Preços dos insumos — médias MT 2024/2025
+      ...getPrecosPadrao(isCampo),
+      // Custos operacionais — por cultura, médias MT
+      ...(() => { const op = getOpCosts(cultura.id, isCampo); return { custoEmbalagem: op.embalagem, custoTransporte: op.transporte, custoDefensivos: op.defensivos, custoEnergia: op.energia }; })(),
     };
   }, [cultura, isCampo, ins]);
 

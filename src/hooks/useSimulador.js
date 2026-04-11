@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { getPrecosPadrao, getOpCosts } from '../data/precos';
 
 const formatBRL = (v) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -32,11 +33,12 @@ export function useSimulador(cultura, valores) {
     const ins = cultura.insumos;
 
     // ── Preços por unidade (editáveis) ──
-    const precoCalcareo  = parseFloat(valores.precoCalcareo)  || 0.55;
-    const precoEsterco   = parseFloat(valores.precoEsterco)   || (isCampo ? 0.08 : 0.80);
-    const precoNPK       = parseFloat(valores.precoNPK)       || (isCampo ? 2.50 : 8.00);
-    const precoUreia     = parseFloat(valores.precoUreia)     || 4.00;
-    const precoNitratoCa = parseFloat(valores.precoNitratoCa) || 12.00;
+    const pp = getPrecosPadrao(isCampo);
+    const precoCalcareo  = parseFloat(valores.precoCalcareo)  || pp.precoCalcareo;
+    const precoEsterco   = parseFloat(valores.precoEsterco)   || pp.precoEsterco;
+    const precoNPK       = parseFloat(valores.precoNPK)       || pp.precoNPK;
+    const precoUreia     = parseFloat(valores.precoUreia)     || pp.precoUreia;
+    const precoNitratoCa = parseFloat(valores.precoNitratoCa) || pp.precoNitratoCa;
 
     const precoSementes  = parseFloat(valores.precoSementes) || ins.sementes.precoUnitario;
 
@@ -61,15 +63,16 @@ export function useSimulador(cultura, valores) {
     }
 
     const custoMulching = (!isCampo && ins.mulching.multiplicador > 0)
-      ? (dim.area || 0) * ins.mulching.multiplicador * (parseFloat(valores.precoMulching) || 2.10)
+      ? (dim.area || 0) * ins.mulching.multiplicador * (parseFloat(valores.precoMulching) || pp.precoMulching)
       : 0;
     const custoMOD = parseFloat(valores.modObra) || ins.modObra.padrao;
 
     // ── Custos adicionais de produção ──
-    const custoEmbalagem   = parseFloat(valores.custoEmbalagem)   ?? (isCampo ? 0 : 18);
-    const custoTransporte  = parseFloat(valores.custoTransporte)  ?? 20;
-    const custoDefensivos  = parseFloat(valores.custoDefensivos)  ?? (isCampo ? 80 : 35);
-    const custoEnergia     = parseFloat(valores.custoEnergia)     ?? 25;
+    const op = getOpCosts(cultura.id, isCampo);
+    const custoEmbalagem   = parseFloat(valores.custoEmbalagem)  >= 0 ? parseFloat(valores.custoEmbalagem)  : op.embalagem;
+    const custoTransporte  = parseFloat(valores.custoTransporte) >= 0 ? parseFloat(valores.custoTransporte) : op.transporte;
+    const custoDefensivos  = parseFloat(valores.custoDefensivos) >= 0 ? parseFloat(valores.custoDefensivos) : op.defensivos;
+    const custoEnergia     = parseFloat(valores.custoEnergia)    >= 0 ? parseFloat(valores.custoEnergia)    : op.energia;
 
     const custoTotal = custoCalcareo + custoEsterco + custoNPK + custoUreia +
                        custoNitratoCa + custoSementes + custoMulching + custoMOD +
