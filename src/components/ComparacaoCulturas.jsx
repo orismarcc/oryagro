@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CULTURAS_LIST } from '../data/culturas';
 import { useSimulador } from '../hooks/useSimulador';
-import { TrendingUp, TrendingDown, Minus, Pencil, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Pencil, Check, ChevronDown, ChevronUp, FileDown } from 'lucide-react';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -92,6 +92,197 @@ function fmtBRL(v) {
 function fmtBRL2(v) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL',
     minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+}
+
+// ── Pure computation (mirrors useSimulador without React hooks) ───────────────
+// Used for PDF generation. Accepts valores from buildDefaults + optional overrides.
+
+function fullCalc(cultura, areaHa = 1, overrides = {}) {
+  const v   = { ...buildDefaults(cultura), ...overrides };
+  const ins = cultura.insumos;
+  const isCampo = cultura.tipo === 'campo';
+  const nC  = calcNCanteirosPorHa(cultura, areaHa);
+
+  // Plant count
+  let totalPlantas, area;
+  if (isCampo) {
+    const ppha = (v.espacamentoLinhas > 0 && v.espacamentoPlantas > 0)
+      ? Math.floor(10000 / (v.espacamentoLinhas * v.espacamentoPlantas)) : 0;
+    totalPlantas = Math.round(ppha * (v.areaHa || 1));
+  } else {
+    const linhas   = v.espacamentoLinhas   > 0 ? Math.floor(v.largura     / v.espacamentoLinhas)   : 0;
+    const porLinha = v.espacamentoPlantas  > 0 ? Math.floor(v.comprimento / v.espacamentoPlantas)  : 0;
+    totalPlantas   = linhas * porLinha;
+    area           = v.comprimento * v.largura;
+  }
+  const plantasViaveis = Math.round(totalPlantas * v.sobrevivencia / 100);
+
+  // Insumo costs
+  const precoSementes = v.precoSementes || ins.sementes.precoUnitario;
+  let custoCalcareo, custoEsterco, custoNPK, custoUreia, custoNitratoCa, custoSementes;
+  if (isCampo) {
+    const ha = v.areaHa || 1;
+    custoCalcareo  = ins.calcareo.padrao  * ha * v.precoCalcareo;
+    custoEsterco   = ins.esterco.padrao   * ha * v.precoEsterco;
+    custoNPK       = ins.npk.padrao       * ha * v.precoNPK;
+    custoUreia     = ins.ureia.padrao     * ha * v.precoUreia;
+    custoNitratoCa = (ins.nitratoCalcio?.padrao || 0) * ha * v.precoNitratoCa;
+    custoSementes  = ins.sementes.padrao  * ha * precoSementes;
+  } else {
+    custoCalcareo  = ins.calcareo.padrao * v.precoCalcareo;
+    custoEsterco   = ins.esterco.padrao  * v.precoEsterco;
+    custoNPK       = ins.npk.padrao      * v.precoNPK;
+    custoUreia     = (ins.ureia.padrao / 1000) * v.precoUreia;
+    custoNitratoCa = ((ins.nitratoCalcio?.padrao || 0) / 1000) * v.precoNitratoCa;
+    const fator    = (area || 32) / 32;
+    custoSementes  = ins.sementes.padrao * precoSementes * fator;
+  }
+  const custoMulching = (!isCampo && ins.mulching.multiplicador > 0)
+    ? (area || 0) * ins.mulching.multiplicador * (v.precoMulching || 2.00) : 0;
+
+  const custoTotal = custoCalcareo + custoEsterco + custoNPK + custoUreia +
+    custoNitratoCa + custoSementes + custoMulching + v.modObra +
+    v.custoEmbalagem + v.custoTransporte + v.custoDefensivos + v.custoEnergia;
+
+  // Receita
+  let receita, producaoTotal;
+  const cv = cultura.venda;
+  if (isCampo && (cv.producaoKgPorHa || v.producaoKgPorHa)) {
+    const baseKgHa = parseFloat(v.producaoKgPorHa) || cv.producaoKgPorHa || 0;
+    producaoTotal  = baseKgHa * (v.areaHa || 1) * (v.sobrevivencia / 100);
+    receita        = producaoTotal * v.precoVenda;
+  } else if (cv.producaoBase != null || v.producaoBase != null) {
+    const base     = parseFloat(v.producaoBase) || cv.producaoBase || 0;
+    producaoTotal  = Math.round(base * (v.sobrevivencia / 100));
+    receita        = producaoTotal * v.precoVenda;
+  } else {
+    producaoTotal  = plantasViaveis;
+    receita        = plantasViaveis * v.precoVenda;
+  }
+
+  const scale      = isCampo ? areaHa : nC;
+  const custoHa    = custoTotal * scale;
+  const receitaHa  = receita   * scale;
+  const lucroHa    = receitaHa - custoHa;
+  const margemHa   = receitaHa > 0 ? (lucroHa / receitaHa) * 100 : 0;
+  const producaoHa = producaoTotal * scale;
+  const producaoUnidade = isCampo && cv.producaoKgPorHa ? 'kg' : cv.unidade;
+
+  return { custoHa, receitaHa, lucroHa, margemHa, producaoHa, producaoUnidade, nC, custoTotal };
+}
+
+// ── PDF generator ─────────────────────────────────────────────────────────────
+
+async function generatePDF(sorted, effectiveArea) {
+  const { default: jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
+
+  const doc   = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const today = new Date().toLocaleDateString('pt-BR');
+  const areaLabel = effectiveArea === 1 ? '1 ha' : `${effectiveArea} ha`;
+
+  // ── Header ──
+  doc.setFillColor(45, 106, 79);
+  doc.rect(0, 0, 297, 22, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Comparacao de Culturas', 14, 9);
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Area: ${areaLabel}  |  Precos medios Mato Grosso 2024/2025  |  Gerado em: ${today}`, 14, 16);
+
+  // ── Info row ──
+  doc.setTextColor(80);
+  doc.setFontSize(7.5);
+  doc.text(
+    'Mao de obra: diarista ~R$130/dia  |  Calcario R$0,25/kg  |  Ureia R$3,00/kg  |  NPK R$2,80-3,50/kg  |  Nitrato Ca R$5,00/kg',
+    14, 27
+  );
+
+  // ── Table ──
+  const calcs = sorted.map(c => fullCalc(c, effectiveArea));
+
+  const tableRows = sorted.map((c, i) => {
+    const calc = calcs[i];
+    const tipo = c.tipo === 'campo' ? 'Campo' : 'Canteiro';
+    const canteiroInfo = c.tipo !== 'campo' ? `${calc.nC} ctrs` : '';
+    return [
+      c.nome,
+      c.tipo === 'campo' ? 'Campo' : `Canteiro\n${canteiroInfo}`,
+      c.ciclo,
+      fmtBRL(calc.custoHa),
+      fmtBRL(calc.receitaHa),
+      fmtBRL(calc.lucroHa),
+      `${calc.margemHa.toFixed(1)}%`,
+      `${Math.round(calc.producaoHa).toLocaleString('pt-BR')} ${calc.producaoUnidade}`,
+    ];
+  });
+
+  autoTable(doc, {
+    startY: 32,
+    head: [[
+      'Cultura', 'Tipo', 'Ciclo',
+      `Custo / ${areaLabel}`, `Receita / ${areaLabel}`, `Lucro / ${areaLabel}`,
+      'Margem', `Producao / ${areaLabel}`,
+    ]],
+    body: tableRows,
+    styles: {
+      fontSize: 8,
+      cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
+      lineColor: [220, 225, 230],
+      lineWidth: 0.2,
+    },
+    headStyles: {
+      fillColor: [45, 106, 79],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 7.5,
+    },
+    alternateRowStyles: { fillColor: [248, 252, 249] },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: 28 },
+      1: { cellWidth: 22, halign: 'center', fontSize: 7 },
+      2: { cellWidth: 30, fontSize: 7 },
+      3: { halign: 'right', cellWidth: 28 },
+      4: { halign: 'right', cellWidth: 28 },
+      5: { halign: 'right', cellWidth: 28 },
+      6: { halign: 'center', cellWidth: 18 },
+      7: { halign: 'right' },
+    },
+    didParseCell(data) {
+      if (data.section === 'body' && data.column.index === 5) {
+        const calc = calcs[data.row.index];
+        if (calc) {
+          data.cell.styles.textColor = calc.lucroHa >= 0 ? [5, 150, 105] : [220, 38, 38];
+          data.cell.styles.fontStyle = 'bold';
+        }
+      }
+      if (data.section === 'body' && data.column.index === 6) {
+        const calc = calcs[data.row.index];
+        if (calc) {
+          data.cell.styles.textColor = calc.margemHa >= 30 ? [5, 150, 105] : calc.margemHa >= 0 ? [180, 90, 10] : [220, 38, 38];
+        }
+      }
+    },
+  });
+
+  // ── Footer ──
+  const totalPages = doc.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    doc.setFontSize(6.5);
+    doc.setTextColor(160);
+    doc.text(
+      `GranjaTop / OryAgro  -  Pagina ${p}/${totalPages}  -  Valores estimados com base em medias de MT. Verifique com fornecedores locais.`,
+      14,
+      doc.internal.pageSize.height - 6
+    );
+  }
+
+  doc.save(`comparacao-culturas-${areaLabel.replace(' ', '')}-${today.replace(/\//g, '-')}.pdf`);
 }
 
 // ── EditField ─────────────────────────────────────────────────────────────────
@@ -446,6 +637,7 @@ export default function ComparacaoCulturas() {
   const [areaHa,    setAreaHa]    = useState(1);
   const [customArea, setCustomArea] = useState('');
   const [useCustom, setUseCustom] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const effectiveArea = useCustom && parseFloat(customArea) > 0
     ? parseFloat(customArea)
@@ -472,15 +664,38 @@ export default function ComparacaoCulturas() {
     return getVal(b) - getVal(a);
   });
 
+  const handleDownloadPDF = async () => {
+    setPdfLoading(true);
+    try {
+      await generatePDF(sorted, effectiveArea);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* ── Header ── */}
       <div className="gradient-hero px-5 pt-6 pb-5">
-        <p className="text-white/55 text-xs font-semibold uppercase tracking-widest mb-1">Análise</p>
-        <h1 className="font-display text-white text-2xl font-extrabold leading-tight">Comparar Culturas</h1>
-        <p className="text-white/50 text-[11px] mt-1">
-          Preços médios MT · corredor {CORREDOR_M * 100} cm · base {effectiveArea} ha
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-white/55 text-xs font-semibold uppercase tracking-widest mb-1">Análise</p>
+            <h1 className="font-display text-white text-2xl font-extrabold leading-tight">Comparar Culturas</h1>
+            <p className="text-white/50 text-[11px] mt-1">
+              Preços médios MT · corredor {CORREDOR_M * 100} cm · base {effectiveArea} ha
+            </p>
+          </div>
+          <button
+            onClick={handleDownloadPDF}
+            disabled={pdfLoading}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition-all flex-shrink-0 mt-1 active:scale-95 disabled:opacity-60"
+            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)' }}
+            title="Baixar comparação em PDF"
+          >
+            <FileDown size={14} />
+            {pdfLoading ? 'Gerando…' : 'PDF'}
+          </button>
+        </div>
 
         {/* Sort pills */}
         <div className="flex gap-2 mt-3 flex-wrap">
