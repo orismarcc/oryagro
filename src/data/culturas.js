@@ -32,7 +32,7 @@ export const CULTURAS = {
       fte: { padrao: 160, min: 80, max: 320, unidade: 'g' },
       sementes: { padrao: 536, precoUnitario: 0.037, unidade: 'sementes' },
       mulching: { multiplicador: 1.1 },
-      modObra: { padrao: 65 },
+      modObra: { padrao: 150 },
     },
     venda: {
       precoUnitario: 3.00,
@@ -82,12 +82,13 @@ export const CULTURAS = {
       fte: { padrao: 160, min: 80, max: 320, unidade: 'g' },
       sementes: { padrao: 2000, precoUnitario: 0.06, unidade: 'mudas/touceiras' },
       mulching: { multiplicador: 1.1 },
-      modObra: { padrao: 40 },
+      modObra: { padrao: 100 },
     },
     venda: {
       precoUnitario: 2.00,
       sobrevivencia: 95,
       unidade: 'maço (100g)',
+      producaoBase: 200,
       producaoKgPorCorte: 20,
       macosPorKg: 10,
     },
@@ -132,12 +133,13 @@ export const CULTURAS = {
       fte: { padrao: 100, min: 50, max: 200, unidade: 'g' },
       sementes: { padrao: 500, precoUnitario: 0.024, unidade: 'g de semente' },
       mulching: { multiplicador: 0 },
-      modObra: { padrao: 30 },
+      modObra: { padrao: 80 },
     },
     venda: {
       precoUnitario: 2.50,
       sobrevivencia: 85,
       unidade: 'maço',
+      producaoBase: 420,
       producaoKgPorM2: 2,
     },
     cronograma: [
@@ -174,7 +176,7 @@ export const CULTURAS = {
       fte: { padrao: 20, min: 10, max: 40, unidade: 'kg/ha' },
       sementes: { padrao: 20000, precoUnitario: 0.08, unidade: 'sementes/ha' },
       mulching: { multiplicador: 0 },
-      modObra: { padrao: 3000 },
+      modObra: { padrao: 4500 },
     },
     venda: {
       precoUnitario: 4.00,
@@ -220,7 +222,7 @@ export const CULTURAS = {
       fte: { padrao: 20, min: 10, max: 40, unidade: 'kg/ha' },
       sementes: { padrao: 6000, precoUnitario: 0.30, unidade: 'manivas/ha' },
       mulching: { multiplicador: 0 },
-      modObra: { padrao: 2500 },
+      modObra: { padrao: 3000 },
     },
     venda: {
       precoUnitario: 1.50,
@@ -267,7 +269,7 @@ export const CULTURAS = {
       ethrel: { padrao: 1, min: 0, max: 2, unidade: 'aplicação (mês 10–12)' },
       sementes: { padrao: 44000, precoUnitario: 0.40, unidade: 'mudas/ha' },
       mulching: { multiplicador: 0 },
-      modObra: { padrao: 8000 },
+      modObra: { padrao: 10000 },
     },
     venda: {
       precoUnitario: 6.50,
@@ -314,7 +316,7 @@ export const CULTURAS = {
       sulfatoPotassio: { padrao: 150, min: 0, max: 300, unidade: 'kg/ha' },
       sementes: { padrao: 625, precoUnitario: 4.50, unidade: 'mudas/ha' },
       mulching: { multiplicador: 0 },
-      modObra: { padrao: 4000 },
+      modObra: { padrao: 5000 },
     },
     venda: {
       precoUnitario: 3.50,
@@ -365,12 +367,13 @@ export const CULTURAS = {
       fte: { padrao: 80, min: 40, max: 160, unidade: 'g' },
       sementes: { padrao: 500, precoUnitario: 0.02, unidade: 'g de semente' },
       mulching: { multiplicador: 0 },
-      modObra: { padrao: 25 },
+      modObra: { padrao: 80 },
     },
     venda: {
       precoUnitario: 2.50,
       sobrevivencia: 88,
       unidade: 'maço',
+      producaoBase: 320,
       producaoKgPorM2: 1.5,
     },
     cronograma: [
@@ -413,12 +416,13 @@ export const CULTURAS = {
       fte: { padrao: 120, min: 60, max: 240, unidade: 'g' },
       sementes: { padrao: 66, precoUnitario: 0.80, unidade: 'mudas' },
       mulching: { multiplicador: 1.1 },
-      modObra: { padrao: 55 },
+      modObra: { padrao: 200 },
     },
     venda: {
       precoUnitario: 3.50,
       sobrevivencia: 92,
       unidade: 'maço',
+      producaoBase: 528,
       producaoMacosPorPlanta: 8,
     },
     cronograma: [
@@ -459,10 +463,10 @@ export const CULTURAS = {
       sulfatoPotassio: { padrao: 300, min: 150, max: 600, unidade: 'kg/ha' },
       sementes: { padrao: 1666, precoUnitario: 3.00, unidade: 'mudas/ha' },
       mulching: { multiplicador: 0 },
-      modObra: { padrao: 5000 },
+      modObra: { padrao: 6000 },
     },
     venda: {
-      precoUnitario: 0.60,
+      precoUnitario: 1.20,
       sobrevivencia: 90,
       unidade: 'kg',
       producaoKgPorHa: 25000,

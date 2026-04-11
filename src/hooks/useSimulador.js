@@ -38,6 +38,8 @@ export function useSimulador(cultura, valores) {
     const precoUreia     = parseFloat(valores.precoUreia)     || 4.00;
     const precoNitratoCa = parseFloat(valores.precoNitratoCa) || 12.00;
 
+    const precoSementes  = parseFloat(valores.precoSementes) || ins.sementes.precoUnitario;
+
     let custoCalcareo, custoEsterco, custoNPK, custoUreia, custoNitratoCa, custoSementes;
 
     if (isCampo) {
@@ -47,7 +49,7 @@ export function useSimulador(cultura, valores) {
       custoNPK       = (parseFloat(valores.npk)           || ins.npk.padrao)           * ha * precoNPK;
       custoUreia     = (parseFloat(valores.ureia)         || ins.ureia.padrao)         * ha * precoUreia;
       custoNitratoCa = (parseFloat(valores.nitratoCalcio) || ins.nitratoCalcio.padrao) * ha * precoNitratoCa;
-      custoSementes  = ins.sementes.padrao * ha * ins.sementes.precoUnitario;
+      custoSementes  = ins.sementes.padrao * ha * precoSementes;
     } else {
       custoCalcareo  = (parseFloat(valores.calcareo)      || ins.calcareo.padrao)              * precoCalcareo;
       custoEsterco   = (parseFloat(valores.esterco)       || ins.esterco.padrao)               * precoEsterco;
@@ -55,7 +57,7 @@ export function useSimulador(cultura, valores) {
       custoUreia     = ((parseFloat(valores.ureia)        || ins.ureia.padrao) / 1000)          * precoUreia;
       custoNitratoCa = ((parseFloat(valores.nitratoCalcio)|| ins.nitratoCalcio.padrao) / 1000)  * precoNitratoCa;
       const fator    = (dim.area || 32) / 32;
-      custoSementes  = ins.sementes.padrao * ins.sementes.precoUnitario * fator;
+      custoSementes  = ins.sementes.padrao * precoSementes * fator;
     }
 
     const custoMulching = (!isCampo && ins.mulching.multiplicador > 0)
@@ -79,12 +81,21 @@ export function useSimulador(cultura, valores) {
       : cultura.venda.sobrevivencia;
     const plantasViaveis = Math.round(dim.totalPlantas * sobrevivencia / 100);
 
-    // producaoBase: overrideable kg/ha for campo cultures, or unit production for canteiro
+    // ── Receita — choose production model ──
+    // 1) Campo with producaoKgPorHa (quiabo, mandioca, acerola, banana)
+    // 2) Canteiro with producaoBase (couve, cebolinha, coentro, rúcula — multi-harvest / area-based)
+    // 3) Default: plant count (alface, abacaxi)
     let receita, producaoTotal;
-    if (isCampo && (cultura.venda.producaoKgPorHa || valores.producaoKgPorHa)) {
-      const baseKgHa = parseFloat(valores.producaoKgPorHa) || cultura.venda.producaoKgPorHa || 0;
-      // Apply sobrevivência as a yield-efficiency factor so it's always meaningful
+    const v = cultura.venda;
+
+    if (isCampo && (v.producaoKgPorHa || valores.producaoKgPorHa)) {
+      const baseKgHa = parseFloat(valores.producaoKgPorHa) || v.producaoKgPorHa || 0;
       producaoTotal = baseKgHa * (dim.areaHa || 1) * (sobrevivencia / 100);
+      receita       = producaoTotal * precoVenda;
+    } else if (v.producaoBase != null || valores.producaoBase != null) {
+      // producaoBase = total sellable units per canteiro at 100% (before sobrevivência)
+      const base = parseFloat(valores.producaoBase) || v.producaoBase || 0;
+      producaoTotal = Math.round(base * (sobrevivencia / 100));
       receita       = producaoTotal * precoVenda;
     } else {
       producaoTotal = plantasViaveis;
