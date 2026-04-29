@@ -482,6 +482,58 @@ export const CULTURAS = {
       { dia: 420, etapa: 'Colheita — 14 meses', produto: '—', dose: '—', forma: 'Cortar o cacho quando os dedos atingirem ângulo reto. ~25 t/ha esperado', tipo: 'colheita' },
     ],
   },
+  mamao_tainung: {
+    id: 'mamao_tainung',
+    tipo: 'campo',
+    nome: 'Mamão Tainung 01',
+    nomesCientifico: 'Carica papaya L. (Tainung 01 — Formosa)',
+    cor: '#ea580c',
+    corClara: '#ffedd5',
+    emoji: '🍈',
+    ciclo: '10–14 meses (1ª colheita)',
+    espacamentoPadrao: '3,5 × 2,0 m',
+    areaPadrao: '1 ha',
+    descricao: 'Mamão tipo Formosa de alta produtividade cultivado em MT. Mudas produzidas em viveiro (~45 dias) e transplantadas ao campo. Frutos de 1,5–3 kg, colheita escalonada a cada 10–15 dias a partir do 8º–10º mês. Exige irrigação regular e controle rigoroso da mosca-das-frutas.',
+    soloTipo: 'Franco-argiloso / Bem drenado',
+    pH: '6,0–6,5',
+    necessidadeHidrica: 'Alta (irrigação regular)',
+    clima: 'Tropical quente / Sol pleno',
+    suportaMudas: true,
+    area: { padrao: 1, unidade: 'ha' },
+    espacamento: { linhas: 3.5, plantas: 2.0 },
+    insumos: {
+      calcareo:       { padrao: 2500, min: 1000, max: 4000,  unidade: 'kg/ha',        porHa: 2500 },
+      esterco:        { padrao: 15000, min: 8000, max: 25000, unidade: 'kg/ha',        porHa: 15000 },
+      npk:            { formula: '10-10-10', padrao: 500, min: 300, max: 900, unidade: 'kg/ha', porHa: 500 },
+      ureia:          { padrao: 100, min: 50, max: 180,      unidade: 'kg/ha',         parcelamento: [{ dia: 75, dose: 35 }, { dia: 150, dose: 35 }, { dia: 240, dose: 30 }] },
+      nitratoCalcio:  { padrao: 50,  min: 20, max: 100,      unidade: 'kg/ha' },
+      aminoacidos:    { padrao: 8,   min: 4,  max: 15,       unidade: 'L/ha' },
+      fte:            { padrao: 20,  min: 10, max: 40,        unidade: 'kg/ha' },
+      sulfatoPotassio:{ padrao: 150, min: 80, max: 300,       unidade: 'kg/ha' },
+      // ~3 sementes/cova × 1428 covas + 15% reserva = 5.000 sementes
+      sementes:       { padrao: 5000, precoUnitario: 0.20,   unidade: 'sementes' },
+      mulching:       { multiplicador: 0 },
+      modObra:        { padrao: 10000 },
+    },
+    venda: {
+      precoUnitario: 1.20,    // R$/kg — média atacado/porta de granja MT
+      sobrevivencia: 90,
+      unidade: 'kg',
+      producaoKgPorHa: 35000, // ~35 t/ha — 1º ciclo produtivo Tainung 01 em MT
+    },
+    cronograma: [
+      { dia: 0,   etapa: 'Viveiro — produção de mudas',      produto: 'Sementes Tainung 01',         dose: '5.000 sementes (3/cova)',      forma: 'Bandejas de isopor 128 células com substrato. Manter sombreamento 50%. Tempo em viveiro: ~45 dias até 4–6 folhas', tipo: 'plantio' },
+      { dia: 45,  etapa: 'Transplante ao campo',              produto: 'Mudas (4–6 folhas)',          dose: '1.428 mudas/ha',               forma: 'Covas 40×40×40cm, espaçamento 3,5×2,0m. Plantar 2–3 mudas/cova — desbastar para 1 planta/cova após 30 dias', tipo: 'plantio' },
+      { dia: 60,  etapa: 'Adubação de arranque',              produto: 'NPK 10-10-10',                dose: '100 kg/ha',                    forma: 'Em anel ao redor de cada muda, a 20–30 cm do caule. Irrigar em seguida', tipo: 'adubo' },
+      { dia: 75,  etapa: 'Desbaste + 1ª Cobertura Ureia',    produto: 'Ureia 46%',                   dose: '35 kg/ha',                     forma: 'Eliminar plantas excedentes por cova. Adubar em meia-lua ao redor das mudas selecionadas', tipo: 'adubo' },
+      { dia: 120, etapa: 'Foliar — FTE + Aminoácidos',        produto: 'FTE BR-12 + Aminoácidos',    dose: '2 g/L + 2 mL/L',              forma: 'Pulverização foliar no início da manhã. Evitar aplicação com chuva. Repetir a cada 45 dias', tipo: 'foliar' },
+      { dia: 150, etapa: '2ª Cobertura — Ureia + K',          produto: 'Ureia + Sulfato de Potássio', dose: '35 kg + 75 kg/ha',            forma: 'Incorporar ao solo ao redor das plantas em anel. Irrigar após a aplicação', tipo: 'adubo' },
+      { dia: 180, etapa: 'Nitrato de Cálcio foliar',          produto: 'Nitrato de Cálcio',           dose: '5 g/L',                        forma: 'Pulverização foliar sobre frutos jovens — previne podridão apical e melhora firmeza dos frutos', tipo: 'foliar' },
+      { dia: 180, etapa: 'Monitoramento Mosca-das-Frutas',    produto: 'Armadilha McPhail',           dose: '1 armadilha / 100 m²',         forma: 'Instalar com atrativo proteico. Monitorar semanalmente. Pulverizar isca tóxica quando acima do nível de dano (2,5 moscas/armadilha/dia)', tipo: 'manejo' },
+      { dia: 240, etapa: '3ª Cobertura + Sulfato K',          produto: 'Ureia + Sulfato de Potássio', dose: '30 kg + 75 kg/ha',            forma: 'Incrementar K para qualidade e coloração dos frutos. Manter irrigação regular', tipo: 'adubo' },
+      { dia: 270, etapa: '1ª Colheita — início escalonado',  produto: '—',                           dose: '—',                            forma: 'Colher frutos com coloração verde-amarelada na base (estádio 1–2). Colheitas a cada 10–15 dias. Meta: ~35 t/ha no ciclo completo', tipo: 'colheita' },
+    ],
+  },
 };
 
 export const CULTURAS_LIST = Object.values(CULTURAS);

@@ -31,11 +31,13 @@ export const OP_COSTS = {
   rucula:    { transporte: 6,    embalagem: 10,  defensivos: 8,    energia: 10 },
   couve:     { transporte: 12,   embalagem: 15,  defensivos: 20,   energia: 18 },
   // campo (R$/ha/ciclo)
-  quiabo:    { transporte: 600,  embalagem: 400, defensivos: 800,  energia: 400 },
-  mandioca:  { transporte: 500,  embalagem: 150, defensivos: 300,  energia: 150 },
-  abacaxi:   { transporte: 1200, embalagem: 800, defensivos: 1500, energia: 500 },
-  acerola:   { transporte: 800,  embalagem: 500, defensivos: 600,  energia: 400 },
-  banana_ana:{ transporte: 800,  embalagem: 400, defensivos: 700,  energia: 500 },
+  quiabo:        { transporte: 600,  embalagem: 400, defensivos: 800,  energia: 400 },
+  mandioca:      { transporte: 500,  embalagem: 150, defensivos: 300,  energia: 150 },
+  abacaxi:       { transporte: 1200, embalagem: 800, defensivos: 1500, energia: 500 },
+  acerola:       { transporte: 800,  embalagem: 500, defensivos: 600,  energia: 400 },
+  banana_ana:    { transporte: 800,  embalagem: 400, defensivos: 700,  energia: 500 },
+  // Mamão Tainung 01 — defensivos altos por mosca-das-frutas (programa intensivo)
+  mamao_tainung: { transporte: 1000, embalagem: 600, defensivos: 1500, energia: 500 },
 };
 
 // Fallbacks quando a cultura não está no OP_COSTS
