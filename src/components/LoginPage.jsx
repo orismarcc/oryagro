@@ -1,20 +1,71 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
-import { Sprout, Mail, Lock, AlertCircle } from 'lucide-react';
+import { Sprout, Mail, Lock, AlertCircle, CheckCircle2, UserPlus, LogIn, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState('');
+  const [mode, setMode]           = useState('login'); // 'login' | 'signup'
+  const [email, setEmail]         = useState('');
+  const [password, setPassword]   = useState('');
+  const [confirm, setConfirm]     = useState('');
+  const [showPass, setShowPass]   = useState(false);
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState('');
+  const [success, setSuccess]     = useState('');
+
+  const reset = (newMode) => {
+    setMode(newMode);
+    setError('');
+    setSuccess('');
+    setPassword('');
+    setConfirm('');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
+
+    if (mode === 'signup') {
+      if (password.length < 6) {
+        setError('A senha deve ter no mínimo 6 caracteres.');
+        return;
+      }
+      if (password !== confirm) {
+        setError('As senhas não coincidem.');
+        return;
+      }
+    }
+
     setLoading(true);
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
-    if (authError) setError(authError.message);
+
+    if (mode === 'login') {
+      const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+      if (err) {
+        setError(
+          err.message === 'Invalid login credentials'
+            ? 'E-mail ou senha incorretos.'
+            : err.message === 'Email not confirmed'
+            ? 'Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada.'
+            : err.message,
+        );
+      }
+    } else {
+      const { error: err } = await supabase.auth.signUp({ email, password });
+      if (err) {
+        setError(
+          err.message.includes('already registered')
+            ? 'Este e-mail já possui uma conta. Faça login.'
+            : err.message,
+        );
+      } else {
+        setSuccess('Conta criada! Verifique seu e-mail para confirmar o cadastro, depois faça login.');
+        setMode('login');
+        setPassword('');
+        setConfirm('');
+      }
+    }
+
     setLoading(false);
   };
 
@@ -29,7 +80,7 @@ export default function LoginPage() {
           <Sprout size={130} color="white" />
         </div>
 
-        <div className="relative z-10 px-6 pt-16 pb-12 text-center">
+        <div className="relative z-10 px-6 pt-14 pb-10 text-center">
           <motion.div
             initial={{ opacity: 0, y: -16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -40,100 +91,177 @@ export default function LoginPage() {
               <Sprout size={28} color="white" />
             </div>
             <h1 className="font-display text-white text-3xl font-extrabold leading-tight">OryAgro</h1>
-            <p className="text-white/55 text-sm mt-1">Guia Hortícola</p>
+            <p className="text-white/55 text-sm mt-1">Guia Hortícola — Mato Grosso</p>
           </motion.div>
         </div>
       </div>
 
-      {/* ── Login form ── */}
-      <div className="flex-1 flex flex-col justify-center px-6 py-8 max-w-sm mx-auto w-full">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <h2 className="font-display text-xl font-bold text-foreground mb-1">Bem-vindo</h2>
-          <p className="text-[13px] text-muted-foreground mb-6">Acesse com sua conta para continuar</p>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                E-mail
-              </label>
-              <div className="relative">
-                <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="seu@email.com"
-                  required
-                  className="w-full pl-9 pr-3 py-3 rounded-xl text-[14px] outline-none transition-all"
-                  style={{
-                    background: 'hsl(210 16% 96%)',
-                    border: '1.5px solid hsl(214 20% 88%)',
-                    color: 'hsl(215 20% 16%)',
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Password */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Senha
-              </label>
-              <div className="relative">
-                <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  className="w-full pl-9 pr-3 py-3 rounded-xl text-[14px] outline-none"
-                  style={{
-                    background: 'hsl(210 16% 96%)',
-                    border: '1.5px solid hsl(214 20% 88%)',
-                    color: 'hsl(215 20% 16%)',
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Error */}
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
-                style={{ background: 'hsl(4 80% 96%)', border: '1px solid #fca5a5' }}
-              >
-                <AlertCircle size={13} style={{ color: '#dc2626', flexShrink: 0 }} />
-                <p className="text-[12px] font-medium" style={{ color: '#dc2626' }}>
-                  {error === 'Invalid login credentials'
-                    ? 'E-mail ou senha incorretos'
-                    : error}
-                </p>
-              </motion.div>
-            )}
-
+      {/* ── Mode toggle ── */}
+      <div className="px-6 pt-6 max-w-sm mx-auto w-full">
+        <div className="flex rounded-2xl p-1 gap-1" style={{ background: 'hsl(210 16% 95%)' }}>
+          {[
+            { key: 'login',  label: 'Entrar',       Icon: LogIn },
+            { key: 'signup', label: 'Criar conta',  Icon: UserPlus },
+          ].map(({ key, label, Icon }) => (
             <button
-              type="submit"
-              disabled={loading || !email || !password}
-              className="w-full py-3.5 rounded-2xl text-[14px] font-bold text-white transition-all active:scale-[0.98] disabled:opacity-50"
-              style={{ background: 'hsl(160 84% 27%)' }}
+              key={key}
+              onClick={() => reset(key)}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-bold transition-all"
+              style={mode === key
+                ? { background: 'white', color: 'hsl(160 84% 27%)', boxShadow: '0 1px 4px rgb(0 0 0 / 0.10)' }
+                : { color: 'hsl(215 16% 50%)' }}
             >
-              {loading ? 'Entrando…' : 'Entrar'}
+              <Icon size={13} />
+              {label}
             </button>
-          </form>
-
-          <p className="text-center text-[11px] text-muted-foreground mt-6">
-            Acesso restrito ao time OryAgro
-          </p>
-        </motion.div>
+          ))}
+        </div>
       </div>
+
+      {/* ── Form ── */}
+      <div className="flex-1 flex flex-col justify-start px-6 pt-5 pb-10 max-w-sm mx-auto w-full">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={mode}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <h2 className="font-display text-xl font-bold text-foreground mb-0.5">
+              {mode === 'login' ? 'Bem-vindo de volta' : 'Criar nova conta'}
+            </h2>
+            <p className="text-[13px] text-muted-foreground mb-5">
+              {mode === 'login'
+                ? 'Acesse com seu e-mail e senha'
+                : 'Preencha os dados para criar sua conta'}
+            </p>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Email */}
+              <Field label="E-mail">
+                <div className="relative">
+                  <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="seu@email.com"
+                    required
+                    className="w-full pl-9 pr-3 py-3 rounded-xl text-[14px] outline-none"
+                    style={{ background: 'hsl(210 16% 96%)', border: '1.5px solid hsl(214 20% 88%)', color: 'hsl(215 20% 16%)' }}
+                  />
+                </div>
+              </Field>
+
+              {/* Password */}
+              <Field label={mode === 'signup' ? 'Senha (mín. 6 caracteres)' : 'Senha'}>
+                <div className="relative">
+                  <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <input
+                    type={showPass ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="w-full pl-9 pr-9 py-3 rounded-xl text-[14px] outline-none"
+                    style={{ background: 'hsl(210 16% 96%)', border: '1.5px solid hsl(214 20% 88%)', color: 'hsl(215 20% 16%)' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(s => !s)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    tabIndex={-1}
+                  >
+                    {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </Field>
+
+              {/* Confirm password — signup only */}
+              {mode === 'signup' && (
+                <Field label="Confirmar senha">
+                  <div className="relative">
+                    <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                    <input
+                      type={showPass ? 'text' : 'password'}
+                      value={confirm}
+                      onChange={e => setConfirm(e.target.value)}
+                      placeholder="••••••••"
+                      required
+                      className="w-full pl-9 pr-3 py-3 rounded-xl text-[14px] outline-none"
+                      style={{ background: 'hsl(210 16% 96%)', border: '1.5px solid hsl(214 20% 88%)', color: 'hsl(215 20% 16%)' }}
+                    />
+                  </div>
+                </Field>
+              )}
+
+              {/* Error */}
+              <AnimatePresence>
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="flex items-start gap-2 px-3 py-2.5 rounded-xl"
+                    style={{ background: 'hsl(4 80% 96%)', border: '1px solid #fca5a5' }}
+                  >
+                    <AlertCircle size={13} className="flex-shrink-0 mt-0.5" style={{ color: '#dc2626' }} />
+                    <p className="text-[12px] font-medium" style={{ color: '#dc2626' }}>{error}</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Success */}
+              <AnimatePresence>
+                {success && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="flex items-start gap-2 px-3 py-2.5 rounded-xl"
+                    style={{ background: 'hsl(152 60% 95%)', border: '1px solid #6ee7b7' }}
+                  >
+                    <CheckCircle2 size={13} className="flex-shrink-0 mt-0.5" style={{ color: '#059669' }} />
+                    <p className="text-[12px] font-medium" style={{ color: '#059669' }}>{success}</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <button
+                type="submit"
+                disabled={loading || !email || !password || (mode === 'signup' && !confirm)}
+                className="w-full py-3.5 rounded-2xl text-[14px] font-bold text-white transition-all active:scale-[0.98] disabled:opacity-50"
+                style={{ background: 'hsl(160 84% 27%)' }}
+              >
+                {loading
+                  ? (mode === 'login' ? 'Entrando…' : 'Criando conta…')
+                  : (mode === 'login' ? 'Entrar' : 'Criar conta')}
+              </button>
+            </form>
+
+            <p className="text-center text-[11px] text-muted-foreground mt-5">
+              {mode === 'login'
+                ? <>Não tem conta?{' '}
+                    <button onClick={() => reset('signup')} className="font-semibold underline">Criar conta</button>
+                  </>
+                : <>Já tem conta?{' '}
+                    <button onClick={() => reset('login')} className="font-semibold underline">Entrar</button>
+                  </>
+              }
+            </p>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{label}</label>
+      {children}
     </div>
   );
 }
