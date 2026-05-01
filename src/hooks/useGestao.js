@@ -40,18 +40,20 @@ export async function deleteDiarioEntry(id) {
 
 // ── Estoque ───────────────────────────────────────────────────────────────────
 
-export async function loadEstoque() {
+export async function loadEstoque(propriedadeId = null) {
   const userId = await getUserId();
   if (!userId) return [];
-  const { data } = await supabase
+  let q = supabase
     .from('estoque_insumos')
     .select('*')
     .eq('user_id', userId)
     .order('nome');
+  if (propriedadeId) q = q.eq('propriedade_id', propriedadeId);
+  const { data } = await q;
   return data || [];
 }
 
-export async function upsertInsumo({ id, nome, unidade, quantidade, quantidade_minima, preco_unitario }) {
+export async function upsertInsumo({ id, nome, unidade, quantidade, quantidade_minima, preco_unitario, propriedadeId }) {
   const userId = await getUserId();
   if (!userId) return null;
   const payload = {
@@ -61,6 +63,7 @@ export async function upsertInsumo({ id, nome, unidade, quantidade, quantidade_m
     quantidade,
     quantidade_minima,
     preco_unitario,
+    ...(propriedadeId ? { propriedade_id: propriedadeId } : {}),
     updated_at: new Date().toISOString(),
   };
   const { data, error } = id
@@ -75,7 +78,7 @@ export async function deleteInsumo(id) {
   return !error;
 }
 
-export async function addMovimento({ insumoId, tipo, quantidade, observacao, data }) {
+export async function addMovimento({ insumoId, tipo, quantidade, observacao, data, plantioId }) {
   const userId = await getUserId();
   if (!userId) return null;
 
@@ -89,6 +92,7 @@ export async function addMovimento({ insumoId, tipo, quantidade, observacao, dat
       quantidade,
       observacao: observacao || null,
       data,
+      plantio_id: plantioId || null,
     });
   if (mErr) { console.error('addMovimento error', mErr); return null; }
 
@@ -116,7 +120,7 @@ export async function loadMovimentos(insumoId) {
   if (!userId) return [];
   const { data } = await supabase
     .from('estoque_movimentos')
-    .select('*')
+    .select('*, plantio:plantios(nome)')
     .eq('user_id', userId)
     .eq('insumo_id', insumoId)
     .order('data', { ascending: false })
