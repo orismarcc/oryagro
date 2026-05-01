@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
 import { Plus, Printer, Trash2, CheckCircle2, Circle, ChevronRight, CalendarDays, X, Layers, AlertCircle, Leaf } from 'lucide-react';
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
+import { loadEstoque, addMovimento } from '../hooks/useGestao';
 
 const TIPO_META = {
   plantio:  { color: '#059669', bg: 'hsl(152 69% 93%)', label: 'Plantio',   emoji: '🌱' },
@@ -133,7 +134,7 @@ function LotePicker({ lotes, selectedId, onSelect, cor }) {
 
 // ── Main component ────────────────────────────────────────────────────────
 
-export default function CronogramaTimeline({ cultura, lotes = [] }) {
+export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId = null }) {
   const isCampo = cultura.tipo === 'campo';
   const cor = cultura.cor;
 
@@ -162,7 +163,9 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
   const [confirming, setConfirming] = useState(null);
   const [confirmDate, setConfirmDate] = useState(todayISO());
   const [addDialog, setAddDialog]   = useState(false);
-  const [newRow, setNewRow]         = useState({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo' });
+  const [newRow, setNewRow]         = useState({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo', insumo_id: '' });
+  const [insumos, setInsumos]   = useState([]);
+  const [stockDebit, setStockDebit] = useState({ enabled: false, insumoId: '', quantidade: '' });
 
   // Reload status/custom from storage when key changes.
   // Also runs a one-time migration from legacy index-based IDs → stable name-based IDs.
@@ -183,6 +186,11 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
 
   useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(status)); }, [storageKey, status]);
   useEffect(() => { localStorage.setItem(customKey, JSON.stringify(customRows)); }, [customKey, customRows]);
+
+  useEffect(() => {
+    if (!propriedadeId) { setInsumos([]); return; }
+    loadEstoque(propriedadeId).then(setInsumos);
+  }, [propriedadeId]);
 
   // ── Dose scaling factor ──
   const baseArea = isCampo
@@ -291,9 +299,28 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
   const feitos   = allEvents.filter(e => status[e._id]?.status === 'feito').length;
   const progress = allEvents.length > 0 ? feitos / allEvents.length : 0;
 
-  const confirmStep = (id) => {
+  const confirmStep = async (id) => {
     setStatus(s => ({ ...s, [id]: { status: 'feito', data: confirmDate } }));
+
+    if (
+      stockDebit.enabled &&
+      stockDebit.insumoId &&
+      parseFloat(stockDebit.quantidade) > 0 &&
+      selectedLote
+    ) {
+      await addMovimento({
+        insumoId: stockDebit.insumoId,
+        tipo: 'saida',
+        quantidade: parseFloat(stockDebit.quantidade),
+        observacao: `Uso — ${confirming?.etapa || 'etapa cronograma'}`,
+        data: confirmDate,
+        plantioId: selectedLote.id,
+      });
+      if (propriedadeId) loadEstoque(propriedadeId).then(setInsumos);
+    }
+
     setConfirming(null);
+    setStockDebit({ enabled: false, insumoId: '', quantidade: '' });
   };
   const undoStep = (id) => {
     setStatus(s => { const n = { ...s }; delete n[id]; return n; });
@@ -635,6 +662,63 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
                             className="w-full rounded-xl border px-3 py-2 text-sm font-semibold text-foreground bg-white focus:outline-none"
                             style={{ borderColor: `${meta.color}40` }}
                           />
+                          {/* Stock deduction — only for adubo/foliar steps with insumos available */}
+                          {(confirming?.tipo === 'adubo' || confirming?.tipo === 'foliar') && insumos.length > 0 && (
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold" style={{ color: meta.color }}>Debitar do estoque</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setStockDebit(s => ({ ...s, enabled: !s.enabled }))}
+                                  className="relative flex-shrink-0"
+                                  style={{ width: 40, height: 22 }}
+                                >
+                                  <span className="absolute inset-0 rounded-full transition-colors"
+                                    style={{ background: stockDebit.enabled ? meta.color : 'hsl(210 16% 88%)' }} />
+                                  <span className="absolute top-[3px] w-[16px] h-[16px] rounded-full bg-white shadow transition-all"
+                                    style={{ left: stockDebit.enabled ? 21 : 3 }} />
+                                </button>
+                              </div>
+
+                              {stockDebit.enabled && (
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                                  exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.18 }}
+                                  style={{ overflow: 'hidden' }}
+                                  className="space-y-2"
+                                >
+                                  <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Insumo</label>
+                                    <select
+                                      value={stockDebit.insumoId}
+                                      onChange={e => setStockDebit(s => ({ ...s, insumoId: e.target.value }))}
+                                      className="w-full mt-1 rounded-xl border px-3 py-2 text-[13px] outline-none"
+                                      style={{ background: 'white', borderColor: `${meta.color}40` }}
+                                    >
+                                      <option value="">Selecionar insumo…</option>
+                                      {insumos.map(i => (
+                                        <option key={i.id} value={i.id}>
+                                          {i.nome} ({i.quantidade} {i.unidade})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                      Quantidade {stockDebit.insumoId ? `(${insumos.find(i => i.id === stockDebit.insumoId)?.unidade || ''})` : ''}
+                                    </label>
+                                    <input
+                                      type="number" min="0.01" step="0.01"
+                                      value={stockDebit.quantidade}
+                                      onChange={e => setStockDebit(s => ({ ...s, quantidade: e.target.value }))}
+                                      className="w-full mt-1 rounded-xl border px-3 py-2 text-[13px] font-semibold outline-none"
+                                      style={{ background: 'white', borderColor: `${meta.color}40` }}
+                                    />
+                                  </div>
+                                </motion.div>
+                              )}
+                            </div>
+                          )}
                           <div className="flex gap-2">
                             <button
                               onClick={() => setConfirming(null)}
@@ -662,7 +746,8 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
                       whileTap={{ scale: 0.985 }}
                       onClick={() => {
                         setConfirmDate(getDefaultConfirmDate(ev.dia));
-                        setConfirming({ id: ev._id, etapa: ev.etapa });
+                        setConfirming({ id: ev._id, etapa: ev.etapa, tipo: ev.tipo });
+                        setStockDebit({ enabled: false, insumoId: '', quantidade: '' });
                       }}
                       className="w-full flex items-center justify-between px-4 py-3 text-[12px] font-semibold transition-colors"
                       style={{
@@ -726,6 +811,19 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
                 className="flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
               />
             </div>
+            {(newRow.tipo === 'adubo' || newRow.tipo === 'foliar') && insumos.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <Label>Vincular a insumo do estoque (opcional)</Label>
+                <select
+                  value={newRow.insumo_id}
+                  onChange={e => setNewRow(r => ({ ...r, insumo_id: e.target.value }))}
+                  className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">Nenhum</option>
+                  {insumos.map(i => <option key={i.id} value={i.id}>{i.nome} ({i.quantidade} {i.unidade})</option>)}
+                </select>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddDialog(false)}>Cancelar</Button>
@@ -733,8 +831,11 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
               disabled={!newRow.etapa}
               onClick={() => {
                 if (!newRow.etapa) return;
-                setCustomRows(r => [...r, { ...newRow, dia: parseInt(newRow.dia) || 0 }]);
-                setNewRow({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo' });
+                setCustomRows(r => [
+                  ...r,
+                  { ...newRow, dia: parseInt(newRow.dia) || 0, insumo_id: newRow.insumo_id || null },
+                ]);
+                setNewRow({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo', insumo_id: '' });
                 setAddDialog(false);
               }}
             >
