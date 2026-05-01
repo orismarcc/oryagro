@@ -305,6 +305,73 @@ export const CULTURAS = {
     clima: 'Tropical quente / Semi-árido',
     area: { padrao: 1, unidade: 'ha' },
     espacamento: { linhas: 4.0, plantas: 4.0 },
+    metodosPropagacao: [
+      {
+        key: 'muda_enxertada', label: 'Muda enxertada', saquinho: true, diasViveiro: 0,
+        descricao: 'Adquirida pronta para o campo. Plantio imediato. Desenvolvimento mais uniforme.',
+        lifecycle: {
+          diasPrimeiraProducao: 540, diasProducaoPlena: 900, cicloDias: 1825,
+          fases: ['Estabelecimento', 'Crescimento vegetativo', 'Pré-produção', 'Produção inicial', 'Produção plena'],
+          faseLimites: [90, 270, 450, 540],
+          minDiasBioRealista: 365,
+        },
+        etapasViveiro: [
+          { dia: -7, etapa: 'Adubação de plantio (Base)', produto: 'NPK 10-10-10 + Esterco bovino', dose: '300 g NPK + 5 kg esterco/cova', tipo: 'adubo' },
+        ],
+      },
+      {
+        key: 'estaquia', label: 'Estaquia', saquinho: true, diasViveiro: 60,
+        descricao: 'Estaca semilenhosa enraizada em saquinho no viveiro (~60 dias). Produção em 8–12 meses.',
+        lifecycle: {
+          diasPrimeiraProducao: 300, diasProducaoPlena: 600, cicloDias: 1825,
+          fases: ['Viveiro (enraizamento)', 'Estabelecimento em campo', 'Crescimento vegetativo', 'Pré-produção', 'Produção inicial', 'Produção plena'],
+          faseLimites: [60, 150, 270, 300, 600],
+          minDiasBioRealista: 210,
+        },
+        etapasViveiro: [
+          { dia: 0,  etapa: 'Corte e preparo das estacas',    produto: 'Enraizador IBA',            dose: '2000 ppm / 5 seg',          tipo: 'plantio' },
+          { dia: 1,  etapa: 'Estaqueamento nos saquinhos',    produto: 'Substrato p/ enraizamento', dose: '1 estaca/saquinho',          tipo: 'plantio' },
+          { dia: 15, etapa: 'Verificação de brotação',        produto: '—',                         dose: 'Retirar estacas sem broto',  tipo: 'manejo'  },
+          { dia: 45, etapa: 'Seleção e rustificação',         produto: '—',                         dose: 'Reduzir irrigação 5 dias',   tipo: 'manejo'  },
+          { dia: 53, etapa: 'Adubação de plantio (Base)',     produto: 'NPK 10-10-10 + Esterco bovino', dose: '300 g NPK + 5 kg esterco/cova', tipo: 'adubo' },
+          { dia: 60, etapa: 'Transplante ao campo',           produto: '—',                         dose: 'Covas 40×40×40 cm, 4×4 m',  tipo: 'especial'},
+        ],
+      },
+      {
+        key: 'alporquia', label: 'Alporquia', saquinho: false, diasViveiro: 45,
+        descricao: 'Alporquia na planta-mãe — enraizamento sem retirada (~45 dias). Produção em 6–10 meses.',
+        lifecycle: {
+          diasPrimeiraProducao: 255, diasProducaoPlena: 540, cicloDias: 1825,
+          fases: ['Viveiro (alporquia)', 'Estabelecimento em campo', 'Crescimento vegetativo', 'Produção inicial', 'Produção plena'],
+          faseLimites: [45, 135, 240, 255],
+          minDiasBioRealista: 180,
+        },
+        etapasViveiro: [
+          { dia: 0,  etapa: 'Marcação e incisão do ramo',     produto: 'Enraizador IBA (pasta)',    dose: '10.000 ppm',                tipo: 'plantio' },
+          { dia: 2,  etapa: 'Envolvimento com substrato',     produto: 'Musgo umedecido',            dose: 'Cobrir toda a incisão',     tipo: 'manejo'  },
+          { dia: 30, etapa: 'Verificar enraizamento',         produto: '—',                         dose: 'Verificar raízes pelo plástico', tipo: 'manejo' },
+          { dia: 38, etapa: 'Adubação de plantio (Base)',     produto: 'NPK 10-10-10 + Esterco bovino', dose: '300 g NPK + 5 kg esterco/cova', tipo: 'adubo' },
+          { dia: 45, etapa: 'Corte e transplante ao campo',   produto: '—',                         dose: 'Cortar abaixo da alporquia — covas 40×40×40 cm', tipo: 'especial' },
+        ],
+      },
+      {
+        key: 'semente', label: 'Semente', saquinho: true, diasViveiro: 90,
+        descricao: 'Germinação + formação de muda em saquinho no viveiro (~90 dias). Produção em 2–3 anos.',
+        lifecycle: {
+          diasPrimeiraProducao: 730, diasProducaoPlena: 1095, cicloDias: 1825,
+          fases: ['Viveiro (semente)', 'Estabelecimento', 'Crescimento vegetativo', 'Pré-produção', 'Produção inicial', 'Produção plena'],
+          faseLimites: [90, 270, 540, 730, 1095],
+          minDiasBioRealista: 540,
+        },
+        etapasViveiro: [
+          { dia: 0,  etapa: 'Semeadura em saquinho',          produto: 'Sementes porta-enxerto',    dose: '1–2 sementes/saquinho',     tipo: 'plantio' },
+          { dia: 20, etapa: 'Desbaste e seleção',             produto: '—',                         dose: 'Deixar 1 planta/saquinho',  tipo: 'manejo'  },
+          { dia: 60, etapa: '1ª Adubação no viveiro',         produto: 'NPK 10-10-10',              dose: '2 g/saquinho',              tipo: 'adubo'   },
+          { dia: 83, etapa: 'Adubação de plantio (Base)',     produto: 'NPK 10-10-10 + Esterco bovino', dose: '300 g NPK + 5 kg esterco/cova', tipo: 'adubo' },
+          { dia: 90, etapa: 'Transplante ao campo',           produto: '—',                         dose: 'Covas 40×40×40 cm, 4×4 m',  tipo: 'especial'},
+        ],
+      },
+    ],
     insumos: {
       calcareo: { padrao: 1500, min: 600, max: 3000, unidade: 'kg/ha', porHa: 1500 },
       esterco: { padrao: 8000, min: 4000, max: 15000, unidade: 'kg/ha', porHa: 8000 },
@@ -452,6 +519,37 @@ export const CULTURAS = {
     clima: 'Tropical quente / Úmido',
     area: { padrao: 1, unidade: 'ha' },
     espacamento: { linhas: 3.0, plantas: 2.0 },
+    metodosPropagacao: [
+      {
+        key: 'rebento', label: 'Rebento de campo', saquinho: false, diasViveiro: 0,
+        descricao: 'Rebento (filhote) retirado diretamente da touceira-mãe e plantado.',
+        lifecycle: {
+          diasPrimeiraProducao: 420, diasProducaoPlena: 570, cicloDias: 720,
+          fases: ['Estabelecimento', 'Crescimento', 'Florescimento', 'Frutificação'],
+          faseLimites: [90, 300, 420],
+          minDiasBioRealista: 300,
+        },
+        etapasViveiro: [
+          { dia: -7, etapa: 'Adubação de plantio (Base)', produto: 'NPK 08-24-12 + Esterco', dose: '200 g NPK + 5 kg esterco/cova', tipo: 'adubo' },
+        ],
+      },
+      {
+        key: 'mudas_mtc', label: 'Muda MTC', saquinho: true, diasViveiro: 30,
+        descricao: 'Muda micropropagada em tubete/saquinho aclimatada no viveiro (~30 dias).',
+        lifecycle: {
+          diasPrimeiraProducao: 450, diasProducaoPlena: 570, cicloDias: 720,
+          fases: ['Viveiro', 'Estabelecimento', 'Crescimento', 'Florescimento', 'Frutificação'],
+          faseLimites: [30, 120, 330, 450],
+          minDiasBioRealista: 330,
+        },
+        etapasViveiro: [
+          { dia: 0,  etapa: 'Recebimento e aclimatação MTC',  produto: 'Mudas micropropagadas',   dose: '—',            tipo: 'plantio' },
+          { dia: 15, etapa: 'Adubação foliar de viveiro',     produto: 'Solução nutritiva 50%',   dose: '2× semana',    tipo: 'adubo'   },
+          { dia: 23, etapa: 'Adubação de plantio (Base)',     produto: 'NPK 08-24-12 + Esterco',  dose: '200 g NPK + 5 kg esterco/cova', tipo: 'adubo' },
+          { dia: 30, etapa: 'Transplante ao campo',           produto: '—',                       dose: '3×2 m',        tipo: 'especial'},
+        ],
+      },
+    ],
     insumos: {
       calcareo: { padrao: 2000, min: 800, max: 4000, unidade: 'kg/ha', porHa: 2000 },
       esterco: { padrao: 10000, min: 5000, max: 20000, unidade: 'kg/ha', porHa: 10000 },
@@ -501,6 +599,38 @@ export const CULTURAS = {
     suportaMudas: true,
     area: { padrao: 1, unidade: 'ha' },
     espacamento: { linhas: 3.5, plantas: 2.0 },
+    metodosPropagacao: [
+      {
+        key: 'muda_saquinho', label: 'Muda em saquinho', saquinho: true, diasViveiro: 45,
+        descricao: 'Semente germinada em saquinho no viveiro (~45 dias). Método padrão Tainung.',
+        lifecycle: {
+          diasPrimeiraProducao: 270, diasProducaoPlena: 420, cicloDias: 600,
+          fases: ['Viveiro', 'Estabelecimento', 'Crescimento', 'Florescimento/Frutificação'],
+          faseLimites: [45, 135, 270],
+          minDiasBioRealista: 210,
+        },
+        etapasViveiro: [
+          { dia: 0,  etapa: 'Semeadura em saquinho',          produto: 'Sementes Tainung 01',     dose: '2–3 sementes/saquinho',     tipo: 'plantio' },
+          { dia: 10, etapa: 'Desbaste — 1 planta/saquinho',   produto: '—',                       dose: 'Manter a mais vigorosa',    tipo: 'manejo'  },
+          { dia: 30, etapa: 'Adubação de viveiro',            produto: 'NPK 10-10-10 diluído',    dose: '1 g/saquinho',              tipo: 'adubo'   },
+          { dia: 38, etapa: 'Adubação de plantio (Base)',     produto: 'NPK 10-10-10 + FTE BR-12',dose: '100 g NPK + 20 g FTE/cova', tipo: 'adubo'   },
+          { dia: 45, etapa: 'Transplante ao campo',           produto: '—',                       dose: 'Mudas de 15–20 cm, 3,5×2 m',tipo: 'especial'},
+        ],
+      },
+      {
+        key: 'direto', label: 'Semente direta', saquinho: false, diasViveiro: 0,
+        descricao: 'Plantio de 2–3 sementes diretamente na cova. Desbaste posterior.',
+        lifecycle: {
+          diasPrimeiraProducao: 300, diasProducaoPlena: 450, cicloDias: 600,
+          fases: ['Germinação/Estabelecimento', 'Crescimento', 'Florescimento/Frutificação'],
+          faseLimites: [90, 300],
+          minDiasBioRealista: 240,
+        },
+        etapasViveiro: [
+          { dia: -7, etapa: 'Adubação de plantio (Base)', produto: 'NPK 10-10-10 + FTE BR-12', dose: '100 g NPK + 20 g FTE/cova', tipo: 'adubo' },
+        ],
+      },
+    ],
     insumos: {
       calcareo:       { padrao: 2500, min: 1000, max: 4000,  unidade: 'kg/ha',        porHa: 2500 },
       esterco:        { padrao: 15000, min: 8000, max: 25000, unidade: 'kg/ha',        porHa: 15000 },
@@ -522,8 +652,6 @@ export const CULTURAS = {
       producaoKgPorHa: 35000, // ~35 t/ha — 1º ciclo produtivo Tainung 01 em MT
     },
     cronograma: [
-      { dia: 0,   etapa: 'Viveiro — produção de mudas',      produto: 'Sementes Tainung 01',         dose: '5.000 sementes (3/cova)',      forma: 'Bandejas de isopor 128 células com substrato. Manter sombreamento 50%. Tempo em viveiro: ~45 dias até 4–6 folhas', tipo: 'plantio' },
-      { dia: 45,  etapa: 'Transplante ao campo',              produto: 'Mudas (4–6 folhas)',          dose: '1.428 mudas/ha',               forma: 'Covas 40×40×40cm, espaçamento 3,5×2,0m. Plantar 2–3 mudas/cova — desbastar para 1 planta/cova após 30 dias', tipo: 'plantio' },
       { dia: 60,  etapa: 'Adubação de arranque',              produto: 'NPK 10-10-10',                dose: '100 kg/ha',                    forma: 'Em anel ao redor de cada muda, a 20–30 cm do caule. Irrigar em seguida', tipo: 'adubo' },
       { dia: 75,  etapa: 'Desbaste + 1ª Cobertura Ureia',    produto: 'Ureia 46%',                   dose: '35 kg/ha',                     forma: 'Eliminar plantas excedentes por cova. Adubar em meia-lua ao redor das mudas selecionadas', tipo: 'adubo' },
       { dia: 120, etapa: 'Foliar — FTE + Aminoácidos',        produto: 'FTE BR-12 + Aminoácidos',    dose: '2 g/L + 2 mL/L',              forma: 'Pulverização foliar no início da manhã. Evitar aplicação com chuva. Repetir a cada 45 dias', tipo: 'foliar' },

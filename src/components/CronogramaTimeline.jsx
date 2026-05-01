@@ -5,7 +5,8 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
-import { Plus, Printer, Trash2, CheckCircle2, Circle, ChevronRight, CalendarDays, X, Layers, AlertCircle } from 'lucide-react';
+import { Plus, Printer, Trash2, CheckCircle2, Circle, ChevronRight, CalendarDays, X, Layers, AlertCircle, Leaf } from 'lucide-react';
+import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
 
 const TIPO_META = {
   plantio:  { color: '#059669', bg: 'hsl(152 69% 93%)', label: 'Plantio',   emoji: '🌱' },
@@ -38,6 +39,49 @@ function stepDate(datePlantio, dia) {
 function formatStepDate(datePlantio, dia) {
   const d = stepDate(datePlantio, dia);
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+
+// ── Stable step IDs ──────────────────────────────────────────────────────────
+// IDs are derived from the step NAME, not the index.
+// This means adding/removing/reordering steps never invalidates existing marks.
+
+function makeStableId(prefix, etapa) {
+  const slug = etapa
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // strip diacritics
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+  return `${prefix}_${slug}`;
+}
+
+/**
+ * One-time migration: convert legacy index-based IDs (viveiro_0, default_1, …)
+ * to the new stable name-based IDs, using the current step lists as a map.
+ * Returns the migrated status object (may be identical if no migration needed).
+ */
+function migrateLegacyStatus(stored, vivSteps, baseSteps) {
+  let changed = false;
+  const migrated = {};
+
+  Object.entries(stored).forEach(([oldId, val]) => {
+    const legacyMatch = oldId.match(/^(viveiro|default)_(\d+)$/);
+    if (!legacyMatch) {
+      // Already stable (or custom/semeadura_bandeja) — keep as-is
+      migrated[oldId] = val;
+      return;
+    }
+    const prefix = legacyMatch[1];
+    const idx    = parseInt(legacyMatch[2], 10);
+    const steps  = prefix === 'viveiro' ? vivSteps : baseSteps;
+    if (steps[idx]) {
+      const newId = makeStableId(prefix, steps[idx].etapa);
+      migrated[newId] = val;
+      if (newId !== oldId) changed = true;
+    }
+    // If the step no longer exists (was removed), silently drop the mark
+  });
+
+  return changed ? migrated : stored; // return original ref if nothing changed
 }
 
 // Scale numeric values in a dose string by a factor
@@ -120,11 +164,21 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
   const [addDialog, setAddDialog]   = useState(false);
   const [newRow, setNewRow]         = useState({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo' });
 
-  // Reload status/custom from storage when key changes
+  // Reload status/custom from storage when key changes.
+  // Also runs a one-time migration from legacy index-based IDs → stable name-based IDs.
   useEffect(() => {
-    try { setStatus(JSON.parse(localStorage.getItem(storageKey)) || {}); } catch { setStatus({}); }
+    try {
+      const raw = JSON.parse(localStorage.getItem(storageKey)) || {};
+      // Build the viveiro + base step lists for the migration map
+      const vivSteps  = metodoObj?.etapasViveiro ?? (usaMudas ? [{ etapa: 'Semeadura em bandeja' }] : []);
+      const migrated  = migrateLegacyStatus(raw, vivSteps, cultura.cronograma);
+      // Persist migrated version if it changed
+      if (migrated !== raw) localStorage.setItem(storageKey, JSON.stringify(migrated));
+      setStatus(migrated);
+    } catch { setStatus({}); }
     try { setCustomRows(JSON.parse(localStorage.getItem(customKey)) || []); } catch { setCustomRows([]); }
     setConfirming(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey, customKey]);
 
   useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(status)); }, [storageKey, status]);
@@ -145,14 +199,45 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
   const fator = loteArea / baseArea;
   const isScaled = Math.abs(fator - 1) > 0.02;
 
-  // ── Mudas flag ──
+  // ── Mudas flag (legacy fallback) ──
   const usaMudas = selectedLote
     ? localStorage.getItem(`lote_mudas_${selectedLote.id}`) === '1'
     : false;
 
+  // ── Resolve propagation method from lote ──
+  const metodoObj = (selectedLote?.metodo_propagacao && cultura.metodosPropagacao)
+    ? (cultura.metodosPropagacao.find(m => m.key === selectedLote.metodo_propagacao) ?? null)
+    : null;
+
+  const diasViveiroAtual = metodoObj
+    ? (metodoObj.diasViveiro || 0)
+    : (usaMudas ? 15 : 0);
+
   // ── Days elapsed for selected lote ──
   const diasDecorridos = selectedLote
     ? Math.max(0, Math.floor((Date.now() - new Date(selectedLote.data_plantio + 'T12:00:00')) / 86_400_000))
+    : null;
+
+  // ── Lifecycle anchor: scale base cronograma to fit method's production window ──
+  const metodoLifecycle = metodoObj?.lifecycle ?? null;
+  const diasPrimeiraProducaoAtual = metodoLifecycle?.diasPrimeiraProducao ?? null;
+  const maxBaseDia = cultura.cronograma.length > 0
+    ? Math.max(...cultura.cronograma.map(e => e.dia))
+    : 0;
+
+  const scaleBaseDia = (originalDia) => {
+    if (!diasPrimeiraProducaoAtual || maxBaseDia === 0 || !selectedLote) {
+      return originalDia + diasViveiroAtual;
+    }
+    // Map [0..maxBaseDia] → [diasViveiroAtual..diasPrimeiraProducaoAtual]
+    return Math.round(
+      diasViveiroAtual + (originalDia / maxBaseDia) * (diasPrimeiraProducaoAtual - diasViveiroAtual)
+    );
+  };
+
+  // ── Full lifecycle state for the summary card ──
+  const lc = (selectedLote && metodoLifecycle)
+    ? resolveLifecycle(selectedLote, cultura)
     : null;
 
   // Pre-fill confirm date for lote steps
@@ -162,20 +247,44 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
     return d.toISOString().split('T')[0];
   };
 
+  // Legacy fallback step for old lotes that used the mudas checkbox
   const semeaduraBandeja = {
     dia: 0, _id: 'semeadura_bandeja', _custom: false,
     etapa: 'Semeadura em bandeja', produto: 'Sementes', dose: '—',
     forma: 'Semeadura em bandeja/viveiro. Transplante previsto em ~15 dias.', tipo: 'plantio',
   };
 
+  // Viveiro steps: stable IDs based on step name, not index
+  const etapasViveiro = metodoObj?.etapasViveiro?.length
+    ? metodoObj.etapasViveiro.map(e => ({
+        ...e,
+        _id: makeStableId('viveiro', e.etapa),
+        _custom: false,
+        _viveiro: true,
+      }))
+    : (usaMudas ? [semeaduraBandeja] : []);
+
+  // True when viveiro steps already include a transplante (tipo especial)
+  const vivTemTransplante = etapasViveiro.some(e => e.tipo === 'especial');
+
   const allEvents = [
-    ...(usaMudas ? [semeaduraBandeja] : []),
-    ...cultura.cronograma.map((e, i) => ({
-      ...e,
-      dia: usaMudas ? e.dia + 15 : e.dia,
-      _id: `default_${i}`,
-      _custom: false,
-    })),
+    ...etapasViveiro,
+    ...cultura.cronograma
+      .filter(e => !(vivTemTransplante && e.dia === 0 && e.tipo === 'plantio'))
+      .map(e => {
+        const override = {};
+        if (e.tipo === 'plantio' && e.dia === 0 && selectedLote && metodoObj) {
+          override.produto = metodoObj.label;
+          if (selectedLote.total_plantas > 0) {
+            const linhasEsp  = parseFloat(selectedLote.espacamento_linhas)  || cultura.espacamento?.linhas  || 4;
+            const plantasEsp = parseFloat(selectedLote.espacamento_plantas) || cultura.espacamento?.plantas || 4;
+            const plantsPerHa = Math.round(10000 / (linhasEsp * plantasEsp));
+            override.dose = `${selectedLote.total_plantas.toLocaleString('pt-BR')} mudas · ${plantsPerHa}/ha`;
+            override._noScaleDose = true;
+          }
+        }
+        return { ...e, ...override, dia: scaleBaseDia(e.dia), _id: makeStableId('default', e.etapa), _custom: false };
+      }),
     ...customRows.map((e, i) => ({ ...e, _id: `custom_${i}`, _custom: true })),
   ].sort((a, b) => a.dia - b.dia);
 
@@ -211,6 +320,47 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
           <p className="text-[11px] font-semibold" style={{ color: cor }}>
             Doses ajustadas para este lote (fator {fator.toFixed(2)}×)
           </p>
+        </div>
+      )}
+
+      {/* ── Estado Atual do Ciclo (lifecycle summary) ── */}
+      {lc && (
+        <div className="card p-4 mb-4" style={{ borderColor: `${cor}30` }}>
+          <p className="section-label mb-3">Estado atual do ciclo</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">Fase</p>
+              {lc.faseAtual ? (
+                <span className="inline-flex items-center gap-1 text-[12px] font-bold px-2 py-0.5 rounded-full"
+                  style={{ background: getFaseColor(lc.faseIndex).bg, color: getFaseColor(lc.faseIndex).text }}>
+                  <Leaf size={11} /> {lc.faseAtual}
+                </span>
+              ) : <p className="text-[13px] font-bold text-foreground">—</p>}
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">Dia do ciclo</p>
+              <p className="text-[15px] font-black" style={{ color: cor }}>D{lc.diasDecorridos}</p>
+            </div>
+            {lc.dataTransplante && (
+              <div>
+                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">Transplante (previsto)</p>
+                <p className="text-[13px] font-bold text-foreground">{fmtDateBR(lc.dataTransplante)}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">1ª Colheita estimada</p>
+              <p className="text-[13px] font-bold" style={{ color: lc.prontoParaColheita ? '#16a34a' : cor }}>
+                {fmtDateBR(lc.dataPrimeiraProducao)}
+              </p>
+              {!lc.prontoParaColheita && (
+                <p className="text-[11px] text-muted-foreground">{fmtDiasRestantes(lc.diasParaColheita)}</p>
+              )}
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">Produção plena estimada</p>
+              <p className="text-[13px] font-bold text-foreground">{fmtDateBR(lc.dataProducaoPlena)}</p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -258,7 +408,10 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
                   Plantio: {formatDate(selectedLote.data_plantio)}
                 </span>
                 <span className="text-[10px] text-muted-foreground">
-                  Colheita prevista: {formatStepDate(selectedLote.data_plantio, cultura.cronograma[cultura.cronograma.length - 1]?.dia || 35)}
+                  1ª colheita: {lc
+                    ? lc.dataPrimeiraProducao.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                    : formatStepDate(selectedLote.data_plantio, cultura.cronograma[cultura.cronograma.length - 1]?.dia || 35)
+                  }
                 </span>
               </div>
             )}
@@ -285,7 +438,7 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
           const isToday    = diasDecorridos !== null && diasDecorridos === ev.dia && !isDone;
           const isTomorrow = diasDecorridos !== null && ev.dia - diasDecorridos === 1 && !isDone;
           const stepDateStr = selectedLote ? formatStepDate(selectedLote.data_plantio, ev.dia) : null;
-          const scaledDose  = scaleDose(ev.dose, fator);
+          const scaledDose  = ev._noScaleDose ? ev.dose : scaleDose(ev.dose, fator);
 
           return (
             <motion.div
@@ -363,13 +516,21 @@ export default function CronogramaTimeline({ cultura, lotes = [] }) {
                   {/* Card content */}
                   <div className="px-4 pt-3.5 pb-3">
                     <div className="flex items-center justify-between mb-2 gap-2">
-                      <span
-                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full flex-shrink-0"
-                        style={{ background: isDone ? `${meta.color}20` : meta.bg, color: meta.color }}
-                      >
-                        <span>{meta.emoji}</span>
-                        {meta.label}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span
+                          className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full flex-shrink-0"
+                          style={{ background: isDone ? `${meta.color}20` : meta.bg, color: meta.color }}
+                        >
+                          <span>{meta.emoji}</span>
+                          {meta.label}
+                        </span>
+                        {ev._viveiro && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                            style={{ background: '#eff6ff', color: '#1d4ed8' }}>
+                            🌱 Viveiro
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-1">
                         {isPast && !isDone && (
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1"
