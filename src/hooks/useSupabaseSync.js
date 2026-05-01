@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { logDbError } from '../lib/logger';
 
 /** Retorna o user_id do usuário autenticado ou null */
 async function getUserId() {
@@ -60,7 +61,7 @@ export async function registrarPlantio(payload) {
     .insert({ ...payload, user_id: userId })
     .select()
     .single();
-  if (error) { console.error('Supabase plantio error:', error); return null; }
+  if (error) { logDbError('registrarPlantio', error); return null; }
   return data;
 }
 
@@ -113,7 +114,7 @@ export async function updateLoteMudas(id, mudas_feitas) {
     .eq('id', id)
     .select()
     .single();
-  if (error) { console.error('updateLoteMudas error', error); return null; }
+  if (error) { logDbError('updateLoteMudas', error); return null; }
   return data;
 }
 
@@ -145,7 +146,7 @@ export async function addEvento(payload) {
     .insert({ ...payload, user_id: userId })
     .select()
     .single();
-  if (error) { console.error('addEvento error:', error); return null; }
+  if (error) { logDbError('addEvento', error); return null; }
   return data;
 }
 
@@ -168,7 +169,7 @@ export async function updateLotePlantado(id, area_plantada_ha) {
     .eq('id', id)
     .select()
     .single();
-  if (error) { console.error('updateLotePlantado error', error); return null; }
+  if (error) { logDbError('updateLotePlantado', error); return null; }
   return data;
 }
 
@@ -194,7 +195,7 @@ export async function syncCronogramaStatus(plantioId, culturaId, atividade) {
       is_custom: atividade.isCustom || false,
       updated_at: new Date().toISOString(),
     });
-  if (error) console.error('Supabase cronograma error:', error);
+  if (error) logDbError('syncCronogramaStatus', error);
 }
 
 // ── Propriedades ──────────────────────────────────────────────────────────────
@@ -224,7 +225,7 @@ export async function createPropriedade({ nome, descricao }) {
     .insert({ user_id: userId, nome, descricao: descricao || null })
     .select()
     .single();
-  if (error) { console.error('createPropriedade error', error); return null; }
+  if (error) { logDbError('createPropriedade', error); return null; }
   return data;
 }
 
@@ -238,7 +239,7 @@ export async function updatePropriedade(id, { nome, descricao }) {
     .eq('id', id)
     .select()
     .single();
-  if (error) { console.error('updatePropriedade error', error); return null; }
+  if (error) { logDbError('updatePropriedade', error); return null; }
   return data;
 }
 

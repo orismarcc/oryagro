@@ -1,7 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://yjwwbynuqnfqkjdoexhm.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlqd3dieW51cW5mcWtqZG9leGhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMTcyMTMsImV4cCI6MjA5MDg5MzIxM30.rBlbwJXN7nDbyheQtNdJB-juJ-UdnSGC4kcpYYP6fQE';
+// ── Validação de ambiente ─────────────────────────────────────────────────────
+// Falha rápido em dev se as variáveis não estiverem configuradas.
+// Em produção, variáveis são injetadas pelo Vercel no build.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    '[OryAgro] Variáveis de ambiente Supabase não configuradas.\n' +
+    'Copie .env.example para .env.local e preencha VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.',
+  );
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

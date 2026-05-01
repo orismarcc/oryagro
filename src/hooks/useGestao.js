@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { logDbError } from '../lib/logger';
 
 async function getUserId() {
   const { data: { user } } = await supabase.auth.getUser();
@@ -29,7 +30,7 @@ export async function addDiarioEntry({ plantioId, data, tipo, texto }) {
     .insert({ user_id: userId, plantio_id: plantioId || null, data, tipo, texto })
     .select()
     .single();
-  if (error) { console.error('diario insert error', error); return null; }
+  if (error) { logDbError('addDiarioEntry', error); return null; }
   return row;
 }
 
@@ -38,7 +39,7 @@ export async function deleteDiarioEntry(id) {
   return !error;
 }
 
-// ── Estoque ───────────────────────────────────────────────────────────────────
+// ── Estoque ─────────────────────────────────────────────────────────────��─────
 
 export async function loadEstoque(propriedadeId = null) {
   const userId = await getUserId();
@@ -69,7 +70,7 @@ export async function upsertInsumo({ id, nome, unidade, quantidade, quantidade_m
   const { data, error } = id
     ? await supabase.from('estoque_insumos').update(payload).eq('id', id).select().single()
     : await supabase.from('estoque_insumos').insert(payload).select().single();
-  if (error) { console.error('upsertInsumo error', error); return null; }
+  if (error) { logDbError('upsertInsumo', error); return null; }
   return data;
 }
 
@@ -94,7 +95,7 @@ export async function addMovimento({ insumoId, tipo, quantidade, observacao, dat
       data,
       plantio_id: plantioId || null,
     });
-  if (mErr) { console.error('addMovimento error', mErr); return null; }
+  if (mErr) { logDbError('addMovimento', mErr); return null; }
 
   // 2. Atualizar quantidade no estoque (fetch + update)
   const delta = tipo === 'entrada' ? quantidade : -quantidade;
