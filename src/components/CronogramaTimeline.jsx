@@ -8,14 +8,17 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import { Plus, Printer, Trash2, CheckCircle2, Circle, ChevronRight, CalendarDays, X, Layers, AlertCircle, Leaf } from 'lucide-react';
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
 import { loadEstoque, addMovimento } from '../hooks/useGestao';
+import { addEvento } from '../hooks/useSupabaseSync';
+import { logDbError } from '../lib/logger';
 
 const TIPO_META = {
-  plantio:  { color: '#059669', bg: 'hsl(152 69% 93%)', label: 'Plantio',   emoji: '🌱' },
-  adubo:    { color: '#d97706', bg: 'hsl(43 96% 93%)',  label: 'Adubação',  emoji: '🧪' },
-  foliar:   { color: '#2563eb', bg: 'hsl(221 90% 95%)', label: 'Foliar',    emoji: '💧' },
-  colheita: { color: '#dc2626', bg: 'hsl(4 80% 94%)',   label: 'Colheita',  emoji: '🌾' },
-  manejo:   { color: '#7c3aed', bg: 'hsl(263 80% 95%)', label: 'Manejo',    emoji: '🔧' },
-  especial: { color: '#db2777', bg: 'hsl(322 75% 95%)', label: 'Especial',  emoji: '⭐' },
+  plantio:   { color: '#059669', bg: 'hsl(152 69% 93%)', label: 'Plantio',   emoji: '🌱' },
+  adubo:     { color: '#d97706', bg: 'hsl(43 96% 93%)',  label: 'Adubação',  emoji: '🧪' },
+  foliar:    { color: '#2563eb', bg: 'hsl(221 90% 95%)', label: 'Foliar',    emoji: '💧' },
+  colheita:  { color: '#dc2626', bg: 'hsl(4 80% 94%)',   label: 'Colheita',  emoji: '🌾' },
+  manejo:    { color: '#7c3aed', bg: 'hsl(263 80% 95%)', label: 'Manejo',    emoji: '🔧' },
+  especial:  { color: '#db2777', bg: 'hsl(322 75% 95%)', label: 'Especial',  emoji: '⭐' },
+  aplicacao: { color: '#7c3aed', bg: 'hsl(263 80% 95%)', label: 'Aplicação', emoji: '🌿' },
 };
 const TIPOS = Object.keys(TIPO_META);
 
@@ -43,23 +46,15 @@ function formatStepDate(datePlantio, dia) {
 }
 
 // ── Stable step IDs ──────────────────────────────────────────────────────────
-// IDs are derived from the step NAME, not the index.
-// This means adding/removing/reordering steps never invalidates existing marks.
-
 function makeStableId(prefix, etapa) {
   const slug = etapa
     .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '') // strip diacritics
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_|_$/g, '');
   return `${prefix}_${slug}`;
 }
 
-/**
- * One-time migration: convert legacy index-based IDs (viveiro_0, default_1, …)
- * to the new stable name-based IDs, using the current step lists as a map.
- * Returns the migrated status object (may be identical if no migration needed).
- */
 function migrateLegacyStatus(stored, vivSteps, baseSteps) {
   let changed = false;
   const migrated = {};
@@ -67,7 +62,6 @@ function migrateLegacyStatus(stored, vivSteps, baseSteps) {
   Object.entries(stored).forEach(([oldId, val]) => {
     const legacyMatch = oldId.match(/^(viveiro|default)_(\d+)$/);
     if (!legacyMatch) {
-      // Already stable (or custom/semeadura_bandeja) — keep as-is
       migrated[oldId] = val;
       return;
     }
@@ -79,10 +73,9 @@ function migrateLegacyStatus(stored, vivSteps, baseSteps) {
       migrated[newId] = val;
       if (newId !== oldId) changed = true;
     }
-    // If the step no longer exists (was removed), silently drop the mark
   });
 
-  return changed ? migrated : stored; // return original ref if nothing changed
+  return changed ? migrated : stored;
 }
 
 // Scale numeric values in a dose string by a factor
@@ -96,8 +89,36 @@ function scaleDose(doseStr, fator) {
   });
 }
 
-// ── Lote picker pill ─────────────────────────────────────────────────────
+// Convert ISO date string to Date object (treating as local noon to avoid timezone offset issues)
+function isoToDate(iso) {
+  if (!iso) return null;
+  return new Date(iso + 'T12:00:00');
+}
 
+// Convert Date to ISO yyyy-mm-dd
+function dateToISO(d) {
+  if (!d) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// ── Toggle component ─────────────────────────────────────────────────────────
+function Toggle({ enabled, onToggle, color }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="relative flex-shrink-0"
+      style={{ width: 40, height: 22 }}
+    >
+      <span className="absolute inset-0 rounded-full transition-colors"
+        style={{ background: enabled ? color : 'hsl(210 16% 88%)' }} />
+      <span className="absolute top-[3px] w-[16px] h-[16px] rounded-full bg-white shadow transition-all"
+        style={{ left: enabled ? 21 : 3 }} />
+    </button>
+  );
+}
+
+// ── Lote picker pill ─────────────────────────────────────────────────────
 function LotePicker({ lotes, selectedId, onSelect, cor }) {
   return (
     <div className="mb-4">
@@ -163,24 +184,34 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
   const [confirming, setConfirming] = useState(null);
   const [confirmDate, setConfirmDate] = useState(todayISO());
   const [addDialog, setAddDialog]   = useState(false);
-  const [newRow, setNewRow]         = useState({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo', insumo_id: '' });
+  const [newRow, setNewRow]         = useState({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo', insumo_id: '', dataPrevista: '' });
   const [insumos, setInsumos]   = useState([]);
   const [stockDebit, setStockDebit] = useState({ enabled: false, insumoId: '', quantidade: '' });
 
-  // Reload status/custom from storage when key changes.
-  // Also runs a one-time migration from legacy index-based IDs → stable name-based IDs.
+  // Harvest data state (for confirm form and add dialog)
+  const [harvestData, setHarvestData] = useState({
+    enabled: false, qtd: '', unidade: 'kg',
+    polpa: false, qtdPolpa: '', unidadePolpa: 'kg'
+  });
+
+  // Add dialog harvest state (for "já realizada" toggle in add dialog)
+  const [addHarvest, setAddHarvest] = useState({
+    jaRealizada: false, qtd: '', unidade: 'kg',
+    polpa: false, qtdPolpa: '', unidadePolpa: 'kg'
+  });
+
+  // Reload status/custom from storage when key changes
   useEffect(() => {
     try {
       const raw = JSON.parse(localStorage.getItem(storageKey)) || {};
-      // Build the viveiro + base step lists for the migration map
       const vivSteps  = metodoObj?.etapasViveiro ?? (usaMudas ? [{ etapa: 'Semeadura em bandeja' }] : []);
       const migrated  = migrateLegacyStatus(raw, vivSteps, cultura.cronograma);
-      // Persist migrated version if it changed
       if (migrated !== raw) localStorage.setItem(storageKey, JSON.stringify(migrated));
       setStatus(migrated);
     } catch { setStatus({}); }
     try { setCustomRows(JSON.parse(localStorage.getItem(customKey)) || []); } catch { setCustomRows([]); }
     setConfirming(null);
+    setHarvestData({ enabled: false, qtd: '', unidade: 'kg', polpa: false, qtdPolpa: '', unidadePolpa: 'kg' });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey, customKey]);
 
@@ -226,7 +257,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
     ? Math.max(0, Math.floor((Date.now() - new Date(selectedLote.data_plantio + 'T12:00:00')) / 86_400_000))
     : null;
 
-  // ── Lifecycle anchor: scale base cronograma to fit method's production window ──
+  // ── Lifecycle anchor ──
   const metodoLifecycle = metodoObj?.lifecycle ?? null;
   const diasPrimeiraProducaoAtual = metodoLifecycle?.diasPrimeiraProducao ?? null;
   const maxBaseDia = cultura.cronograma.length > 0
@@ -237,7 +268,6 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
     if (!diasPrimeiraProducaoAtual || maxBaseDia === 0 || !selectedLote) {
       return originalDia + diasViveiroAtual;
     }
-    // Map [0..maxBaseDia] → [diasViveiroAtual..diasPrimeiraProducaoAtual]
     return Math.round(
       diasViveiroAtual + (originalDia / maxBaseDia) * (diasPrimeiraProducaoAtual - diasViveiroAtual)
     );
@@ -255,14 +285,32 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
     return d.toISOString().split('T')[0];
   };
 
-  // Legacy fallback step for old lotes that used the mudas checkbox
+  // Compute dataPrevista ISO for a given dia (used in add dialog)
+  const computeDataPrevista = (dia) => {
+    if (!selectedLote || !selectedLote.data_plantio || dia === '' || dia === undefined) return '';
+    const diaNum = parseInt(dia, 10);
+    if (isNaN(diaNum)) return '';
+    const d = stepDate(selectedLote.data_plantio, diaNum);
+    return dateToISO(d);
+  };
+
+  // When dataPrevista changes, compute dia from it
+  const computeDiaFromDate = (isoDate) => {
+    if (!selectedLote || !selectedLote.data_plantio || !isoDate) return '';
+    const plantioDate = isoToDate(selectedLote.data_plantio);
+    const targetDate = isoToDate(isoDate);
+    if (!plantioDate || !targetDate) return '';
+    return Math.round((targetDate - plantioDate) / 86400000);
+  };
+
+  // Legacy fallback step
   const semeaduraBandeja = {
     dia: 0, _id: 'semeadura_bandeja', _custom: false,
     etapa: 'Semeadura em bandeja', produto: 'Sementes', dose: '—',
     forma: 'Semeadura em bandeja/viveiro. Transplante previsto em ~15 dias.', tipo: 'plantio',
   };
 
-  // Viveiro steps: stable IDs based on step name, not index
+  // Viveiro steps
   const etapasViveiro = metodoObj?.etapasViveiro?.length
     ? metodoObj.etapasViveiro.map(e => ({
         ...e,
@@ -272,7 +320,6 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
       }))
     : (usaMudas ? [semeaduraBandeja] : []);
 
-  // True when viveiro steps already include a transplante (tipo especial)
   const vivTemTransplante = etapasViveiro.some(e => e.tipo === 'especial');
 
   const allEvents = [
@@ -302,6 +349,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
   const confirmStep = async (id) => {
     setStatus(s => ({ ...s, [id]: { status: 'feito', data: confirmDate } }));
 
+    // Debitar estoque (adubo/foliar)
     if (
       stockDebit.enabled &&
       stockDebit.insumoId &&
@@ -319,17 +367,109 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
       if (propriedadeId) loadEstoque(propriedadeId).then(setInsumos);
     }
 
+    // Registrar colheita
+    if (confirming?.tipo === 'colheita' && harvestData.enabled && selectedLote) {
+      try {
+        await addEvento({
+          plantio_id: selectedLote.id,
+          data: confirmDate,
+          tipo: 'colheita',
+          descricao: JSON.stringify({
+            quantidade: parseFloat(harvestData.qtd) || 0,
+            unidade: harvestData.unidade,
+            polpa: harvestData.polpa ? (parseFloat(harvestData.qtdPolpa) || 0) : null,
+            unidadePolpa: harvestData.polpa ? harvestData.unidadePolpa : null,
+            etapa: confirming.etapa,
+          }),
+        });
+      } catch (err) {
+        logDbError('confirmStep:colheita', err);
+      }
+    }
+
     setConfirming(null);
     setStockDebit({ enabled: false, insumoId: '', quantidade: '' });
+    setHarvestData({ enabled: false, qtd: '', unidade: 'kg', polpa: false, qtdPolpa: '', unidadePolpa: 'kg' });
   };
+
   const undoStep = (id) => {
     setStatus(s => { const n = { ...s }; delete n[id]; return n; });
   };
 
+  // Add dialog: save to localStorage calendario_events for colheita
+  const saveColheitaToCalendario = (isoDate, etapaLabel) => {
+    if (!isoDate) return;
+    try {
+      const existingEvents = JSON.parse(localStorage.getItem('calendario_events') || '[]');
+      const newEvent = {
+        id: `cronograma_${selectedLote?.id}_${Date.now()}`,
+        date: isoDate,
+        tipo: 'colheita',
+        label: etapaLabel || 'Colheita',
+        loteId: selectedLote?.id,
+        loteName: selectedLote?.nome,
+        culturaId: cultura.id,
+      };
+      localStorage.setItem('calendario_events', JSON.stringify([...existingEvents, newEvent]));
+    } catch (err) {
+      logDbError('saveColheitaToCalendario', err);
+    }
+  };
+
+  // ── Add dialog submit ──
+  const handleAddRow = async () => {
+    if (!newRow.etapa) return;
+
+    const diaNum = parseInt(newRow.dia) || 0;
+    const rowToAdd = { ...newRow, dia: diaNum, insumo_id: newRow.insumo_id || null };
+
+    // For colheita: if "já realizada" is on, register event
+    if (newRow.tipo === 'colheita' && addHarvest.jaRealizada && selectedLote) {
+      const isoDate = newRow.dataPrevista || computeDataPrevista(diaNum) || todayISO();
+      try {
+        await addEvento({
+          plantio_id: selectedLote.id,
+          data: isoDate,
+          tipo: 'colheita',
+          descricao: JSON.stringify({
+            quantidade: parseFloat(addHarvest.qtd) || 0,
+            unidade: addHarvest.unidade,
+            polpa: addHarvest.polpa ? (parseFloat(addHarvest.qtdPolpa) || 0) : null,
+            unidadePolpa: addHarvest.polpa ? addHarvest.unidadePolpa : null,
+            etapa: newRow.etapa,
+          }),
+        });
+      } catch (err) {
+        logDbError('handleAddRow:colheita', err);
+      }
+      // Also auto-mark as done in status
+      const tempId = `custom_${customRows.length}`;
+      setStatus(s => ({ ...s, [tempId]: { status: 'feito', data: isoDate } }));
+    }
+
+    // For colheita: save to calendario
+    if (newRow.tipo === 'colheita') {
+      const isoDate = newRow.dataPrevista || computeDataPrevista(diaNum);
+      if (isoDate) saveColheitaToCalendario(isoDate, newRow.etapa);
+    }
+
+    setCustomRows(r => [...r, rowToAdd]);
+    setNewRow({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo', insumo_id: '', dataPrevista: '' });
+    setAddHarvest({ jaRealizada: false, qtd: '', unidade: 'kg', polpa: false, qtdPolpa: '', unidadePolpa: 'kg' });
+    setAddDialog(false);
+  };
+
+  const isInsumeTipo = (t) => t === 'adubo' || t === 'foliar' || t === 'aplicacao';
+
+  // Selected insumo unit in add dialog
+  const selectedInsumoUnit = newRow.insumo_id
+    ? (insumos.find(i => i.id === newRow.insumo_id)?.unidade || '')
+    : '';
+
   return (
     <div className="px-4 pt-5 pb-4 max-w-2xl mx-auto">
 
-      {/* ── Lote picker (shown only when there are registered lots) ── */}
+      {/* ── Lote picker ── */}
       {lotes.length > 0 && (
         <LotePicker
           lotes={lotes}
@@ -350,7 +490,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
         </div>
       )}
 
-      {/* ── Estado Atual do Ciclo (lifecycle summary) ── */}
+      {/* ── Estado Atual do Ciclo ── */}
       {lc && (
         <div className="card p-4 mb-4" style={{ borderColor: `${cor}30` }}>
           <p className="section-label mb-3">Estado atual do ciclo</p>
@@ -460,7 +600,6 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
           const isLast = rowIdx === allEvents.length - 1;
           const isConfirming = confirming?.id === ev._id;
 
-          // Date-aware states
           const isPast     = diasDecorridos !== null && diasDecorridos > ev.dia && !isDone;
           const isToday    = diasDecorridos !== null && diasDecorridos === ev.dia && !isDone;
           const isTomorrow = diasDecorridos !== null && ev.dia - diasDecorridos === 1 && !isDone;
@@ -662,22 +801,104 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                             className="w-full rounded-xl border px-3 py-2 text-sm font-semibold text-foreground bg-white focus:outline-none"
                             style={{ borderColor: `${meta.color}40` }}
                           />
-                          {/* Stock deduction — only for adubo/foliar steps with insumos available */}
+
+                          {/* ── Colheita confirm fields ── */}
+                          {confirming?.tipo === 'colheita' && (
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold" style={{ color: meta.color }}>Colheita realizada?</span>
+                                <Toggle
+                                  enabled={harvestData.enabled}
+                                  onToggle={() => setHarvestData(h => ({ ...h, enabled: !h.enabled }))}
+                                  color={meta.color}
+                                />
+                              </div>
+                              <AnimatePresence>
+                                {harvestData.enabled && (
+                                  <motion.div
+                                    initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                                    exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.18 }}
+                                    style={{ overflow: 'hidden' }}
+                                    className="space-y-2"
+                                  >
+                                    <div>
+                                      <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Quantidade colhida</label>
+                                      <div className="flex gap-2 mt-1">
+                                        <input
+                                          type="number" min="0" step="0.01"
+                                          value={harvestData.qtd}
+                                          onChange={e => setHarvestData(h => ({ ...h, qtd: e.target.value }))}
+                                          placeholder="0"
+                                          className="flex-1 rounded-xl border px-3 py-2 text-[13px] font-semibold outline-none bg-white"
+                                          style={{ borderColor: `${meta.color}40` }}
+                                        />
+                                        <select
+                                          value={harvestData.unidade}
+                                          onChange={e => setHarvestData(h => ({ ...h, unidade: e.target.value }))}
+                                          className="rounded-xl border px-2 py-2 text-[13px] outline-none bg-white"
+                                          style={{ borderColor: `${meta.color}40` }}
+                                        >
+                                          <option value="kg">kg</option>
+                                          <option value="caixas">caixas</option>
+                                          <option value="dúzias">dúzias</option>
+                                          <option value="unidades">unidades</option>
+                                        </select>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[11px] font-bold" style={{ color: meta.color }}>Polpa produzida?</span>
+                                      <Toggle
+                                        enabled={harvestData.polpa}
+                                        onToggle={() => setHarvestData(h => ({ ...h, polpa: !h.polpa }))}
+                                        color={meta.color}
+                                      />
+                                    </div>
+                                    <AnimatePresence>
+                                      {harvestData.polpa && (
+                                        <motion.div
+                                          initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                                          exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.15 }}
+                                          style={{ overflow: 'hidden' }}
+                                        >
+                                          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Quantidade de polpa</label>
+                                          <div className="flex gap-2 mt-1">
+                                            <input
+                                              type="number" min="0" step="0.01"
+                                              value={harvestData.qtdPolpa}
+                                              onChange={e => setHarvestData(h => ({ ...h, qtdPolpa: e.target.value }))}
+                                              placeholder="0"
+                                              className="flex-1 rounded-xl border px-3 py-2 text-[13px] font-semibold outline-none bg-white"
+                                              style={{ borderColor: `${meta.color}40` }}
+                                            />
+                                            <select
+                                              value={harvestData.unidadePolpa}
+                                              onChange={e => setHarvestData(h => ({ ...h, unidadePolpa: e.target.value }))}
+                                              className="rounded-xl border px-2 py-2 text-[13px] outline-none bg-white"
+                                              style={{ borderColor: `${meta.color}40` }}
+                                            >
+                                              <option value="kg">kg</option>
+                                              <option value="L">L</option>
+                                            </select>
+                                          </div>
+                                        </motion.div>
+                                      )}
+                                    </AnimatePresence>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          )}
+
+                          {/* ── Stock deduction (adubo/foliar) ── */}
                           {(confirming?.tipo === 'adubo' || confirming?.tipo === 'foliar') && insumos.length > 0 && (
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
                                 <span className="text-[11px] font-bold" style={{ color: meta.color }}>Debitar do estoque</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setStockDebit(s => ({ ...s, enabled: !s.enabled }))}
-                                  className="relative flex-shrink-0"
-                                  style={{ width: 40, height: 22 }}
-                                >
-                                  <span className="absolute inset-0 rounded-full transition-colors"
-                                    style={{ background: stockDebit.enabled ? meta.color : 'hsl(210 16% 88%)' }} />
-                                  <span className="absolute top-[3px] w-[16px] h-[16px] rounded-full bg-white shadow transition-all"
-                                    style={{ left: stockDebit.enabled ? 21 : 3 }} />
-                                </button>
+                                <Toggle
+                                  enabled={stockDebit.enabled}
+                                  onToggle={() => setStockDebit(s => ({ ...s, enabled: !s.enabled }))}
+                                  color={meta.color}
+                                />
                               </div>
 
                               {stockDebit.enabled && (
@@ -719,9 +940,14 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                               )}
                             </div>
                           )}
+
                           <div className="flex gap-2">
                             <button
-                              onClick={() => setConfirming(null)}
+                              onClick={() => {
+                                setConfirming(null);
+                                setStockDebit({ enabled: false, insumoId: '', quantidade: '' });
+                                setHarvestData({ enabled: false, qtd: '', unidade: 'kg', polpa: false, qtdPolpa: '', unidadePolpa: 'kg' });
+                              }}
                               className="flex-1 py-2 rounded-xl text-[12px] font-semibold border transition-colors"
                               style={{ borderColor: 'hsl(214 20% 88%)', color: 'hsl(215 16% 45%)' }}
                             >
@@ -748,6 +974,11 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                         setConfirmDate(getDefaultConfirmDate(ev.dia));
                         setConfirming({ id: ev._id, etapa: ev.etapa, tipo: ev.tipo });
                         setStockDebit({ enabled: false, insumoId: '', quantidade: '' });
+                        setHarvestData({
+                          enabled: ev.tipo === 'colheita',
+                          qtd: '', unidade: 'kg',
+                          polpa: false, qtdPolpa: '', unidadePolpa: 'kg'
+                        });
                       }}
                       className="w-full flex items-center justify-between px-4 py-3 text-[12px] font-semibold transition-colors"
                       style={{
@@ -771,14 +1002,29 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
       </div>
 
       {/* ── Add Dialog ── */}
-      <Dialog open={addDialog} onOpenChange={o => !o && setAddDialog(false)}>
+      <Dialog open={addDialog} onOpenChange={o => {
+        if (!o) {
+          setAddDialog(false);
+          setAddHarvest({ jaRealizada: false, qtd: '', unidade: 'kg', polpa: false, qtdPolpa: '', unidadePolpa: 'kg' });
+        }
+      }}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Nova etapa</DialogTitle></DialogHeader>
           <div className="flex flex-col gap-3">
+
+            {/* ── Dia + Tipo ── */}
             <div className="flex gap-3">
               <div className="flex flex-col gap-1 w-24">
                 <Label>Dia</Label>
-                <Input type="number" value={newRow.dia} onChange={e => setNewRow(r => ({ ...r, dia: e.target.value }))} />
+                <Input
+                  type="number"
+                  value={newRow.dia}
+                  onChange={e => {
+                    const dia = e.target.value;
+                    const prevista = computeDataPrevista(dia);
+                    setNewRow(r => ({ ...r, dia, dataPrevista: prevista }));
+                  }}
+                />
               </div>
               <div className="flex flex-col gap-1 flex-1">
                 <Label>Tipo</Label>
@@ -788,56 +1034,234 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                 </Select>
               </div>
             </div>
+
+            {/* ── Etapa ── */}
             <div className="flex flex-col gap-1">
               <Label>Etapa *</Label>
               <Input value={newRow.etapa} onChange={e => setNewRow(r => ({ ...r, etapa: e.target.value }))} />
             </div>
-            <div className="flex gap-3">
-              <div className="flex flex-col gap-1 flex-1">
-                <Label>Produto</Label>
-                <Input value={newRow.produto} onChange={e => setNewRow(r => ({ ...r, produto: e.target.value }))} />
-              </div>
-              <div className="flex flex-col gap-1 w-28">
-                <Label>Dose</Label>
-                <Input value={newRow.dose} onChange={e => setNewRow(r => ({ ...r, dose: e.target.value }))} />
-              </div>
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label>Forma de aplicação</Label>
-              <textarea
-                value={newRow.forma}
-                onChange={e => setNewRow(r => ({ ...r, forma: e.target.value }))}
-                rows={2}
-                className="flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-              />
-            </div>
-            {(newRow.tipo === 'adubo' || newRow.tipo === 'foliar') && insumos.length > 0 && (
-              <div className="flex flex-col gap-1">
-                <Label>Vincular a insumo do estoque (opcional)</Label>
-                <select
-                  value={newRow.insumo_id}
-                  onChange={e => setNewRow(r => ({ ...r, insumo_id: e.target.value }))}
-                  className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">Nenhum</option>
-                  {insumos.map(i => <option key={i.id} value={i.id}>{i.nome} ({i.quantidade} {i.unidade})</option>)}
-                </select>
-              </div>
+
+            {/* ── colheita type ── */}
+            {newRow.tipo === 'colheita' && (
+              <>
+                {/* Data prevista */}
+                <div className="flex flex-col gap-1">
+                  <Label>Data prevista</Label>
+                  <input
+                    type="date"
+                    value={newRow.dataPrevista}
+                    onChange={e => {
+                      const isoDate = e.target.value;
+                      const dia = computeDiaFromDate(isoDate);
+                      setNewRow(r => ({ ...r, dataPrevista: isoDate, dia: dia !== '' ? String(dia) : r.dia }));
+                    }}
+                    className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  {!selectedLote && (
+                    <p className="text-[11px] text-muted-foreground">Selecione um lote para sincronização automática de datas.</p>
+                  )}
+                </div>
+
+                {/* Forma / Observações */}
+                <div className="flex flex-col gap-1">
+                  <Label>Observações</Label>
+                  <textarea
+                    value={newRow.forma}
+                    onChange={e => setNewRow(r => ({ ...r, forma: e.target.value }))}
+                    rows={2}
+                    className="flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                  />
+                </div>
+
+                {/* Registrar como já realizada */}
+                <div className="space-y-2 rounded-xl border border-input p-3"
+                  style={{ background: 'hsl(4 80% 98%)' }}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] font-bold text-foreground">Registrar como já realizada?</span>
+                    <Toggle
+                      enabled={addHarvest.jaRealizada}
+                      onToggle={() => setAddHarvest(h => ({ ...h, jaRealizada: !h.jaRealizada }))}
+                      color="#dc2626"
+                    />
+                  </div>
+                  <AnimatePresence>
+                    {addHarvest.jaRealizada && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.18 }}
+                        style={{ overflow: 'hidden' }}
+                        className="space-y-2 pt-1"
+                      >
+                        <div>
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Quantidade colhida</label>
+                          <div className="flex gap-2 mt-1">
+                            <Input
+                              type="number" min="0" step="0.01"
+                              value={addHarvest.qtd}
+                              onChange={e => setAddHarvest(h => ({ ...h, qtd: e.target.value }))}
+                              placeholder="0"
+                              className="flex-1"
+                            />
+                            <select
+                              value={addHarvest.unidade}
+                              onChange={e => setAddHarvest(h => ({ ...h, unidade: e.target.value }))}
+                              className="rounded-lg border border-input bg-background px-2 py-1 text-sm outline-none"
+                            >
+                              <option value="kg">kg</option>
+                              <option value="caixas">caixas</option>
+                              <option value="dúzias">dúzias</option>
+                              <option value="unidades">unidades</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] font-bold text-foreground">Polpa produzida?</span>
+                          <Toggle
+                            enabled={addHarvest.polpa}
+                            onToggle={() => setAddHarvest(h => ({ ...h, polpa: !h.polpa }))}
+                            color="#dc2626"
+                          />
+                        </div>
+                        <AnimatePresence>
+                          {addHarvest.polpa && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.15 }}
+                              style={{ overflow: 'hidden' }}
+                            >
+                              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Quantidade de polpa</label>
+                              <div className="flex gap-2 mt-1">
+                                <Input
+                                  type="number" min="0" step="0.01"
+                                  value={addHarvest.qtdPolpa}
+                                  onChange={e => setAddHarvest(h => ({ ...h, qtdPolpa: e.target.value }))}
+                                  placeholder="0"
+                                  className="flex-1"
+                                />
+                                <select
+                                  value={addHarvest.unidadePolpa}
+                                  onChange={e => setAddHarvest(h => ({ ...h, unidadePolpa: e.target.value }))}
+                                  className="rounded-lg border border-input bg-background px-2 py-1 text-sm outline-none"
+                                >
+                                  <option value="kg">kg</option>
+                                  <option value="L">L</option>
+                                </select>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </>
             )}
+
+            {/* ── adubo / foliar / aplicacao type ── */}
+            {isInsumeTipo(newRow.tipo) && (
+              <>
+                {/* Data prevista */}
+                <div className="flex flex-col gap-1">
+                  <Label>Data prevista</Label>
+                  <input
+                    type="date"
+                    value={newRow.dataPrevista}
+                    onChange={e => {
+                      const isoDate = e.target.value;
+                      const dia = computeDiaFromDate(isoDate);
+                      setNewRow(r => ({ ...r, dataPrevista: isoDate, dia: dia !== '' ? String(dia) : r.dia }));
+                    }}
+                    className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  {!selectedLote && (
+                    <p className="text-[11px] text-muted-foreground">Selecione um lote para sincronização automática de datas.</p>
+                  )}
+                </div>
+
+                {/* Insumo dropdown */}
+                {insumos.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                    <Label>Vincular a insumo do estoque (opcional)</Label>
+                    <select
+                      value={newRow.insumo_id}
+                      onChange={e => setNewRow(r => ({ ...r, insumo_id: e.target.value }))}
+                      className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Nenhum</option>
+                      {insumos.map(i => <option key={i.id} value={i.id}>{i.nome} ({i.quantidade} {i.unidade})</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {/* Dose with unit */}
+                <div className="flex gap-3 items-end">
+                  <div className="flex flex-col gap-1 flex-1">
+                    <Label>
+                      Dose {selectedInsumoUnit ? `(${selectedInsumoUnit})` : ''}
+                    </Label>
+                    <Input
+                      value={newRow.dose}
+                      onChange={e => setNewRow(r => ({ ...r, dose: e.target.value }))}
+                      placeholder={selectedInsumoUnit ? `ex: 2 ${selectedInsumoUnit}` : 'ex: 2 kg/100L'}
+                    />
+                  </div>
+                </div>
+
+                {/* Produto */}
+                <div className="flex flex-col gap-1">
+                  <Label>Produto</Label>
+                  <Input value={newRow.produto} onChange={e => setNewRow(r => ({ ...r, produto: e.target.value }))} />
+                </div>
+
+                {/* Forma */}
+                <div className="flex flex-col gap-1">
+                  <Label>Forma de aplicação</Label>
+                  <textarea
+                    value={newRow.forma}
+                    onChange={e => setNewRow(r => ({ ...r, forma: e.target.value }))}
+                    rows={2}
+                    className="flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* ── plantio / manejo / especial type ── */}
+            {(newRow.tipo === 'plantio' || newRow.tipo === 'manejo' || newRow.tipo === 'especial') && (
+              <>
+                <div className="flex gap-3">
+                  <div className="flex flex-col gap-1 flex-1">
+                    <Label>Produto</Label>
+                    <Input value={newRow.produto} onChange={e => setNewRow(r => ({ ...r, produto: e.target.value }))} />
+                  </div>
+                  <div className="flex flex-col gap-1 w-28">
+                    <Label>Dose</Label>
+                    <Input value={newRow.dose} onChange={e => setNewRow(r => ({ ...r, dose: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label>Forma de aplicação</Label>
+                  <textarea
+                    value={newRow.forma}
+                    onChange={e => setNewRow(r => ({ ...r, forma: e.target.value }))}
+                    rows={2}
+                    className="flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                  />
+                </div>
+              </>
+            )}
+
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddDialog(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => {
+              setAddDialog(false);
+              setAddHarvest({ jaRealizada: false, qtd: '', unidade: 'kg', polpa: false, qtdPolpa: '', unidadePolpa: 'kg' });
+            }}>
+              Cancelar
+            </Button>
             <Button
               disabled={!newRow.etapa}
-              onClick={() => {
-                if (!newRow.etapa) return;
-                setCustomRows(r => [
-                  ...r,
-                  { ...newRow, dia: parseInt(newRow.dia) || 0, insumo_id: newRow.insumo_id || null },
-                ]);
-                setNewRow({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo', insumo_id: '' });
-                setAddDialog(false);
-              }}
+              onClick={handleAddRow}
             >
               Adicionar
             </Button>
