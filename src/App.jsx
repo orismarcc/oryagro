@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Dashboard from './components/Dashboard';
 import CulturaPicker from './components/CulturaPicker';
@@ -8,26 +8,42 @@ import SimuladorPage from './components/SimuladorPage';
 import ComparacaoCulturas from './components/ComparacaoCulturas';
 import AnalysePage from './components/AnalysePage';
 import LoginPage from './components/LoginPage';
+import CalendarioPage from './components/CalendarioPage';
+import EstoquePage from './components/EstoquePage';
+import PropriedadesPage from './components/PropriedadesPage';
+import PropriedadePage from './components/PropriedadePage';
+import MigrationWizard from './components/MigrationWizard';
 import { CULTURAS } from './data/culturas';
 import { useAuth } from './hooks/useAuth';
-import { Home, TrendingUp, BarChart2, Activity, Loader2 } from 'lucide-react';
+import { loadPropriedades, loadTodosLotes } from './hooks/useSupabaseSync';
+import { Home, CalendarDays, Building2, BarChart2, Activity, Loader2 } from 'lucide-react';
 
 const BOTTOM_NAV = [
-  { value: 'dashboard',  label: 'Início',    Icon: Home },
-  { value: 'simulador',  label: 'Simulador', Icon: TrendingUp },
-  { value: 'analise',    label: 'Análise',   Icon: Activity },
-  { value: 'comparacao', label: 'Comparar',  Icon: BarChart2 },
+  { value: 'dashboard',  label: 'Início',     Icon: Home },
+  { value: 'calendario', label: 'Calendário', Icon: CalendarDays },
+  { value: 'analise',    label: 'Análise',    Icon: Activity },
+  { value: 'comparacao', label: 'Comparar',   Icon: BarChart2 },
 ];
 
 export default function App() {
   const { session, loading: authLoading, user, signOut } = useAuth();
 
   // Navigation state
-  // mainView: 'dashboard' | 'cultura-picker' | 'cultura' | 'lote' | 'simulador' | 'comparacao' | 'analise'
+  // mainView: 'dashboard' | 'cultura-picker' | 'cultura' | 'lote' | 'simulador' | 'comparacao' | 'analise' | 'propriedades' | 'propriedade' | 'estoque'
   const [mainView, setMainView]             = useState('dashboard');
   const [culturaId, setCulturaId]           = useState(null);
   const [autoOpenLoteForm, setAutoOpenLoteForm] = useState(false);
   const [selectedLote, setSelectedLote]     = useState(null);
+  const [selectedPropriedade, setSelectedPropriedade] = useState(null);
+  const [showMigrationWizard, setShowMigrationWizard] = useState(false);
+
+  // Check on mount if migration is needed (existing lotes but no properties)
+  useEffect(() => {
+    if (!session) return;
+    Promise.all([loadPropriedades(), loadTodosLotes(1)]).then(([props, ls]) => {
+      if (props.length === 0 && ls.length > 0) setShowMigrationWizard(true);
+    });
+  }, [session]);
 
   // ── Navigation handlers ──
 
@@ -74,6 +90,42 @@ export default function App() {
     setAutoOpenLoteForm(false);
   };
 
+  const handleSelectPropriedade = (propriedade) => {
+    setSelectedPropriedade(propriedade);
+    setMainView('propriedade');
+  };
+
+  const handleManagePropriedades = () => {
+    setMainView('propriedades');
+  };
+
+  const handleSelectPropriedadeFromList = (propriedade) => {
+    setSelectedPropriedade(propriedade);
+    setMainView('propriedade');
+  };
+
+  const handleBackFromPropriedades = () => {
+    setMainView('dashboard');
+  };
+
+  const handleBackFromPropriedade = () => {
+    setSelectedPropriedade(null);
+    setMainView('propriedades');
+  };
+
+  const handleGoEstoque = () => {
+    setMainView('estoque');
+  };
+
+  const handleAddLoteFromPropriedade = () => {
+    setMainView('cultura-picker');
+  };
+
+  const handleSelectLoteFromPropriedade = (lote) => {
+    setSelectedLote(lote);
+    setMainView('lote');
+  };
+
   const cultura = culturaId ? CULTURAS[culturaId] : null;
   const isInCultura = (mainView === 'cultura' && cultura) || (mainView === 'lote' && selectedLote);
   const activeCultura = mainView === 'lote' && selectedLote ? CULTURAS[selectedLote.cultura_id] : cultura;
@@ -102,6 +154,7 @@ export default function App() {
               mainView === 'cultura'        ? `cultura-${culturaId}` :
               mainView === 'lote'           ? `lote-${selectedLote?.id}` :
               mainView === 'cultura-picker' ? 'cultura-picker' :
+              mainView === 'propriedade'    ? `propriedade-${selectedPropriedade?.id}` :
               mainView
             }
             initial={{ opacity: 0 }}
@@ -113,6 +166,8 @@ export default function App() {
               <Dashboard
                 onAddLote={handleAddLote}
                 onSelectLote={handleSelectLote}
+                onSelectPropriedade={handleSelectPropriedade}
+                onManagePropriedades={handleManagePropriedades}
                 onSignOut={signOut}
                 userName={user?.email}
               />
@@ -128,6 +183,7 @@ export default function App() {
                 cultura={cultura}
                 onBack={handleBack}
                 autoOpenLoteForm={autoOpenLoteForm}
+                propriedadeId={selectedPropriedade?.id ?? null}
               />
             )}
             {mainView === 'lote' && selectedLote && CULTURAS[selectedLote.cultura_id] && (
@@ -140,6 +196,25 @@ export default function App() {
             {mainView === 'simulador'  && <SimuladorPage />}
             {mainView === 'analise'    && <AnalysePage onSignOut={signOut} userName={user?.email} />}
             {mainView === 'comparacao' && <ComparacaoCulturas />}
+            {mainView === 'calendario' && <CalendarioPage />}
+            {mainView === 'estoque' && (
+              <EstoquePage propriedadeId={selectedPropriedade?.id ?? null} />
+            )}
+            {mainView === 'propriedades' && (
+              <PropriedadesPage
+                onBack={handleBackFromPropriedades}
+                onSelectPropriedade={handleSelectPropriedadeFromList}
+              />
+            )}
+            {mainView === 'propriedade' && selectedPropriedade && (
+              <PropriedadePage
+                propriedade={selectedPropriedade}
+                onBack={handleBackFromPropriedade}
+                onSelectLote={handleSelectLoteFromPropriedade}
+                onGoEstoque={handleGoEstoque}
+                onAddLote={handleAddLoteFromPropriedade}
+              />
+            )}
           </motion.div>
         </AnimatePresence>
       </main>
@@ -198,6 +273,15 @@ export default function App() {
           </div>
         </div>
       </nav>
+
+      {showMigrationWizard && (
+        <MigrationWizard
+          onComplete={(prop) => {
+            setShowMigrationWizard(false);
+            setSelectedPropriedade(prop);
+          }}
+        />
+      )}
     </div>
   );
 }
