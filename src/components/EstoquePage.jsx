@@ -187,8 +187,8 @@ function AddInsumoModal({ onClose, onAdded, propriedadeId }) {
       <motion.div
         initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
         transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-        className="rounded-t-3xl"
-        style={{ background: 'white' }}
+        className="rounded-t-3xl overflow-y-auto"
+        style={{ background: 'white', maxHeight: '92vh' }}
         onClick={e => e.stopPropagation()}
       >
         <div className="flex justify-center pt-3 pb-1"><div className="w-10 h-1 rounded-full bg-muted" /></div>
@@ -212,7 +212,7 @@ function AddInsumoModal({ onClose, onAdded, propriedadeId }) {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-5 pb-8 space-y-3">
+        <form onSubmit={handleSubmit} className="px-5 space-y-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 88px)' }}>
           <div>
             <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Nome do insumo</label>
             <input type="text" value={nome} onChange={e => setNome(e.target.value)} required placeholder="Ex: Ureia 46%"

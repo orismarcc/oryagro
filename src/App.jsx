@@ -36,11 +36,13 @@ export default function App() {
   const [selectedLote, setSelectedLote]     = useState(null);
   const [selectedPropriedade, setSelectedPropriedade] = useState(null);
   const [showMigrationWizard, setShowMigrationWizard] = useState(false);
+  const [propriedades, setPropriedades] = useState([]);
 
-  // Check on mount if migration is needed (existing lotes but no properties)
+  // Check on mount if migration is needed; also load propriedades for AnalysePage
   useEffect(() => {
     if (!session) return;
     Promise.all([loadPropriedades(), loadTodosLotes(1)]).then(([props, ls]) => {
+      setPropriedades(props);
       if (props.length === 0 && ls.length > 0) setShowMigrationWizard(true);
     });
   }, [session]);
@@ -194,7 +196,7 @@ export default function App() {
               />
             )}
             {mainView === 'simulador'  && <SimuladorPage />}
-            {mainView === 'analise'    && <AnalysePage onSignOut={signOut} userName={user?.email} />}
+            {mainView === 'analise'    && <AnalysePage onSignOut={signOut} userName={user?.email} propriedades={propriedades} />}
             {mainView === 'comparacao' && <ComparacaoCulturas />}
             {mainView === 'calendario' && <CalendarioPage />}
             {mainView === 'estoque' && (
