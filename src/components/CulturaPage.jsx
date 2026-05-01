@@ -18,7 +18,7 @@ const GLASS_STATS = (c) => [
   { Icon: Droplets,     label: 'Água',  value: c.necessidadeHidrica },
 ];
 
-export default function CulturaPage({ cultura, onBack, autoOpenLoteForm = false }) {
+export default function CulturaPage({ cultura, onBack, autoOpenLoteForm = false, propriedadeId = null }) {
   const [tab, setTab] = useState('lotes');
   const isCampo = cultura.tipo === 'campo';
 
@@ -165,10 +165,11 @@ export default function CulturaPage({ cultura, onBack, autoOpenLoteForm = false 
               onLoteAdded={handleLoteAdded}
               onLoteDeleted={handleLoteDeleted}
               autoOpenForm={autoOpenLoteForm}
+              propriedadeId={propriedadeId}
             />
           )}
           {tab === 'manejo'     && <ManejoAdubacao  cultura={cultura} calc={calc} />}
-          {tab === 'cronograma' && <CronogramaTimeline cultura={cultura} lotes={lotes} />}
+          {tab === 'cronograma' && <CronogramaTimeline cultura={cultura} lotes={lotes} propriedadeId={propriedadeId} />}
         </motion.div>
       </AnimatePresence>
     </div>
