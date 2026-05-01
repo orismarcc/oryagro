@@ -1,27 +1,60 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package2, Plus, TrendingUp, TrendingDown, X, Trash2, AlertTriangle } from 'lucide-react';
+import { Package2, Plus, TrendingUp, TrendingDown, X, Trash2, AlertTriangle, Pencil } from 'lucide-react';
 import { loadEstoque, upsertInsumo, deleteInsumo, addMovimento, loadMovimentos } from '../hooks/useGestao';
+import { logDbError } from '../lib/logger';
+
+// ── Constante de segurança para padding acima da navbar ──────────────────────
+// Todos os bottom-sheets devem usar isso no último elemento scrollável.
+const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
 
 const INSUMOS_PADRAO = [
-  { nome: 'Calcário dolomítico', unidade: 'kg', quantidade_minima: 50 },
-  { nome: 'Esterco bovino',      unidade: 'kg', quantidade_minima: 100 },
-  { nome: 'NPK 10-10-10',        unidade: 'kg', quantidade_minima: 25 },
-  { nome: 'Ureia 46%',           unidade: 'kg', quantidade_minima: 20 },
-  { nome: 'Nitrato de Cálcio',   unidade: 'kg', quantidade_minima: 10 },
-  { nome: 'Defensivo foliar',    unidade: 'L',  quantidade_minima: 2  },
-  { nome: 'Sementes (geral)',    unidade: 'un', quantidade_minima: 100 },
+  { nome: 'Calcário dolomítico', unidade: 'kg',  quantidade_minima: 50  },
+  { nome: 'Esterco bovino',      unidade: 'kg',  quantidade_minima: 100 },
+  { nome: 'NPK 10-10-10',        unidade: 'kg',  quantidade_minima: 25  },
+  { nome: 'Ureia 46%',           unidade: 'kg',  quantidade_minima: 20  },
+  { nome: 'Nitrato de Cálcio',   unidade: 'kg',  quantidade_minima: 10  },
+  { nome: 'Defensivo foliar',    unidade: 'L',   quantidade_minima: 2   },
+  { nome: 'Sementes (geral)',    unidade: 'un',  quantidade_minima: 100 },
 ];
 
+const UNIDADES = ['kg', 'L', 'g', 'mL', 'saco', 'un'];
+
 function statusColor(qty, min) {
-  if (qty <= 0)    return '#dc2626';
-  if (qty <= min)  return '#d97706';
+  if (qty <= 0)       return '#dc2626';
+  if (qty <= min)     return '#d97706';
   return '#059669';
 }
 
 function StatusDot({ qty, min }) {
   const c = statusColor(qty, min);
   return <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: c }} />;
+}
+
+// ── Helper: wrapper de bottom-sheet ─────────────────────────────────────────
+function BottomSheet({ onClose, children, maxHeight = '92vh' }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex flex-col justify-end"
+      style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+        transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+        className="rounded-t-3xl overflow-y-auto"
+        style={{ background: 'white', maxHeight }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Drag handle */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full" style={{ background: 'hsl(214 20% 88%)' }} />
+        </div>
+        {children}
+      </motion.div>
+    </motion.div>
+  );
 }
 
 // ── Modal: movimentação ──────────────────────────────────────────────────────
@@ -49,158 +82,182 @@ function MovModal({ insumo, onClose, onMoved }) {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex flex-col justify-end"
-      style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-        transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-        className="rounded-t-3xl overflow-y-auto"
-        style={{ background: 'white', maxHeight: '85vh' }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex justify-center pt-3 pb-1"><div className="w-10 h-1 rounded-full bg-muted" /></div>
-        <div className="px-5 pt-2 pb-3 flex items-center justify-between border-b" style={{ borderColor: 'hsl(214 20% 91%)' }}>
-          <div>
-            <h3 className="font-bold text-[15px]">{insumo.nome}</h3>
-            <p className="text-[11px] text-muted-foreground">
-              Estoque atual: <strong>{insumo.quantidade} {insumo.unidade}</strong>
-            </p>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center bg-muted"><X size={14} /></button>
+    <BottomSheet onClose={onClose}>
+      <div className="px-5 pt-2 pb-3 flex items-center justify-between border-b" style={{ borderColor: 'hsl(214 20% 91%)' }}>
+        <div>
+          <h3 className="font-bold text-[15px]">{insumo.nome}</h3>
+          <p className="text-[11px] text-muted-foreground">
+            Estoque atual: <strong>{insumo.quantidade} {insumo.unidade}</strong>
+          </p>
         </div>
+        <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center bg-muted">
+          <X size={14} />
+        </button>
+      </div>
 
-        <div className="px-5 py-4 space-y-4">
-          <form onSubmit={handleSubmit} className="space-y-3">
-            {/* Tipo */}
-            <div className="grid grid-cols-2 gap-2">
-              {[{ k:'entrada', l:'Entrada (compra)', Icon: TrendingUp },
-                { k:'saida',   l:'Saída (uso)',      Icon: TrendingDown }].map(({ k, l, Icon }) => (
-                <button key={k} type="button" onClick={() => setTipo(k)}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-[12px] font-bold transition-all"
-                  style={tipo === k
-                    ? { background: k === 'entrada' ? '#dcfce7' : '#fee2e2', color: k === 'entrada' ? '#16a34a' : '#dc2626', border: `1.5px solid ${k === 'entrada' ? '#86efac' : '#fca5a5'}` }
-                    : { background: 'hsl(210 16% 95%)', color: 'hsl(215 16% 45%)' }}>
-                  <Icon size={13} /> {l}
-                </button>
-              ))}
-            </div>
+      <div className="px-5 py-4 space-y-4" style={{ paddingBottom: SAFE_BOTTOM }}>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {/* Tipo */}
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { k: 'entrada', l: 'Entrada (compra)', Icon: TrendingUp  },
+              { k: 'saida',   l: 'Saída (uso)',      Icon: TrendingDown },
+            ].map(({ k, l, Icon }) => (
+              <button key={k} type="button" onClick={() => setTipo(k)}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-[12px] font-bold transition-all"
+                style={tipo === k
+                  ? { background: k === 'entrada' ? '#dcfce7' : '#fee2e2', color: k === 'entrada' ? '#16a34a' : '#dc2626', border: `1.5px solid ${k === 'entrada' ? '#86efac' : '#fca5a5'}` }
+                  : { background: 'hsl(210 16% 95%)', color: 'hsl(215 16% 45%)' }}>
+                <Icon size={13} /> {l}
+              </button>
+            ))}
+          </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Quantidade ({insumo.unidade})</label>
-                <input type="number" min="0.01" step="0.01" value={qty} onChange={e => setQty(e.target.value)} required
-                  className="w-full mt-1 rounded-xl border px-3 py-2 text-[13px] font-bold outline-none"
-                  style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Data</label>
-                <input type="date" value={data} onChange={e => setData(e.target.value)}
-                  className="w-full mt-1 rounded-xl border px-3 py-2 text-[13px] outline-none"
-                  style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
-              </div>
-            </div>
-
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Observação (opcional)</label>
-              <input type="text" value={obs} onChange={e => setObs(e.target.value)} placeholder="Ex: Compra na agropecuária"
+              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Quantidade ({insumo.unidade})
+              </label>
+              <input type="number" min="0.01" step="0.01" value={qty} onChange={e => setQty(e.target.value)} required
+                className="w-full mt-1 rounded-xl border px-3 py-2 text-[13px] font-bold outline-none"
+                style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Data</label>
+              <input type="date" value={data} onChange={e => setData(e.target.value)}
                 className="w-full mt-1 rounded-xl border px-3 py-2 text-[13px] outline-none"
                 style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
             </div>
+          </div>
 
-            <button type="submit" disabled={saving || !qty}
-              className="w-full py-3 rounded-xl text-[13px] font-bold text-white disabled:opacity-50"
-              style={{ background: tipo === 'entrada' ? '#16a34a' : '#dc2626' }}>
-              {saving ? 'Salvando…' : tipo === 'entrada' ? 'Registrar Entrada' : 'Registrar Saída'}
-            </button>
-          </form>
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Observação (opcional)
+            </label>
+            <input type="text" value={obs} onChange={e => setObs(e.target.value)}
+              placeholder="Ex: Compra na agropecuária"
+              className="w-full mt-1 rounded-xl border px-3 py-2 text-[13px] outline-none"
+              style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
+          </div>
 
-          {historico.length > 0 && (
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Últimos movimentos</p>
-              <div className="space-y-1.5">
-                {historico.map(m => {
-                  const [ano, mes, dia] = m.data.split('-');
-                  return (
-                    <div key={m.id} className="flex items-center gap-2 px-3 py-2 rounded-xl"
-                      style={{ background: m.tipo === 'entrada' ? '#f0fdf4' : '#fef2f2' }}>
-                      {m.tipo === 'entrada'
-                        ? <TrendingUp size={11} style={{ color: '#16a34a' }} />
-                        : <TrendingDown size={11} style={{ color: '#dc2626' }} />}
-                      <span className="text-[12px] font-bold flex-1" style={{ color: m.tipo === 'entrada' ? '#16a34a' : '#dc2626' }}>
-                        {m.tipo === 'entrada' ? '+' : '-'}{m.quantidade} {insumo.unidade}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">{dia}/{mes}/{ano}</span>
-                      {(() => {
-                        const loteLabel = m.plantio?.nome ? `Lote: ${m.plantio.nome}` : '';
-                        return (m.observacao || loteLabel) && (
-                          <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">
-                            {m.observacao || loteLabel}
-                          </span>
-                        );
-                      })()}
-                    </div>
-                  );
-                })}
-              </div>
+          <button type="submit" disabled={saving || !qty}
+            className="w-full py-3 rounded-xl text-[13px] font-bold text-white disabled:opacity-50"
+            style={{ background: tipo === 'entrada' ? '#16a34a' : '#dc2626' }}>
+            {saving ? 'Salvando…' : tipo === 'entrada' ? 'Registrar Entrada' : 'Registrar Saída'}
+          </button>
+        </form>
+
+        {historico.length > 0 && (
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
+              Últimos movimentos
+            </p>
+            <div className="space-y-1.5">
+              {historico.map(m => {
+                const [ano, mes, dia] = m.data.split('-');
+                return (
+                  <div key={m.id} className="flex items-center gap-2 px-3 py-2 rounded-xl"
+                    style={{ background: m.tipo === 'entrada' ? '#f0fdf4' : '#fef2f2' }}>
+                    {m.tipo === 'entrada'
+                      ? <TrendingUp size={11} style={{ color: '#16a34a' }} />
+                      : <TrendingDown size={11} style={{ color: '#dc2626' }} />}
+                    <span className="text-[12px] font-bold flex-1"
+                      style={{ color: m.tipo === 'entrada' ? '#16a34a' : '#dc2626' }}>
+                      {m.tipo === 'entrada' ? '+' : '-'}{m.quantidade} {insumo.unidade}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">{dia}/{mes}/{ano}</span>
+                    {(() => {
+                      const loteLabel = m.plantio?.nome ? `Lote: ${m.plantio.nome}` : '';
+                      return (m.observacao || loteLabel) && (
+                        <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">
+                          {m.observacao || loteLabel}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                );
+              })}
             </div>
-          )}
-        </div>
-      </motion.div>
-    </motion.div>
+          </div>
+        )}
+      </div>
+    </BottomSheet>
   );
 }
 
-// ── Modal: adicionar insumo ───────────────────────────────────────────────────
+// ── Modal: adicionar / editar insumo ─────────────────────────────────────────
+// Quando `existingInsumo` é passado, opera em modo edição.
 
-function AddInsumoModal({ onClose, onAdded, propriedadeId }) {
-  const [nome, setNome]       = useState('');
-  const [unidade, setUnidade] = useState('kg');
-  const [min, setMin]         = useState('');
-  const [preco, setPreco]     = useState('');
-  const [saving, setSaving]   = useState(false);
+function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = null }) {
+  const isEdit = !!existingInsumo;
+
+  const [nome,    setNome]    = useState(existingInsumo?.nome    ?? '');
+  const [unidade, setUnidade] = useState(existingInsumo?.unidade ?? 'kg');
+  const [min,     setMin]     = useState(existingInsumo?.quantidade_minima != null ? String(existingInsumo.quantidade_minima) : '');
+  const [preco,   setPreco]   = useState(existingInsumo?.preco_unitario != null    ? String(existingInsumo.preco_unitario)    : '');
+  // Quantidade inicial — só disponível no cadastro (não no edit, pois a
+  // quantidade real é controlada pelas movimentações)
+  const [qtdInicial, setQtdInicial] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
+
+    const qtd = isEdit
+      ? existingInsumo.quantidade               // mantém quantidade atual no edit
+      : (parseFloat(qtdInicial) || 0);          // usa quantidade inicial no cadastro
+
     const row = await upsertInsumo({
-      nome, unidade,
-      quantidade: 0,
-      quantidade_minima: parseFloat(min) || 0,
-      preco_unitario: parseFloat(preco) || 0,
+      id: existingInsumo?.id,
+      nome,
+      unidade,
+      quantidade: qtd,
+      quantidade_minima: parseFloat(min)   || 0,
+      preco_unitario:    parseFloat(preco) || 0,
       propriedadeId,
     });
+
     setSaving(false);
-    if (row) { onAdded(row); onClose(); }
+
+    if (!row) return; // erro já logado em upsertInsumo
+
+    // Se estamos cadastrando com quantidade inicial > 0, registra uma
+    // movimentação de "entrada" para manter o histórico consistente.
+    if (!isEdit && qtd > 0) {
+      await addMovimento({
+        insumoId: row.id,
+        tipo: 'entrada',
+        quantidade: qtd,
+        observacao: 'Estoque inicial',
+        data: new Date().toISOString().split('T')[0],
+        plantioId: null,
+      });
+    }
+
+    onSaved(row);
+    onClose();
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex flex-col justify-end"
-      style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-        transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-        className="rounded-t-3xl overflow-y-auto"
-        style={{ background: 'white', maxHeight: '92vh' }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex justify-center pt-3 pb-1"><div className="w-10 h-1 rounded-full bg-muted" /></div>
-        <div className="px-5 pt-2 pb-3 border-b flex items-center justify-between" style={{ borderColor: 'hsl(214 20% 91%)' }}>
-          <h3 className="font-bold text-[15px]">Novo insumo</h3>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center bg-muted"><X size={14} /></button>
-        </div>
+    <BottomSheet onClose={onClose}>
+      <div className="px-5 pt-2 pb-3 border-b flex items-center justify-between"
+        style={{ borderColor: 'hsl(214 20% 91%)' }}>
+        <h3 className="font-bold text-[15px]">
+          {isEdit ? `Editar — ${existingInsumo.nome}` : 'Novo insumo'}
+        </h3>
+        <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center bg-muted">
+          <X size={14} />
+        </button>
+      </div>
 
-        {/* Sugestões rápidas */}
+      {/* Sugestões rápidas — só no cadastro */}
+      {!isEdit && (
         <div className="px-5 pt-3">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Sugestões rápidas</p>
-          <div className="flex flex-wrap gap-1.5 mb-4">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
+            Sugestões rápidas
+          </p>
+          <div className="flex flex-wrap gap-1.5 mb-1">
             {INSUMOS_PADRAO.map(s => (
               <button key={s.nome} type="button"
                 onClick={() => { setNome(s.nome); setUnidade(s.unidade); setMin(String(s.quantidade_minima)); }}
@@ -211,62 +268,103 @@ function AddInsumoModal({ onClose, onAdded, propriedadeId }) {
             ))}
           </div>
         </div>
+      )}
 
-        <form onSubmit={handleSubmit} className="px-5 space-y-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 88px)' }}>
+      <form onSubmit={handleSubmit} className="px-5 pt-3 space-y-3"
+        style={{ paddingBottom: SAFE_BOTTOM }}>
+
+        {/* Nome */}
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Nome do insumo
+          </label>
+          <input type="text" value={nome} onChange={e => setNome(e.target.value)} required
+            placeholder="Ex: Ureia 46%"
+            className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
+            style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
+        </div>
+
+        {/* Unidade + Qtd mínima */}
+        <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Nome do insumo</label>
-            <input type="text" value={nome} onChange={e => setNome(e.target.value)} required placeholder="Ex: Ureia 46%"
+            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Unidade
+            </label>
+            <select value={unidade} onChange={e => setUnidade(e.target.value)}
+              className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
+              style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }}>
+              {UNIDADES.map(u => <option key={u}>{u}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Qtd mínima
+            </label>
+            <input type="number" min="0" step="0.1" value={min}
+              onChange={e => setMin(e.target.value)} placeholder="0"
               className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
               style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Unidade</label>
-              <select value={unidade} onChange={e => setUnidade(e.target.value)}
-                className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
-                style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }}>
-                {['kg','L','g','mL','saco','un'].map(u => <option key={u}>{u}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Qtd mínima</label>
-              <input type="number" min="0" step="0.1" value={min} onChange={e => setMin(e.target.value)} placeholder="0"
-                className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
-                style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
-            </div>
-          </div>
+        </div>
+
+        {/* Quantidade inicial — APENAS no cadastro */}
+        {!isEdit && (
           <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Preço unitário (R$) — opcional</label>
-            <input type="number" min="0" step="0.01" value={preco} onChange={e => setPreco(e.target.value)} placeholder="0,00"
+            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Quantidade inicial ({unidade})
+              <span className="ml-1 normal-case font-normal opacity-60">— opcional</span>
+            </label>
+            <input type="number" min="0" step="0.01" value={qtdInicial}
+              onChange={e => setQtdInicial(e.target.value)} placeholder="0"
               className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
               style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
+            <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
+              Se você já tem este insumo, informe a quantidade atual. Será registrada como entrada inicial.
+            </p>
           </div>
-          <button type="submit" disabled={saving || !nome}
-            className="w-full py-3 rounded-xl text-[13px] font-bold text-white disabled:opacity-50"
-            style={{ background: 'hsl(160 84% 27%)' }}>
-            {saving ? 'Salvando…' : 'Adicionar insumo'}
-          </button>
-        </form>
-      </motion.div>
-    </motion.div>
+        )}
+
+        {/* Preço unitário */}
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Preço unitário (R$) — opcional
+          </label>
+          <input type="number" min="0" step="0.01" value={preco}
+            onChange={e => setPreco(e.target.value)} placeholder="0,00"
+            className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
+            style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
+        </div>
+
+        <button type="submit" disabled={saving || !nome}
+          className="w-full py-3 rounded-xl text-[13px] font-bold text-white disabled:opacity-50"
+          style={{ background: 'hsl(160 84% 27%)' }}>
+          {saving ? 'Salvando…' : isEdit ? 'Salvar alterações' : 'Adicionar insumo'}
+        </button>
+      </form>
+    </BottomSheet>
   );
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 export default function EstoquePage({ propriedadeId = null }) {
-  const [insumos, setInsumos]   = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [movModal, setMovModal] = useState(null);
-  const [addModal, setAddModal] = useState(false);
+  const [insumos,    setInsumos]    = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [movModal,   setMovModal]   = useState(null);   // insumo object | null
+  const [addModal,   setAddModal]   = useState(false);
+  const [editModal,  setEditModal]  = useState(null);   // insumo object | null
 
   const reload = () => loadEstoque(propriedadeId).then(setInsumos);
 
-  useEffect(() => { reload().then(() => setLoading(false)); }, [propriedadeId]);
+  useEffect(() => {
+    reload().then(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propriedadeId]);
 
   const alertas = insumos.filter(i => i.quantidade <= i.quantidade_minima && i.quantidade_minima > 0);
 
   const handleDelete = async (id) => {
+    if (!window.confirm('Remover este insumo?')) return;
     await deleteInsumo(id);
     setInsumos(prev => prev.filter(i => i.id !== id));
   };
@@ -277,7 +375,9 @@ export default function EstoquePage({ propriedadeId = null }) {
       <div className="gradient-hero px-5 pt-6 pb-5">
         <p className="text-white/55 text-xs font-semibold uppercase tracking-widest mb-1">Estoque</p>
         <h1 className="font-display text-white text-2xl font-extrabold leading-tight">Insumos</h1>
-        <p className="text-white/50 text-[11px] mt-1">{insumos.length} insumo{insumos.length !== 1 ? 's' : ''} cadastrado{insumos.length !== 1 ? 's' : ''}</p>
+        <p className="text-white/50 text-[11px] mt-1">
+          {insumos.length} insumo{insumos.length !== 1 ? 's' : ''} cadastrado{insumos.length !== 1 ? 's' : ''}
+        </p>
       </div>
 
       {/* Action bar */}
@@ -314,12 +414,16 @@ export default function EstoquePage({ propriedadeId = null }) {
 
         {/* Lista */}
         {loading ? (
-          <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-16 rounded-xl bg-muted animate-pulse" />)}</div>
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => <div key={i} className="h-16 rounded-xl bg-muted animate-pulse" />)}
+          </div>
         ) : insumos.length === 0 ? (
           <div className="text-center py-16">
             <Package2 size={36} className="mx-auto mb-3 opacity-30" />
             <p className="text-[13px] text-muted-foreground">Nenhum insumo cadastrado.</p>
-            <p className="text-[11px] text-muted-foreground mt-1">Adicione os insumos que você usa na propriedade.</p>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Adicione os insumos que você usa na propriedade.
+            </p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -341,13 +445,26 @@ export default function EstoquePage({ propriedadeId = null }) {
                         {insumo.quantidade_minima > 0 && ` · mín. ${insumo.quantidade_minima} ${insumo.unidade}`}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <button onClick={() => setMovModal(insumo)}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {/* Editar */}
+                      <button
+                        onClick={() => setEditModal(insumo)}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+                        style={{ color: 'hsl(215 16% 50%)' }}
+                        title="Editar"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      {/* Movimentar */}
+                      <button
+                        onClick={() => setMovModal(insumo)}
                         className="px-3 py-1.5 rounded-xl text-[11px] font-bold"
                         style={{ background: `${cor}15`, color: cor }}>
                         Movimentar
                       </button>
-                      <button onClick={() => handleDelete(insumo.id)}
+                      {/* Deletar */}
+                      <button
+                        onClick={() => handleDelete(insumo.id)}
                         className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-500 transition-colors">
                         <Trash2 size={12} />
                       </button>
@@ -375,9 +492,17 @@ export default function EstoquePage({ propriedadeId = null }) {
           />
         )}
         {addModal && (
-          <AddInsumoModal
+          <InsumoFormModal
             onClose={() => setAddModal(false)}
-            onAdded={row => { setInsumos(prev => [...prev, row]); }}
+            onSaved={row => setInsumos(prev => [...prev, row])}
+            propriedadeId={propriedadeId}
+          />
+        )}
+        {editModal && (
+          <InsumoFormModal
+            existingInsumo={editModal}
+            onClose={() => setEditModal(null)}
+            onSaved={row => setInsumos(prev => prev.map(i => i.id === row.id ? row : i))}
             propriedadeId={propriedadeId}
           />
         )}
