@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database } from 'lucide-react';
 import { loadLotesByPropriedade, deleteLoteCompleto } from '../hooks/useSupabaseSync';
 import { loadEstoque } from '../hooks/useGestao';
 import { CULTURAS } from '../data/culturas';
@@ -8,6 +8,7 @@ import { resolveLifecycle, fmtDiasRestantes, getFaseColor } from '../lib/lifecyc
 import { loadFarmMembers, addFarmMember, removeFarmMember, updateFarmMemberRole } from '../hooks/useFarmMembers';
 import { supabase } from '../lib/supabase';
 import { can, FARM_ACTIONS } from '../lib/permissions';
+import BackupModal from './BackupModal';
 
 function getStatusEtapas(cultura, lote) {
   if (!cultura?.cronograma) return { atrasadas: 0, hoje: null, amanha: null, proxima: null };
@@ -423,9 +424,10 @@ function FarmMembersSection({ propriedade, userRole }) {
 }
 
 export default function PropriedadePage({ propriedade, userRole, onBack, onSelectLote, onGoEstoque, onAddLote }) {
-  const [lotes, setLotes]     = useState([]);
-  const [alertas, setAlertas] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [lotes, setLotes]         = useState([]);
+  const [alertas, setAlertas]     = useState(0);
+  const [loading, setLoading]     = useState(true);
+  const [showBackup, setShowBackup] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -480,6 +482,13 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
             style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)' }}>
             <Plus size={13} /> Novo Lote
           </button>
+          {canDeleteLote && (
+            <button onClick={() => setShowBackup(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold"
+              style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)' }}>
+              <Database size={13} /> Backup
+            </button>
+          )}
         </div>
       </div>
 
@@ -514,6 +523,10 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
 
         <FarmMembersSection propriedade={propriedade} userRole={userRole} />
       </div>
+
+      {showBackup && (
+        <BackupModal propriedade={propriedade} onClose={() => setShowBackup(false)} />
+      )}
     </div>
   );
 }

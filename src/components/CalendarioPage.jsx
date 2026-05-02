@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronLeft, ChevronRight, CalendarDays, X } from 'lucide-react';
 import { CULTURAS } from '../data/culturas';
 import { loadTodosLotes } from '../hooks/useSupabaseSync';
 
 const DIAS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const MESES_PT_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
 function isoDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -19,18 +20,44 @@ function startOfWeek(d) {
   const r = new Date(d); r.setDate(r.getDate() - r.getDay()); r.setHours(0,0,0,0); return r;
 }
 
+function startOfMonth(d) {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function endOfMonth(d) {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+}
+
+function formatDatePtBR(iso) {
+  if (!iso) return '';
+  const [y, m, day] = iso.split('-');
+  return `${day}/${m}/${y}`;
+}
+
 const TIPO_COLOR = {
-  plantio:  '#16a34a',
-  adubo:    '#d97706',
-  foliar:   '#0891b2',
-  colheita: '#7c3aed',
-  manejo:   '#6b7280',
-  especial: '#dc2626',
+  plantio:   '#16a34a',
+  adubo:     '#d97706',
+  foliar:    '#0891b2',
+  colheita:  '#7c3aed',
+  manejo:    '#6b7280',
+  especial:  '#dc2626',
+  aplicacao: '#b45309',
 };
 
 const TIPO_LABEL = {
   plantio: 'Plantio', adubo: 'Adubação', foliar: 'Foliar',
   colheita: 'Colheita', manejo: 'Manejo', especial: 'Especial',
+  aplicacao: 'Aplicação',
+};
+
+const TIPO_DESC = {
+  plantio:   'Momento de transplantio das mudas para o campo definitivo.',
+  adubo:     'Aplicação de fertilizante para suprir as necessidades nutricionais da cultura.',
+  foliar:    'Aplicação via foliar para correção nutricional ou controle fitossanitário.',
+  colheita:  'Colheita prevista do produto. Verificar ponto de maturação antes de iniciar.',
+  manejo:    'Atividade de manejo e manutenção regular do cultivo.',
+  especial:  'Atividade especial definida no cronograma da cultura.',
+  aplicacao: 'Aplicação de produto fitossanitário ou regulador.',
 };
 
 /** Resolve o shift de viveiro a partir do metodo_propagacao do lote */
@@ -182,14 +209,16 @@ function getAtividadesLote(lote, cultura) {
   return activities;
 }
 
-function AtividadeCard({ ativ, isHoje }) {
+/** AtividadeCard — clickable to open popup */
+function AtividadeCard({ ativ, isHoje, onClick }) {
   const cor = ativ.done ? '#16a34a' : (TIPO_COLOR[ativ.tipo] || '#6b7280');
   const dataDiferente = ativ.done && ativ.dataPlanejada && ativ.data !== ativ.dataPlanejada;
   return (
     <motion.div
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: 1, x: 0 }}
-      className="flex items-start gap-3 p-3 rounded-xl mb-2"
+      onClick={onClick}
+      className="flex items-start gap-3 p-3 rounded-xl mb-2 cursor-pointer active:scale-[0.98] transition-transform"
       style={{
         background: ativ.done ? '#f0fdf4' : (isHoje ? `${cor}10` : 'white'),
         border: `1px solid ${ativ.done ? '#bbf7d0' : (isHoje ? cor+'40' : 'hsl(214 20% 91%)')}`,
@@ -245,8 +274,260 @@ function AtividadeCard({ ativ, isHoje }) {
   );
 }
 
+/** Step detail bottom-sheet popup */
+function AtividadePopup({ ativ, onClose }) {
+  const cor = TIPO_COLOR[ativ.tipo] || '#6b7280';
+  const desc = TIPO_DESC[ativ.tipo] || 'Atividade prevista no cronograma de cultivo.';
+
+  return (
+    <>
+      {/* Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="fixed inset-0 z-50 bg-black/40"
+      />
+      {/* Bottom sheet */}
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+        className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-2xl bg-white max-h-[80vh] overflow-y-auto p-5"
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center"
+          style={{ background: 'hsl(210 16% 93%)' }}
+        >
+          <X size={16} color="hsl(215 20% 35%)" />
+        </button>
+
+        {/* Emoji + etapa */}
+        <div className="flex items-center gap-3 mb-4 pr-10">
+          <span style={{ fontSize: '2.5rem', lineHeight: 1 }}>{ativ.culturaEmoji}</span>
+          <div>
+            <p className="text-[18px] font-extrabold text-foreground leading-tight">{ativ.etapa}</p>
+            <span
+              className="inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded-full mt-1"
+              style={{ background: `${cor}18`, color: cor }}
+            >
+              {TIPO_LABEL[ativ.tipo] || ativ.tipo}
+            </span>
+          </div>
+        </div>
+
+        {/* Info rows */}
+        <div className="space-y-2.5 mb-4">
+          <InfoRow label="Lote" value={ativ.loteNome} />
+          <InfoRow label="Cultura" value={ativ.culturaNome} />
+          <InfoRow label="Data prevista" value={formatDatePtBR(ativ.dataPlanejada)} />
+          {ativ.done && ativ.data && (
+            <InfoRow label="Data realizada" value={formatDatePtBR(ativ.data)} />
+          )}
+          {ativ.dia !== undefined && ativ.dia !== null && ativ.dia !== '' && (
+            <InfoRow label="Dia do ciclo" value={`Dia ${ativ.dia}`} />
+          )}
+          {ativ.produto && ativ.produto !== '—' && (
+            <InfoRow label="Produto" value={ativ.produto} />
+          )}
+          {ativ.dose && ativ.dose !== '—' && (
+            <InfoRow label="Dose" value={ativ.dose} />
+          )}
+        </div>
+
+        {/* Description block */}
+        <div className="rounded-xl p-3.5 mb-4"
+          style={{ background: `${cor}0d`, border: `1px solid ${cor}25` }}>
+          <p className="text-[12px] text-foreground leading-relaxed">{desc}</p>
+          {ativ.isViveiro && (
+            <p className="text-[11px] mt-2 text-blue-600">📍 Esta etapa faz parte da fase de viveiro.</p>
+          )}
+          {ativ.isCustom && (
+            <p className="text-[11px] mt-2" style={{ color: '#7c3aed' }}>✏️ Atividade personalizada adicionada manualmente.</p>
+          )}
+        </div>
+
+        {/* Status badge */}
+        {ativ.done ? (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
+            style={{ background: '#dcfce7' }}>
+            <span className="text-[13px] font-bold text-green-700">✓ Atividade concluída</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
+            style={{ background: `${cor}10` }}>
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: cor }} />
+            <span className="text-[12px] font-semibold" style={{ color: cor }}>Aguardando execução</span>
+          </div>
+        )}
+      </motion.div>
+    </>
+  );
+}
+
+function InfoRow({ label, value }) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <span className="text-[11px] text-muted-foreground w-28 flex-shrink-0">{label}</span>
+      <span className="text-[13px] font-semibold text-foreground">{value}</span>
+    </div>
+  );
+}
+
+/** Month grid view */
+function MonthView({ monthStart, atividadesPorDia, today, selectedDay, setSelectedDay, onAtivClick }) {
+  const year = monthStart.getFullYear();
+  const month = monthStart.getMonth();
+
+  // Build all cell dates: leading days from prev month + current month + trailing days to fill 6 rows
+  const firstCell = startOfWeek(startOfMonth(monthStart));
+  // Always render 6 rows (42 cells) for stable grid height
+  const cells = Array.from({ length: 42 }, (_, i) => addDays(firstCell, i));
+
+  const selectedAtivs = selectedDay ? (atividadesPorDia[selectedDay] || []) : [];
+
+  return (
+    <div>
+      {/* Day-of-week header */}
+      <div className="grid grid-cols-7 mb-1">
+        {DIAS_PT.map(d => (
+          <div key={d} className="text-center text-[10px] font-bold text-muted-foreground py-1.5">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Calendar grid */}
+      <div className="grid grid-cols-7 gap-px rounded-xl overflow-hidden"
+        style={{ background: 'hsl(214 20% 88%)' }}>
+        {cells.map(cell => {
+          const iso = isoDate(cell);
+          const inMonth = cell.getMonth() === month;
+          const isToday = iso === today;
+          const isSelected = iso === selectedDay;
+          const ativs = atividadesPorDia[iso] || [];
+          const dots = ativs.slice(0, 3);
+          const extra = ativs.length - 3;
+
+          return (
+            <button
+              key={iso}
+              onClick={() => setSelectedDay(isSelected ? null : iso)}
+              className="relative flex flex-col items-start p-1 min-h-[56px] transition-colors"
+              style={{
+                background: isSelected
+                  ? 'hsl(160 84% 95%)'
+                  : isToday
+                  ? 'hsl(160 84% 97%)'
+                  : 'white',
+                opacity: inMonth ? 1 : 1,
+              }}
+            >
+              {/* Day number */}
+              <span
+                className="text-[11px] font-bold leading-none mb-1 w-5 h-5 flex items-center justify-center rounded-full flex-shrink-0"
+                style={
+                  isToday
+                    ? { background: '#16a34a', color: 'white' }
+                    : {
+                        color: inMonth
+                          ? (isSelected ? '#16a34a' : 'hsl(215 20% 25%)')
+                          : 'hsl(215 16% 70%)',
+                        opacity: inMonth ? 1 : 0.4,
+                      }
+                }
+              >
+                {cell.getDate()}
+              </span>
+
+              {/* Activity dots */}
+              <div className="flex flex-col gap-[2px] w-full">
+                {dots.map((a, idx) => (
+                  <span
+                    key={idx}
+                    className="block w-full rounded-sm"
+                    style={{
+                      height: '3px',
+                      background: TIPO_COLOR[a.tipo] || '#6b7280',
+                      opacity: inMonth ? 1 : 0.4,
+                    }}
+                  />
+                ))}
+                {extra > 0 && (
+                  <span
+                    className="text-[8px] font-bold leading-none"
+                    style={{ color: inMonth ? 'hsl(215 20% 45%)' : 'hsl(215 16% 70%)', opacity: inMonth ? 1 : 0.4 }}
+                  >
+                    +{extra}
+                  </span>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Day activity panel */}
+      <AnimatePresence>
+        {selectedDay && (
+          <motion.div
+            key={selectedDay}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            className="mt-4"
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <div
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-[12px] font-extrabold flex-shrink-0"
+                style={
+                  selectedDay === today
+                    ? { background: 'hsl(160 84% 27%)', color: 'white' }
+                    : { background: 'hsl(210 16% 92%)', color: 'hsl(215 20% 20%)' }
+                }
+              >
+                {new Date(selectedDay + 'T12:00:00').getDate()}
+              </div>
+              <div>
+                <p className="text-[12px] font-bold text-foreground leading-none">
+                  {selectedDay === today
+                    ? 'Hoje'
+                    : (() => {
+                        const sd = new Date(selectedDay + 'T12:00:00');
+                        return `${DIAS_PT[sd.getDay()]}, ${sd.getDate()} ${MESES_PT[sd.getMonth()]} ${sd.getFullYear()}`;
+                      })()}
+                </p>
+                {selectedAtivs.length > 0 && (
+                  <p className="text-[10px] text-muted-foreground">
+                    {selectedAtivs.length} atividade{selectedAtivs.length !== 1 ? 's' : ''}
+                  </p>
+                )}
+              </div>
+            </div>
+            {selectedAtivs.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground px-2 py-1">Sem atividades previstas</p>
+            ) : (
+              selectedAtivs.map(a => (
+                <AtividadeCard key={a.id} ativ={a} isHoje={selectedDay === today} onClick={() => onAtivClick(a)} />
+              ))
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function CalendarioPage() {
+  const [calView, setCalView] = useState('month');
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+  const [monthStart, setMonthStart] = useState(() => startOfMonth(new Date()));
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [popupAtiv, setPopupAtiv] = useState(null);
   const [lotes, setLotes] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -267,14 +548,29 @@ export default function CalendarioPage() {
     });
   });
 
-  // Days of current week
+  // Week view helpers
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const weekLabel = (() => {
     const s = weekDays[0]; const e = weekDays[6];
     return `${s.getDate()} ${MESES_PT[s.getMonth()]} – ${e.getDate()} ${MESES_PT[e.getMonth()]} ${e.getFullYear()}`;
   })();
-
   const totalWeek = weekDays.reduce((n, d) => n + (atividadesPorDia[isoDate(d)]?.length || 0), 0);
+
+  // Month view helpers
+  const monthLabel = `${MESES_PT_FULL[monthStart.getMonth()]} ${monthStart.getFullYear()}`;
+  const totalMonth = (() => {
+    const m = monthStart.getMonth();
+    const y = monthStart.getFullYear();
+    return Object.entries(atividadesPorDia).reduce((n, [iso, arr]) => {
+      const d = new Date(iso + 'T12:00:00');
+      return d.getMonth() === m && d.getFullYear() === y ? n + arr.length : n;
+    }, 0);
+  })();
+
+  const heroCount = calView === 'month' ? totalMonth : totalWeek;
+  const heroLabel = calView === 'month'
+    ? `${heroCount} atividade${heroCount !== 1 ? 's' : ''} este mês`
+    : `${heroCount} atividade${heroCount !== 1 ? 's' : ''} esta semana`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -282,43 +578,70 @@ export default function CalendarioPage() {
       <div className="gradient-hero px-5 pt-6 pb-5">
         <p className="text-white/55 text-xs font-semibold uppercase tracking-widest mb-1">Propriedade</p>
         <h1 className="font-display text-white text-2xl font-extrabold leading-tight">Calendário</h1>
-        <p className="text-white/50 text-[11px] mt-1">{totalWeek} atividade{totalWeek !== 1 ? 's' : ''} esta semana</p>
+        <p className="text-white/50 text-[11px] mt-1">{heroLabel}</p>
 
-        {/* Week nav */}
+        {/* View toggle */}
+        <div className="flex items-center gap-1 mt-3 w-fit rounded-xl p-0.5"
+          style={{ background: 'rgba(255,255,255,0.12)' }}>
+          {['month', 'week'].map(v => (
+            <button
+              key={v}
+              onClick={() => setCalView(v)}
+              className="px-4 py-1.5 rounded-[10px] text-[12px] font-bold transition-all"
+              style={calView === v
+                ? { background: 'white', color: 'hsl(160 84% 27%)' }
+                : { background: 'transparent', color: 'rgba(255,255,255,0.7)' }}
+            >
+              {v === 'month' ? 'Mês' : 'Semana'}
+            </button>
+          ))}
+        </div>
+
+        {/* Navigation */}
         <div className="flex items-center gap-3 mt-3">
-          <button onClick={() => setWeekStart(w => addDays(w, -7))}
+          <button
+            onClick={() => calView === 'month'
+              ? setMonthStart(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))
+              : setWeekStart(w => addDays(w, -7))}
             className="w-8 h-8 rounded-xl flex items-center justify-center"
             style={{ background: 'rgba(255,255,255,0.15)' }}>
             <ChevronLeft size={16} color="white" />
           </button>
-          <span className="flex-1 text-center text-[12px] font-semibold text-white/80">{weekLabel}</span>
-          <button onClick={() => setWeekStart(w => addDays(w, 7))}
+          <span className="flex-1 text-center text-[12px] font-semibold text-white/80">
+            {calView === 'month' ? monthLabel : weekLabel}
+          </span>
+          <button
+            onClick={() => calView === 'month'
+              ? setMonthStart(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))
+              : setWeekStart(w => addDays(w, 7))}
             className="w-8 h-8 rounded-xl flex items-center justify-center"
             style={{ background: 'rgba(255,255,255,0.15)' }}>
             <ChevronRight size={16} color="white" />
           </button>
         </div>
 
-        {/* Day strip */}
-        <div className="flex gap-1 mt-3">
-          {weekDays.map(d => {
-            const iso = isoDate(d);
-            const count = atividadesPorDia[iso]?.length || 0;
-            const isToday = iso === today;
-            return (
-              <button key={iso} onClick={() => {
-                const el = document.getElementById(`day-${iso}`);
-                el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}
-                className="flex-1 flex flex-col items-center py-1.5 rounded-xl transition-all"
-                style={{ background: isToday ? 'rgba(255,255,255,0.28)' : count > 0 ? 'rgba(255,255,255,0.10)' : 'transparent' }}>
-                <span className="text-[9px] text-white/60 font-semibold">{DIAS_PT[d.getDay()]}</span>
-                <span className="text-[14px] font-bold text-white leading-tight">{d.getDate()}</span>
-                {count > 0 && <span className="w-1.5 h-1.5 rounded-full mt-0.5" style={{ background: isToday ? 'white' : 'rgba(255,255,255,0.5)' }} />}
-              </button>
-            );
-          })}
-        </div>
+        {/* Week day strip (week view only) */}
+        {calView === 'week' && (
+          <div className="flex gap-1 mt-3">
+            {weekDays.map(d => {
+              const iso = isoDate(d);
+              const count = atividadesPorDia[iso]?.length || 0;
+              const isToday = iso === today;
+              return (
+                <button key={iso} onClick={() => {
+                  const el = document.getElementById(`day-${iso}`);
+                  el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+                  className="flex-1 flex flex-col items-center py-1.5 rounded-xl transition-all"
+                  style={{ background: isToday ? 'rgba(255,255,255,0.28)' : count > 0 ? 'rgba(255,255,255,0.10)' : 'transparent' }}>
+                  <span className="text-[9px] text-white/60 font-semibold">{DIAS_PT[d.getDay()]}</span>
+                  <span className="text-[14px] font-bold text-white leading-tight">{d.getDate()}</span>
+                  {count > 0 && <span className="w-1.5 h-1.5 rounded-full mt-0.5" style={{ background: isToday ? 'white' : 'rgba(255,255,255,0.5)' }} />}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -333,6 +656,15 @@ export default function CalendarioPage() {
             <p className="text-[13px] text-muted-foreground">Nenhum lote cadastrado ainda.</p>
             <p className="text-[11px] text-muted-foreground mt-1">Adicione um lote na tela Início para ver o calendário.</p>
           </div>
+        ) : calView === 'month' ? (
+          <MonthView
+            monthStart={monthStart}
+            atividadesPorDia={atividadesPorDia}
+            today={today}
+            selectedDay={selectedDay}
+            setSelectedDay={setSelectedDay}
+            onAtivClick={setPopupAtiv}
+          />
         ) : (
           weekDays.map(d => {
             const iso = isoDate(d);
@@ -361,13 +693,22 @@ export default function CalendarioPage() {
                 {ativs.length === 0 ? (
                   <p className="text-[11px] text-muted-foreground px-2 py-1">Sem atividades previstas</p>
                 ) : (
-                  ativs.map(a => <AtividadeCard key={a.id} ativ={a} isHoje={isToday} />)
+                  ativs.map(a => (
+                    <AtividadeCard key={a.id} ativ={a} isHoje={isToday} onClick={() => setPopupAtiv(a)} />
+                  ))
                 )}
               </div>
             );
           })
         )}
       </div>
+
+      {/* Step detail popup */}
+      <AnimatePresence>
+        {popupAtiv && (
+          <AtividadePopup ativ={popupAtiv} onClose={() => setPopupAtiv(null)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

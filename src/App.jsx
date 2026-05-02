@@ -63,6 +63,9 @@ function AppInner({ session, displayName, signOut }) {
   const [selectedPropriedade, setSelectedPropriedade] = useState(null);
   const [showMigrationWizard, setShowMigrationWizard] = useState(false);
   const [propriedades, setPropriedades] = useState([]);
+  // Track where lote/picker was opened from so back goes to the right place
+  const [loteOpenedFrom, setLoteOpenedFrom] = useState('dashboard');
+  const [pickerOpenedFrom, setPickerOpenedFrom] = useState('dashboard');
 
   // Check on mount if migration is needed; also load propriedades for AnalysePage
   useEffect(() => {
@@ -77,19 +80,25 @@ function AppInner({ session, displayName, signOut }) {
 
   // From Dashboard: user clicks "+ Novo Lote"
   const handleAddLote = () => {
+    setPickerOpenedFrom('dashboard');
     setMainView('cultura-picker');
   };
 
   // From Dashboard: user clicks an existing lot card → dedicated LotePage
   const handleSelectLote = (lote) => {
     setSelectedLote(lote);
+    setLoteOpenedFrom('dashboard');
     setMainView('lote');
   };
 
-  // Back from LotePage → dashboard
+  // Back from LotePage → context-aware (propriedade or dashboard)
   const handleBackFromLote = () => {
     setSelectedLote(null);
-    setMainView('dashboard');
+    if (loteOpenedFrom === 'propriedade') {
+      setMainView('propriedade');
+    } else {
+      setMainView('dashboard');
+    }
   };
 
   // From CulturaPicker: user selects a culture → go to CulturaPage with form open
@@ -99,16 +108,24 @@ function AppInner({ session, displayName, signOut }) {
     setMainView('cultura');
   };
 
-  // Back from CulturaPage → dashboard
+  // Back from CulturaPage → context-aware (propriedade or dashboard)
   const handleBack = () => {
-    setMainView('dashboard');
     setCulturaId(null);
     setAutoOpenLoteForm(false);
+    if (pickerOpenedFrom === 'propriedade') {
+      setMainView('propriedade');
+    } else {
+      setMainView('dashboard');
+    }
   };
 
-  // Back from CulturaPicker → dashboard
+  // Back from CulturaPicker → context-aware (propriedade or dashboard)
   const handleBackFromPicker = () => {
-    setMainView('dashboard');
+    if (pickerOpenedFrom === 'propriedade') {
+      setMainView('propriedade');
+    } else {
+      setMainView('dashboard');
+    }
   };
 
   // Bottom nav
@@ -155,11 +172,13 @@ function AppInner({ session, displayName, signOut }) {
   const handleBackFromSettings = () => setMainView('dashboard');
 
   const handleAddLoteFromPropriedade = () => {
+    setPickerOpenedFrom('propriedade');
     setMainView('cultura-picker');
   };
 
   const handleSelectLoteFromPropriedade = (lote) => {
     setSelectedLote(lote);
+    setLoteOpenedFrom('propriedade');
     setMainView('lote');
   };
 
