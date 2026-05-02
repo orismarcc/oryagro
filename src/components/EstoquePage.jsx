@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package2, Plus, TrendingUp, TrendingDown, X, Trash2, AlertTriangle, Pencil } from 'lucide-react';
+import { Package2, Plus, TrendingUp, TrendingDown, X, Trash2, AlertTriangle, Pencil, ChevronLeft } from 'lucide-react';
 import { loadEstoque, upsertInsumo, deleteInsumo, addMovimento, loadMovimentos } from '../hooks/useGestao';
 import { logDbError } from '../lib/logger';
 
@@ -347,7 +347,7 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-export default function EstoquePage({ propriedadeId = null }) {
+export default function EstoquePage({ propriedadeId = null, onBack }) {
   const [insumos,    setInsumos]    = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [movModal,   setMovModal]   = useState(null);   // insumo object | null
@@ -373,6 +373,14 @@ export default function EstoquePage({ propriedadeId = null }) {
     <div className="min-h-screen bg-background">
       {/* Hero */}
       <div className="gradient-hero px-5 pt-6 pb-5">
+        {onBack && (
+          <button onClick={onBack}
+            className="flex items-center gap-1.5 text-white/70 hover:text-white transition-colors mb-3"
+          >
+            <ChevronLeft size={16} />
+            <span className="text-[12px] font-semibold">Voltar</span>
+          </button>
+        )}
         <p className="text-white/55 text-xs font-semibold uppercase tracking-widest mb-1">Estoque</p>
         <h1 className="font-display text-white text-2xl font-extrabold leading-tight">Insumos</h1>
         <p className="text-white/50 text-[11px] mt-1">

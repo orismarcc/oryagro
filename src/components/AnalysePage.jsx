@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { CULTURAS } from '../data/culturas';
-import { loadTodosLotes } from '../hooks/useSupabaseSync';
+import { loadTodosLotes, loadAllColheitaEventos } from '../hooks/useSupabaseSync';
 import { resolveLifecycle, fmtDateBR } from '../lib/lifecycle';
 import { logDbError } from '../lib/logger';
 import {
@@ -15,6 +15,7 @@ import {
   MapPin,
   Clock,
   Activity,
+  DollarSign,
 } from 'lucide-react';
 
 /* ─── helpers ─────────────────────────────────────────────── */
@@ -569,6 +570,304 @@ function SafrasAnterioresCard({ lotes }) {
   );
 }
 
+/* ─── Helpers: produção e receita estimada ────────────────── */
+
+/**
+ * Returns { qtdKg, receita } for a lote based on its cultura's venda config.
+ * Calculations: campo = producaoKgPorHa × area_ha; canteiro = producaoBase (or per m²)
+ */
+function calcProducaoLote(lote, cultura) {
+  const venda = cultura?.venda;
+  if (!venda) return { qtdKg: 0, receita: 0 };
+  const sobr = (venda.sobrevivencia || 90) / 100;
+  const preco = venda.precoUnitario || 0;
+
+  if (venda.producaoKgPorHa) {
+    const area = parseFloat(lote.area_ha) || 1;
+    const qtdKg = venda.producaoKgPorHa * area * sobr;
+    return { qtdKg, receita: qtdKg * preco };
+  }
+  if (venda.producaoKgPorM2) {
+    const area = (parseFloat(lote.comprimento_m) || 20) * (parseFloat(lote.largura_m) || 1.6);
+    const qtdKg = venda.producaoKgPorM2 * area * sobr;
+    return { qtdKg, receita: qtdKg * preco };
+  }
+  if (venda.producaoKgPorCorte) {
+    const qtdKg = venda.producaoKgPorCorte * sobr;
+    return { qtdKg, receita: qtdKg * (venda.macosPorKg || 1) * preco };
+  }
+  if (venda.producaoBase) {
+    const qtdKg = venda.producaoBase * sobr;
+    return { qtdKg, receita: qtdKg * preco };
+  }
+  // Fallback: plantas × preço
+  const plantas = (lote.total_plantas || 0) * sobr;
+  return { qtdKg: plantas, receita: plantas * preco };
+}
+
+function fmtBRL(v) {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+}
+
+function monthKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthLabel(key) {
+  const [y, m] = key.split('-');
+  const d = new Date(+y, +m - 1, 1);
+  return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+}
+
+/* ─── Projeção de Receita (bar chart) ─────────────────────── */
+
+function ProjecaoReceitaCard({ lotes, eventosColheita }) {
+  // Build 14 months: -1 past → +12 ahead
+  const now = new Date();
+  const months = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - 1 + i, 1);
+    return {
+      key: monthKey(d),
+      label: monthLabel(monthKey(d)),
+      isPast: d < new Date(now.getFullYear(), now.getMonth(), 1),
+      isCurrent: monthKey(d) === monthKey(now),
+    };
+  });
+
+  // Projected by month
+  const projByMonth = {};
+  lotes.forEach(lote => {
+    const cultura = getCultura(lote.cultura_id);
+    if (!cultura) return;
+    const lc = safeResolveLifecycle(lote, cultura);
+    if (!lc?.dataPrimeiraProducao) return;
+    const mk = monthKey(lc.dataPrimeiraProducao);
+    const { receita } = calcProducaoLote(lote, cultura);
+    projByMonth[mk] = (projByMonth[mk] || 0) + receita;
+  });
+
+  // Actual by month from colheita eventos
+  const actualByMonth = {};
+  eventosColheita.forEach(ev => {
+    if (!ev.data) return;
+    const mk = ev.data.substring(0, 7);
+    const lote = lotes.find(l => String(l.id) === String(ev.plantio_id));
+    const cultura = lote ? getCultura(lote.cultura_id) : null;
+    let receita = 0;
+    try {
+      const d = typeof ev.descricao === 'string' ? JSON.parse(ev.descricao) : (ev.descricao || {});
+      if (d?.qtd && cultura?.venda?.precoUnitario) {
+        receita = parseFloat(d.qtd) * cultura.venda.precoUnitario;
+      }
+    } catch { /* ignore */ }
+    actualByMonth[mk] = (actualByMonth[mk] || 0) + receita;
+  });
+
+  const allValues = [
+    ...months.map(m => projByMonth[m.key] || 0),
+    ...months.map(m => actualByMonth[m.key] || 0),
+  ];
+  const maxVal = Math.max(1, ...allValues);
+
+  const totalProj = Object.values(projByMonth).reduce((a, b) => a + b, 0);
+  const totalActual = Object.values(actualByMonth).reduce((a, b) => a + b, 0);
+  const hasActual = totalActual > 0;
+
+  if (totalProj === 0 && !hasActual) return null;
+
+  return (
+    <Card>
+      <div className="px-4 pt-4 pb-1 flex items-center gap-2 border-b border-gray-50">
+        <DollarSign size={14} className="text-green-500" />
+        <span className="text-[13px] font-bold text-gray-700">Projeção de Receita</span>
+      </div>
+
+      {/* Summary chips */}
+      <div className="px-4 pt-3 flex gap-2 flex-wrap">
+        {totalProj > 0 && (
+          <div className="flex items-center gap-1.5 bg-green-50 rounded-xl px-3 py-1.5">
+            <div className="w-2.5 h-2.5 rounded-sm bg-green-400 flex-shrink-0" />
+            <div>
+              <p className="text-[9px] text-green-600/70 font-medium leading-none">Projetada (próx. colheitas)</p>
+              <p className="text-[14px] font-bold text-green-700 leading-tight">{fmtBRL(totalProj)}</p>
+            </div>
+          </div>
+        )}
+        {hasActual && (
+          <div className="flex items-center gap-1.5 bg-blue-50 rounded-xl px-3 py-1.5">
+            <div className="w-2.5 h-2.5 rounded-sm bg-blue-400 flex-shrink-0" />
+            <div>
+              <p className="text-[9px] text-blue-600/70 font-medium leading-none">Realizada (registrada)</p>
+              <p className="text-[14px] font-bold text-blue-700 leading-tight">{fmtBRL(totalActual)}</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Bar chart — horizontal scroll */}
+      <div className="px-3 pt-3 pb-4 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex items-end gap-1.5" style={{ minWidth: months.length * 44 }}>
+          {months.map(({ key, label, isPast, isCurrent }) => {
+            const proj = projByMonth[key] || 0;
+            const actual = actualByMonth[key] || 0;
+            const projH = Math.round((proj / maxVal) * 80);
+            const actualH = Math.round((actual / maxVal) * 80);
+            const hasData = proj > 0 || actual > 0;
+            return (
+              <div key={key} className="flex flex-col items-center flex-shrink-0" style={{ width: hasActual ? 38 : 30 }}>
+                {/* Value label */}
+                {hasData && (
+                  <span className="text-[8px] text-gray-400 font-medium mb-0.5 text-center leading-none">
+                    {proj > 0 ? `${Math.round(proj / 1000)}k` : ''}
+                  </span>
+                )}
+                {/* Bars */}
+                <div className="flex items-end gap-0.5" style={{ height: 84 }}>
+                  {/* Projected bar */}
+                  <motion.div
+                    className="rounded-t-sm flex-shrink-0"
+                    style={{
+                      width: hasActual ? 14 : 24,
+                      height: projH || (hasData ? 2 : 0),
+                      backgroundColor: proj > 0
+                        ? (isCurrent ? '#16a34a' : isPast ? '#86efac' : '#4ade80')
+                        : 'transparent',
+                    }}
+                    initial={{ height: 0 }}
+                    animate={{ height: projH || (hasData ? 2 : 0) }}
+                    transition={{ duration: 0.6, ease: 'easeOut', delay: 0.05 }}
+                  />
+                  {/* Actual bar */}
+                  {hasActual && (
+                    <motion.div
+                      className="rounded-t-sm flex-shrink-0"
+                      style={{
+                        width: 14,
+                        height: actualH || (actual > 0 ? 2 : 0),
+                        backgroundColor: actual > 0 ? '#60a5fa' : 'transparent',
+                      }}
+                      initial={{ height: 0 }}
+                      animate={{ height: actualH || (actual > 0 ? 2 : 0) }}
+                      transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 }}
+                    />
+                  )}
+                </div>
+                {/* Month label */}
+                <span
+                  className="text-[8px] font-semibold mt-1 text-center leading-none"
+                  style={{ color: isCurrent ? '#16a34a' : isPast ? '#cbd5e1' : '#94a3b8' }}
+                >
+                  {label}
+                </span>
+                {isCurrent && (
+                  <div className="w-1 h-1 rounded-full bg-green-400 mt-0.5" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {/* Legend */}
+        {hasActual && (
+          <div className="flex items-center gap-4 mt-2 px-1">
+            <div className="flex items-center gap-1">
+              <div className="w-2.5 h-2.5 rounded-sm bg-green-400" />
+              <span className="text-[9px] text-gray-400">Projetada</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2.5 h-2.5 rounded-sm bg-blue-400" />
+              <span className="text-[9px] text-gray-400">Realizada</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/* ─── Projeção de Produção por Cultura ────────────────────── */
+
+function ProjecaoProducaoCard({ lotes }) {
+  const rows = [];
+  lotes.forEach(lote => {
+    const cultura = getCultura(lote.cultura_id);
+    if (!cultura) return;
+    const lc = safeResolveLifecycle(lote, cultura);
+    const { qtdKg, receita } = calcProducaoLote(lote, cultura);
+    if (receita === 0) return;
+    const harvestDate = lc?.dataPrimeiraProducao;
+    rows.push({ lote, cultura, qtdKg, receita, harvestDate, lc });
+  });
+
+  rows.sort((a, b) => {
+    const ta = a.harvestDate?.getTime() ?? Infinity;
+    const tb = b.harvestDate?.getTime() ?? Infinity;
+    return ta - tb;
+  });
+
+  if (rows.length === 0) return null;
+
+  const totalReceita = rows.reduce((s, r) => s + r.receita, 0);
+
+  return (
+    <Card>
+      <div className="px-4 pt-4 pb-1 flex items-center gap-2 border-b border-gray-50">
+        <TrendingUp size={14} className="text-green-500" />
+        <span className="text-[13px] font-bold text-gray-700">Produção Estimada por Lote</span>
+        <span className="ml-auto text-[10px] text-gray-400">{fmtBRL(totalReceita)}</span>
+      </div>
+      <div className="divide-y divide-gray-50">
+        {rows.map(({ lote, cultura, qtdKg, receita, harvestDate, lc }) => {
+          const pct = totalReceita > 0 ? (receita / totalReceita) * 100 : 0;
+          const venda = cultura.venda;
+          const isCampo = cultura.tipo === 'campo';
+          const unidadeDisplay = venda?.unidade || 'kg';
+          const diasRestantes = lc?.diasParaColheita;
+          const pronto = lc?.prontoParaColheita;
+
+          return (
+            <div key={lote.id} className="px-4 py-3">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-[15px] leading-none">{cultura.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-bold text-gray-800 truncate">{lote.nome}</p>
+                  <p className="text-[10px] text-gray-400">
+                    {cultura.nome}
+                    {isCampo && lote.area_ha ? ` · ${parseFloat(lote.area_ha).toFixed(2)} ha` : ''}
+                    {' · '}{Math.round(qtdKg).toLocaleString('pt-BR')} {unidadeDisplay}
+                  </p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-[12px] font-bold text-green-700">{fmtBRL(receita)}</p>
+                  {pronto ? (
+                    <span className="text-[9px] font-bold text-amber-600 bg-amber-50 rounded-full px-1.5 py-0.5">
+                      ⚠️ colher
+                    </span>
+                  ) : harvestDate ? (
+                    <span className="text-[9px] text-gray-400">
+                      {diasRestantes != null && diasRestantes <= 60
+                        ? `em ${diasRestantes}d`
+                        : harvestDate.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full"
+                  style={{ backgroundColor: cultura.cor }}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${pct}%` }}
+                  transition={{ duration: 0.7, ease: 'easeOut' }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
 /* ─── Empty state ─────────────────────────────────────────── */
 
 function EmptyState() {
@@ -600,20 +899,22 @@ function Spinner() {
 
 export default function AnalysePage({ onSignOut, userName, propriedades = [] }) {
   const [lotes, setLotes] = useState([]);
+  const [eventosColheita, setEventosColheita] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    loadTodosLotes(500)
-      .then((data) => {
+    Promise.all([loadTodosLotes(500), loadAllColheitaEventos()])
+      .then(([data, eventos]) => {
         if (!cancelled) {
           setLotes(Array.isArray(data) ? data : []);
+          setEventosColheita(Array.isArray(eventos) ? eventos : []);
           setLoading(false);
         }
       })
       .catch((err) => {
-        logDbError('AnalysePage.loadTodosLotes', err);
+        logDbError('AnalysePage.load', err);
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
@@ -680,11 +981,31 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
           <EmptyState />
         ) : (
           <>
-            {/* Distribuição por Cultura */}
+            {/* Projeção de Receita */}
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4 }}
+            >
+              <SectionLabel>Projeção Financeira</SectionLabel>
+              <ProjecaoReceitaCard lotes={lotesAtivos} eventosColheita={eventosColheita} />
+            </motion.div>
+
+            {/* Produção Estimada por Lote */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.05 }}
+            >
+              <SectionLabel>Receita por Lote</SectionLabel>
+              <ProjecaoProducaoCard lotes={lotesAtivos} />
+            </motion.div>
+
+            {/* Distribuição por Cultura */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.08 }}
             >
               <SectionLabel>Distribuição</SectionLabel>
               <DistribuicaoCard lotes={lotesAtivos} />

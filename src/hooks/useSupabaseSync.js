@@ -159,6 +159,22 @@ export async function deleteEvento(id) {
 }
 
 /**
+ * Load all harvest events (tipo = 'colheita') for the current user across all plantios.
+ * Used by AnalysePage to compare actual vs projected production.
+ */
+export async function loadAllColheitaEventos() {
+  const userId = await getUserId();
+  if (!userId) return [];
+  const { data } = await supabase
+    .from('plantio_eventos')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('tipo', 'colheita')
+    .order('data', { ascending: true });
+  return data || [];
+}
+
+/**
  * Update the area_plantada_ha field of a lote (partial planting tracking).
  * Returns the updated row or null.
  */

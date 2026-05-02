@@ -119,6 +119,12 @@ export default function App() {
     setMainView('estoque');
   };
 
+  const handleBackFromEstoque = () => {
+    // Go back to the property that opened estoque, or dashboard
+    if (selectedPropriedade) setMainView('propriedade');
+    else setMainView('dashboard');
+  };
+
   const handleAddLoteFromPropriedade = () => {
     setMainView('cultura-picker');
   };
@@ -200,7 +206,7 @@ export default function App() {
             {mainView === 'comparacao' && <ComparacaoCulturas />}
             {mainView === 'calendario' && <CalendarioPage />}
             {mainView === 'estoque' && (
-              <EstoquePage propriedadeId={selectedPropriedade?.id ?? null} />
+              <EstoquePage propriedadeId={selectedPropriedade?.id ?? null} onBack={handleBackFromEstoque} />
             )}
             {mainView === 'propriedades' && (
               <PropriedadesPage
