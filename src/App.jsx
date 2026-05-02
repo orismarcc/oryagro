@@ -17,17 +17,41 @@ import NetworkStatusBanner from './components/NetworkStatus';
 import { CULTURAS } from './data/culturas';
 import { useAuth } from './hooks/useAuth';
 import { loadPropriedades, loadTodosLotes } from './hooks/useSupabaseSync';
+import { FarmProvider, useFarm } from './context/FarmContext';
+import { can, FARM_ACTIONS } from './lib/permissions';
 import { Home, CalendarDays, Building2, BarChart2, Activity, Loader2 } from 'lucide-react';
 
-const BOTTOM_NAV = [
+const ALL_BOTTOM_NAV = [
   { value: 'dashboard',  label: 'Início',     Icon: Home },
   { value: 'calendario', label: 'Calendário', Icon: CalendarDays },
-  { value: 'analise',    label: 'Análise',    Icon: Activity },
+  { value: 'analise',    label: 'Análise',    Icon: Activity,  requiresAction: FARM_ACTIONS.VIEW_ANALYSIS },
   { value: 'comparacao', label: 'Comparar',   Icon: BarChart2 },
 ];
 
 export default function App() {
   const { session, loading: authLoading, user, displayName, signOut } = useAuth();
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 size={28} className="animate-spin" style={{ color: 'hsl(160 84% 27%)' }} />
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <LoginPage />;
+  }
+
+  return (
+    <FarmProvider session={session}>
+      <AppInner session={session} displayName={displayName} signOut={signOut} />
+    </FarmProvider>
+  );
+}
+
+function AppInner({ session, displayName, signOut }) {
+  const { getUserRole } = useFarm();
 
   // Navigation state
   // mainView: 'dashboard' | 'cultura-picker' | 'cultura' | 'lote' | 'simulador' | 'comparacao' | 'analise' | 'propriedades' | 'propriedade' | 'estoque'
@@ -139,21 +163,13 @@ export default function App() {
   const isInCultura = (mainView === 'cultura' && cultura) || (mainView === 'lote' && selectedLote);
   const activeCultura = mainView === 'lote' && selectedLote ? CULTURAS[selectedLote.cultura_id] : cultura;
 
-  // ── Auth loading ──
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 size={28} className="animate-spin" style={{ color: 'hsl(160 84% 27%)' }} />
-      </div>
-    );
-  }
+  // Role for the currently selected farm
+  const userRole = getUserRole(selectedPropriedade?.id);
+  // Bottom nav: hide items that require a permission the user doesn't have
+  const BOTTOM_NAV = ALL_BOTTOM_NAV.filter(item =>
+    !item.requiresAction || !selectedPropriedade || can(userRole, item.requiresAction)
+  );
 
-  // ── Auth gate ──
-  if (!session) {
-    return <LoginPage />;
-  }
-
-  // ── App ──
   return (
     <div className="min-h-screen bg-background">
       <NetworkStatusBanner />
@@ -201,10 +217,11 @@ export default function App() {
                 lote={selectedLote}
                 cultura={CULTURAS[selectedLote.cultura_id]}
                 onBack={handleBackFromLote}
+                userRole={userRole}
               />
             )}
             {mainView === 'simulador'  && <SimuladorPage />}
-            {mainView === 'analise'    && <AnalysePage onSignOut={signOut} userName={displayName} propriedades={propriedades} />}
+            {mainView === 'analise'    && <AnalysePage onSignOut={signOut} userName={displayName} propriedades={propriedades} userRole={userRole} />}
             {mainView === 'comparacao' && <ComparacaoCulturas />}
             {mainView === 'calendario' && <CalendarioPage />}
             {mainView === 'estoque' && (
@@ -219,6 +236,7 @@ export default function App() {
             {mainView === 'propriedade' && selectedPropriedade && (
               <PropriedadePage
                 propriedade={selectedPropriedade}
+                userRole={userRole}
                 onBack={handleBackFromPropriedade}
                 onSelectLote={handleSelectLoteFromPropriedade}
                 onGoEstoque={handleGoEstoque}

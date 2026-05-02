@@ -4,6 +4,8 @@ import { ArrowLeft, Plus, Pencil, Trash2, Building2, Layers, ChevronRight } from
 import {
   loadPropriedades, createPropriedade, updatePropriedade, deletePropriedade, countLotesByPropriedade,
 } from '../hooks/useSupabaseSync';
+import { useFarm } from '../context/FarmContext';
+import { can, FARM_ACTIONS } from '../lib/permissions';
 
 function PropriedadeForm({ initial, onSave, onCancel, saving }) {
   const [nome, setNome] = useState(initial?.nome || '');
@@ -53,6 +55,8 @@ function PropriedadeForm({ initial, onSave, onCancel, saving }) {
 }
 
 export default function PropriedadesPage({ onBack, onSelectPropriedade }) {
+  const { getUserRole } = useFarm();
+
   const [propriedades, setPropriedades] = useState([]);
   const [loteCounts, setLoteCounts]     = useState({});
   const [loading, setLoading]           = useState(true);
@@ -156,10 +160,12 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade }) {
                           className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground transition-colors">
                           <Pencil size={13} />
                         </button>
-                        <button onClick={e => { e.stopPropagation(); handleDelete(p.id); }} disabled={deletingId === p.id}
-                          className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-500 transition-colors">
-                          <Trash2 size={13} />
-                        </button>
+                        {can(getUserRole(p.id), FARM_ACTIONS.DELETE_ANY) && (
+                          <button onClick={e => { e.stopPropagation(); handleDelete(p.id); }} disabled={deletingId === p.id}
+                            className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-500 transition-colors">
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                         <ChevronRight size={14} className="opacity-30" />
                       </div>
                     </button>

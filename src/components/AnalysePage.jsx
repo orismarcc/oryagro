@@ -7,6 +7,7 @@ import { loadMovimentosByLote, loadTodasVendas } from '../hooks/useGestao';
 import { resolveLifecycle, fmtDateBR } from '../lib/lifecycle';
 import { logDbError } from '../lib/logger';
 import { estimateKgAnual } from '../constants/cropYields';
+import { can, FARM_ACTIONS } from '../lib/permissions';
 import {
   BarChart2,
   Sprout,
@@ -1244,7 +1245,7 @@ function Spinner() {
 
 /* ─── Main component ──────────────────────────────────────── */
 
-export default function AnalysePage({ onSignOut, userName, propriedades = [] }) {
+export default function AnalysePage({ onSignOut, userName, propriedades = [], userRole = null }) {
   const [lotes, setLotes] = useState([]);
   const [eventosColheita, setEventosColheita] = useState([]);
   const [todasVendas, setTodasVendas] = useState([]);
@@ -1289,6 +1290,21 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
   const totalPlantas = lotesAtivos.reduce((s, l) => s + (l.total_plantas || 0), 0);
   const areaAtiva = lotesAtivos.reduce((s, l) => s + (l.area_ha || 0), 0);
 
+  // 10C: block technicians from the Analysis page
+  if (userRole !== null && !can(userRole, FARM_ACTIONS.VIEW_ANALYSIS)) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4 px-8 text-center">
+        <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
+          <BarChart2 size={28} className="text-gray-300" />
+        </div>
+        <p className="text-[15px] font-bold text-gray-600">Acesso restrito</p>
+        <p className="text-[13px] text-gray-400 leading-relaxed">
+          A página de análises está disponível apenas para administradores da propriedade.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* ── Hero header ── */}
@@ -1305,14 +1321,16 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleExportPDF}
-              disabled={exportingPDF || lotes.length === 0}
-              className="flex items-center gap-1.5 text-[11px] text-white/70 hover:text-white transition-colors bg-white/10 rounded-lg px-3 py-1.5 disabled:opacity-40"
-            >
-              <FileDown size={12} />
-              {exportingPDF ? 'Gerando…' : 'PDF'}
-            </button>
+            {can(userRole ?? 'admin', FARM_ACTIONS.EXPORT_PDF) && (
+              <button
+                onClick={handleExportPDF}
+                disabled={exportingPDF || lotes.length === 0}
+                className="flex items-center gap-1.5 text-[11px] text-white/70 hover:text-white transition-colors bg-white/10 rounded-lg px-3 py-1.5 disabled:opacity-40"
+              >
+                <FileDown size={12} />
+                {exportingPDF ? 'Gerando…' : 'PDF'}
+              </button>
+            )}
             {onSignOut && (
               <button
                 onClick={onSignOut}

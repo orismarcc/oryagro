@@ -18,6 +18,7 @@ import {
   deleteVenda,
   updateLoteMaoObra,
 } from '../hooks/useGestao';
+import { can, FARM_ACTIONS } from '../lib/permissions';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -361,7 +362,7 @@ function TabInsumos({ cultura, lote }) {
 
 // ─── Tab: Colheita ───────────────────────────────────────────────────────────
 
-function TabColheita({ cultura, lote }) {
+function TabColheita({ cultura, lote, canDelete }) {
   const COLHEITA_KEY = `lote_colheita_${lote.id}`;
   const cor = cultura.cor;
 
@@ -568,13 +569,15 @@ function TabColheita({ cultura, lote }) {
                       <p className="text-[11px] text-muted-foreground mt-0.5">{entry.notas}</p>
                     )}
                   </div>
-                  <motion.button
-                    whileTap={{ scale: 0.85 }}
-                    onClick={() => handleDelete(entry.id)}
-                    className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0"
-                  >
-                    <Trash2 size={14} />
-                  </motion.button>
+                  {canDelete && (
+                    <motion.button
+                      whileTap={{ scale: 0.85 }}
+                      onClick={() => handleDelete(entry.id)}
+                      className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0"
+                    >
+                      <Trash2 size={14} />
+                    </motion.button>
+                  )}
                 </motion.div>
               );
             })}
@@ -623,7 +626,7 @@ function DestinoBadge({ destino }) {
   );
 }
 
-function TabVendas({ cultura, lote }) {
+function TabVendas({ cultura, lote, canDelete }) {
   const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
   const cor = cultura.cor;
   const unidadeDefault = cultura.venda?.unidade ?? 'un';
@@ -869,13 +872,15 @@ function TabVendas({ cultura, lote }) {
                     <p className="text-[11px] text-muted-foreground mt-0.5">{entry.observacao}</p>
                   )}
                 </div>
-                <motion.button
-                  whileTap={{ scale: 0.85 }}
-                  onClick={() => handleDeleteVenda(entry.id)}
-                  className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5"
-                >
-                  <Trash2 size={14} />
-                </motion.button>
+                {canDelete && (
+                  <motion.button
+                    whileTap={{ scale: 0.85 }}
+                    onClick={() => handleDeleteVenda(entry.id)}
+                    className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5"
+                  >
+                    <Trash2 size={14} />
+                  </motion.button>
+                )}
               </motion.div>
             );
           })}
@@ -919,7 +924,7 @@ function TipoBadge({ tipo }) {
   );
 }
 
-function TabDiario({ lote }) {
+function TabDiario({ lote, canDelete }) {
   const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
 
   const [entries, setEntries] = useState([]);
@@ -1066,13 +1071,15 @@ function TabDiario({ lote }) {
                 </div>
                 <p className="text-[13px] text-foreground leading-snug">{entry.texto}</p>
               </div>
-              <motion.button
-                whileTap={{ scale: 0.85 }}
-                onClick={() => handleDelete(entry.id)}
-                className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5"
-              >
-                <Trash2 size={14} />
-              </motion.button>
+              {canDelete && (
+                <motion.button
+                  whileTap={{ scale: 0.85 }}
+                  onClick={() => handleDelete(entry.id)}
+                  className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5"
+                >
+                  <Trash2 size={14} />
+                </motion.button>
+              )}
             </motion.div>
           ))}
         </div>
@@ -1091,7 +1098,8 @@ const TABS = [
   { value: 'diario',     label: 'Diário',     Icon: BookOpen },
 ];
 
-export default function LotePage({ lote, cultura, onBack }) {
+export default function LotePage({ lote, cultura, onBack, userRole = null }) {
+  const canDelete = can(userRole, FARM_ACTIONS.DELETE_ANY);
   const [tab, setTab] = useState('cronograma');
   const cor = cultura.cor;
 
@@ -1281,13 +1289,13 @@ export default function LotePage({ lote, cultura, onBack }) {
             <TabInsumos cultura={cultura} lote={lote} />
           )}
           {tab === 'colheita' && (
-            <TabColheita cultura={cultura} lote={lote} />
+            <TabColheita cultura={cultura} lote={lote} canDelete={canDelete} />
           )}
           {tab === 'vendas' && (
-            <TabVendas cultura={cultura} lote={lote} />
+            <TabVendas cultura={cultura} lote={lote} canDelete={canDelete} />
           )}
           {tab === 'diario' && (
-            <TabDiario lote={lote} />
+            <TabDiario lote={lote} canDelete={canDelete} />
           )}
         </motion.div>
       </AnimatePresence>

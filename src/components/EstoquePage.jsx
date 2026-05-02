@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Package2, Plus, TrendingUp, TrendingDown, X, Trash2, AlertTriangle, Pencil, ChevronLeft } from 'lucide-react';
 import { loadEstoque, upsertInsumo, deleteInsumo, addMovimento, loadMovimentos } from '../hooks/useGestao';
 import { logDbError } from '../lib/logger';
+import { useFarm } from '../context/FarmContext';
+import { can, FARM_ACTIONS } from '../lib/permissions';
 
 // ── Constante de segurança para padding acima da navbar ──────────────────────
 // Todos os bottom-sheets devem usar isso no último elemento scrollável.
@@ -348,6 +350,9 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 export default function EstoquePage({ propriedadeId = null, onBack }) {
+  const { getUserRole } = useFarm();
+  const canDelete = can(getUserRole(propriedadeId), FARM_ACTIONS.DELETE_ANY);
+
   const [insumos,    setInsumos]    = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [movModal,   setMovModal]   = useState(null);   // insumo object | null
@@ -471,11 +476,13 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
                         Movimentar
                       </button>
                       {/* Deletar */}
-                      <button
-                        onClick={() => handleDelete(insumo.id)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-500 transition-colors">
-                        <Trash2 size={12} />
-                      </button>
+                      {canDelete && (
+                        <button
+                          onClick={() => handleDelete(insumo.id)}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-500 transition-colors">
+                          <Trash2 size={12} />
+                        </button>
+                      )}
                     </div>
                   </div>
                   {/* Progress bar */}

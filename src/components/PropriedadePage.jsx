@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown } from 'lucide-react';
 import { loadLotesByPropriedade } from '../hooks/useSupabaseSync';
 import { loadEstoque } from '../hooks/useGestao';
 import { CULTURAS } from '../data/culturas';
 import { resolveLifecycle, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
+import { loadFarmMembers, addFarmMember, removeFarmMember, updateFarmMemberRole } from '../hooks/useFarmMembers';
+import { supabase } from '../lib/supabase';
+import { can, FARM_ACTIONS } from '../lib/permissions';
 
 function getStatusEtapas(cultura, lote) {
   if (!cultura?.cronograma) return { atrasadas: 0, hoje: null, amanha: null, proxima: null };
@@ -188,7 +191,194 @@ function LoteSummaryCard({ lote, onSelect, index }) {
   );
 }
 
-export default function PropriedadePage({ propriedade, onBack, onSelectLote, onGoEstoque, onAddLote }) {
+function FarmMembersSection({ propriedade, userRole }) {
+  const [members, setMembers] = useState([]);
+  const [loadingMembers, setLoadingMembers] = useState(true);
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('technician');
+  const [adding, setAdding] = useState(false);
+  const [msg, setMsg] = useState(null); // { type: 'success'|'error', text: string }
+  const [confirmRemove, setConfirmRemove] = useState(null); // memberId to confirm
+
+  // Load current user id (to identify owner vs others)
+  const [currentUserId, setCurrentUserId] = useState(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUserId(user?.id ?? null));
+  }, []);
+
+  useEffect(() => {
+    if (!propriedade?.id) return;
+    loadFarmMembers(propriedade.id).then(ms => {
+      setMembers(ms);
+      setLoadingMembers(false);
+    });
+  }, [propriedade?.id]);
+
+  if (!can(userRole, FARM_ACTIONS.MANAGE_MEMBERS)) return null;
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setAdding(true);
+    setMsg(null);
+    const result = await addFarmMember(propriedade.id, email.trim(), role, currentUserId);
+    if (result.success) {
+      setMembers(prev => [...prev, result.member]);
+      setEmail('');
+      setMsg({ type: 'success', text: 'Usuário adicionado com sucesso.' });
+    } else {
+      setMsg({ type: 'error', text: result.error });
+    }
+    setAdding(false);
+  };
+
+  const handleRemove = async (memberId) => {
+    setConfirmRemove(null);
+    const ok = await removeFarmMember(memberId);
+    if (ok) setMembers(prev => prev.filter(m => m.id !== memberId));
+  };
+
+  const handleRoleChange = async (memberId, newRole) => {
+    const ok = await updateFarmMemberRole(memberId, newRole);
+    if (ok) setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: newRole } : m));
+  };
+
+  const getInitials = (name, email) => {
+    const n = name || email || '?';
+    return n.slice(0, 2).toUpperCase();
+  };
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-center gap-2 mb-3 px-1">
+        <p className="section-label flex-1">Usuários da Propriedade</p>
+        <span className="text-[11px] text-muted-foreground">{members.length} {members.length === 1 ? 'membro' : 'membros'}</span>
+      </div>
+
+      {/* Add user form */}
+      <div className="card p-4 mb-3">
+        <div className="flex items-center gap-2 mb-3">
+          <UserPlus size={14} className="text-green-600" />
+          <span className="text-[13px] font-bold text-foreground">Adicionar usuário</span>
+        </div>
+        <form onSubmit={handleAdd} className="flex flex-col gap-2">
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="E-mail do usuário"
+            required
+            className="w-full px-3 py-2.5 rounded-xl text-[13px] outline-none"
+            style={{ background: 'hsl(210 16% 96%)', border: '1.5px solid hsl(214 20% 88%)', color: 'hsl(215 20% 16%)' }}
+          />
+          <div className="flex gap-2">
+            <select
+              value={role}
+              onChange={e => setRole(e.target.value)}
+              className="flex-1 px-3 py-2.5 rounded-xl text-[13px] outline-none"
+              style={{ background: 'hsl(210 16% 96%)', border: '1.5px solid hsl(214 20% 88%)', color: 'hsl(215 20% 16%)' }}
+            >
+              <option value="admin">Administrador</option>
+              <option value="technician">Técnico</option>
+            </select>
+            <button
+              type="submit"
+              disabled={adding || !email.trim()}
+              className="px-4 py-2.5 rounded-xl text-[13px] font-bold text-white disabled:opacity-50 transition-all active:scale-95"
+              style={{ background: 'hsl(160 84% 27%)' }}
+            >
+              {adding ? '…' : 'Adicionar'}
+            </button>
+          </div>
+          {msg && (
+            <p className="text-[12px] font-medium px-1"
+              style={{ color: msg.type === 'success' ? '#059669' : '#dc2626' }}>
+              {msg.text}
+            </p>
+          )}
+        </form>
+      </div>
+
+      {/* Members list */}
+      {loadingMembers ? (
+        <div className="h-12 rounded-2xl bg-muted animate-pulse" />
+      ) : members.length === 0 ? (
+        <div className="card p-4 text-center">
+          <p className="text-[12px] text-muted-foreground">Nenhum membro adicionado ainda.</p>
+        </div>
+      ) : (
+        <div className="card divide-y" style={{ borderColor: 'hsl(214 20% 92%)' }}>
+          {members.map(m => {
+            const isOwner = m.user_id === propriedade.user_id;
+            const isSelf = m.user_id === currentUserId;
+            return (
+              <div key={m.id} className="flex items-center gap-3 px-4 py-3">
+                {/* Avatar */}
+                <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-bold text-white"
+                  style={{ background: isOwner ? 'hsl(160 84% 27%)' : 'hsl(215 16% 55%)' }}>
+                  {getInitials(m.displayName, m.email)}
+                </div>
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-bold text-foreground truncate">
+                    {m.displayName || m.email}
+                    {isSelf && <span className="ml-1 text-[10px] font-normal text-muted-foreground">(você)</span>}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground truncate">{m.email}</p>
+                </div>
+                {/* Role + actions */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {isOwner ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                      style={{ background: '#dbeafe', color: '#1d4ed8' }}>
+                      Proprietário
+                    </span>
+                  ) : (
+                    <select
+                      value={m.role}
+                      onChange={e => handleRoleChange(m.id, e.target.value)}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-full border-0 outline-none cursor-pointer"
+                      style={{
+                        background: m.role === 'admin' ? '#dbeafe' : '#dcfce7',
+                        color:      m.role === 'admin' ? '#1d4ed8' : '#16a34a',
+                      }}
+                    >
+                      <option value="admin">Administrador</option>
+                      <option value="technician">Técnico</option>
+                    </select>
+                  )}
+                  {!isOwner && (
+                    confirmRemove === m.id ? (
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => handleRemove(m.id)}
+                          className="text-[10px] font-bold px-2 py-1 rounded-lg"
+                          style={{ background: '#fee2e2', color: '#dc2626' }}>
+                          Confirmar
+                        </button>
+                        <button onClick={() => setConfirmRemove(null)}
+                          className="text-[10px] font-medium px-2 py-1 rounded-lg"
+                          style={{ background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }}>
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setConfirmRemove(m.id)}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:bg-red-50">
+                        <Trash2 size={13} className="text-red-400" />
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function PropriedadePage({ propriedade, userRole, onBack, onSelectLote, onGoEstoque, onAddLote }) {
   const [lotes, setLotes]     = useState([]);
   const [alertas, setAlertas] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -261,6 +451,8 @@ export default function PropriedadePage({ propriedade, onBack, onSelectLote, onG
             {lotes.map((lote, i) => <LoteSummaryCard key={lote.id} lote={lote} onSelect={onSelectLote} index={i} />)}
           </div>
         )}
+
+        <FarmMembersSection propriedade={propriedade} userRole={userRole} />
       </div>
     </div>
   );

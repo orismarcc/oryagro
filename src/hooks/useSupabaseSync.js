@@ -230,7 +230,10 @@ export async function syncCronogramaStatus(plantioId, culturaId, atividade) {
 // ── Propriedades ──────────────────────────────────────────────────────────────
 
 /**
- * Load all properties for the current user, alphabetically sorted.
+ * Load all properties the current user has access to:
+ * - farms they own (user_id = auth.uid())
+ * - farms they are a member of (via farm_members)
+ * Results are deduplicated and sorted alphabetically.
  */
 export async function loadPropriedades() {
   const userId = await getUserId();
@@ -243,16 +246,30 @@ export async function loadPropriedades() {
     if (cached) return cached;
   }
 
+  // Fetch farms where user is a member (RLS already filters to user's memberships)
   const { data, error } = await supabase
-    .from('propriedades')
-    .select('*')
-    .eq('user_id', userId)
-    .order('nome');
+    .from('farm_members')
+    .select('propriedades(*)')
+    .eq('user_id', userId);
 
-  if (!error && data) {
-    cacheSet(cacheKey, data);
+  if (error) {
+    // Fallback: load only owned farms
+    const { data: owned } = await supabase
+      .from('propriedades')
+      .select('*')
+      .eq('user_id', userId)
+      .order('nome');
+    return owned || (cacheGet(cacheKey) ?? []);
   }
-  return data || (cacheGet(cacheKey) ?? []);
+
+  // Flatten and deduplicate
+  const farms = (data || [])
+    .map(row => row.propriedades)
+    .filter(Boolean)
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+  cacheSet(cacheKey, farms);
+  return farms;
 }
 
 /**
@@ -296,31 +313,36 @@ export async function deletePropriedade(id) {
 
 /**
  * Load all plantios belonging to a specific property.
+ * Works for both owners and members (RLS handles access control).
  */
 export async function loadLotesByPropriedade(propriedadeId) {
-  const userId = await getUserId();
-  if (!userId) return [];
+  if (!propriedadeId) return [];
   const { data } = await supabase
     .from('plantios')
     .select('*')
-    .eq('user_id', userId)
     .eq('propriedade_id', propriedadeId)
     .order('data_plantio', { ascending: false });
   return data || [];
 }
 
 /**
- * Count lotes per property for the current user.
+ * Count lotes per property accessible to the current user.
  * Returns an object: { [propriedadeId]: count }
  */
 export async function countLotesByPropriedade() {
   const userId = await getUserId();
   if (!userId) return {};
+  // Query via farm_members to get all accessible farm IDs, then count lotes
+  const { data: memberships } = await supabase
+    .from('farm_members')
+    .select('farm_id')
+    .eq('user_id', userId);
+  if (!memberships || memberships.length === 0) return {};
+  const farmIds = memberships.map(m => m.farm_id);
   const { data } = await supabase
     .from('plantios')
     .select('propriedade_id')
-    .eq('user_id', userId)
-    .not('propriedade_id', 'is', null);
+    .in('propriedade_id', farmIds);
   if (!data) return {};
   return data.reduce((acc, row) => {
     acc[row.propriedade_id] = (acc[row.propriedade_id] || 0) + 1;
