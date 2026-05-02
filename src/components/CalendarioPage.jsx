@@ -45,42 +45,109 @@ function resolveShift(lote, cultura) {
   return usaMudas ? 15 : 0;
 }
 
-/** Gera atividades de um lote para todos os dias do cronograma (estático + customizados) */
+/** Resolve the status (done/date) for a specific step key from localStorage */
+function resolveStepStatus(lote, stepKey) {
+  try {
+    const raw = localStorage.getItem(`cronograma_status_lote_${lote.id}`);
+    const stored = raw ? JSON.parse(raw) : {};
+    return stored[stepKey] || null;
+  } catch { return null; }
+}
+
+/** Make a stable step ID matching CronogramaTimeline's logic */
+function makeStepId(prefix, etapa) {
+  const slug = etapa
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+  return `${prefix}_${slug}`;
+}
+
+/** Gera atividades de um lote para todos os dias do cronograma (viveiro + estático + customizados) */
 function getAtividadesLote(lote, cultura) {
-  if (!cultura?.cronograma) return [];
+  if (!cultura) return [];
   const plantioDate = new Date(lote.data_plantio + 'T12:00:00');
   const shift = resolveShift(lote, cultura);
 
-  // Static steps from cultura.cronograma
-  const staticActivities = cultura.cronograma.map((etapa, i) => {
-    const dataAtividade = addDays(plantioDate, etapa.dia + shift);
-    return {
-      id: `${lote.id}_static_${i}`,
-      loteId: lote.id,
-      loteNome: lote.nome,
-      culturaId: cultura.id,
-      culturaNome: cultura.nome,
-      culturaEmoji: cultura.emoji,
-      culturaCor: cultura.cor,
-      data: isoDate(dataAtividade),
-      dia: etapa.dia,
-      etapa: etapa.etapa,
-      produto: etapa.produto,
-      dose: etapa.dose,
-      tipo: etapa.tipo || 'manejo',
-      isCustom: false,
-    };
-  });
+  // Resolve the propagation method object for this lote
+  const metodoObj = lote.metodo_propagacao && cultura.metodosPropagacao
+    ? cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao) ?? null
+    : null;
 
-  // Custom rows added by user via CronogramaTimeline (stored in localStorage)
+  const activities = [];
+
+  // 1. Viveiro steps (from propagation method)
+  if (metodoObj?.etapasViveiro) {
+    metodoObj.etapasViveiro.forEach((etapa, i) => {
+      const dataAtividade = addDays(plantioDate, etapa.dia);
+      const stepKey = makeStepId('viveiro', etapa.etapa);
+      const stepStatus = resolveStepStatus(lote, stepKey);
+      // If done with a different date, use the actual date
+      const dataStr = (stepStatus?.status === 'feito' && stepStatus?.data)
+        ? stepStatus.data
+        : isoDate(dataAtividade);
+      activities.push({
+        id: `${lote.id}_viveiro_${i}`,
+        loteId: lote.id,
+        loteNome: lote.nome,
+        culturaId: cultura.id,
+        culturaNome: cultura.nome,
+        culturaEmoji: cultura.emoji,
+        culturaCor: cultura.cor,
+        data: dataStr,
+        dataPlanejada: isoDate(dataAtividade),
+        dia: etapa.dia,
+        etapa: etapa.etapa,
+        produto: etapa.produto,
+        dose: etapa.dose,
+        tipo: etapa.tipo || 'manejo',
+        isCustom: false,
+        isViveiro: true,
+        done: stepStatus?.status === 'feito',
+      });
+    });
+  }
+
+  // 2. Static steps from cultura.cronograma
+  if (cultura.cronograma) {
+    cultura.cronograma.forEach((etapa, i) => {
+      const dataAtividade = addDays(plantioDate, etapa.dia + shift);
+      const stepKey = makeStepId('default', etapa.etapa);
+      const stepStatus = resolveStepStatus(lote, stepKey);
+      const dataStr = (stepStatus?.status === 'feito' && stepStatus?.data)
+        ? stepStatus.data
+        : isoDate(dataAtividade);
+      activities.push({
+        id: `${lote.id}_static_${i}`,
+        loteId: lote.id,
+        loteNome: lote.nome,
+        culturaId: cultura.id,
+        culturaNome: cultura.nome,
+        culturaEmoji: cultura.emoji,
+        culturaCor: cultura.cor,
+        data: dataStr,
+        dataPlanejada: isoDate(dataAtividade),
+        dia: etapa.dia,
+        etapa: etapa.etapa,
+        produto: etapa.produto,
+        dose: etapa.dose,
+        tipo: etapa.tipo || 'manejo',
+        isCustom: false,
+        isViveiro: false,
+        done: stepStatus?.status === 'feito',
+      });
+    });
+  }
+
+  // 3. Custom rows added by user via CronogramaTimeline (stored in localStorage)
   let customRows = [];
   try {
     const raw = localStorage.getItem(`cronograma_custom_lote_${lote.id}`);
     customRows = raw ? JSON.parse(raw) : [];
   } catch { customRows = []; }
 
-  const customActivities = customRows.map((row, i) => {
-    // If dataPrevista is set use it directly, otherwise calculate from dia + plantio
+  customRows.forEach((row, i) => {
     let dataStr;
     if (row.dataPrevista) {
       dataStr = row.dataPrevista;
@@ -90,8 +157,8 @@ function getAtividadesLote(lote, cultura) {
         dataStr = isoDate(addDays(plantioDate, diaNum + shift));
       }
     }
-    if (!dataStr) return null;
-    return {
+    if (!dataStr) return;
+    activities.push({
       id: `${lote.id}_custom_${i}`,
       loteId: lote.id,
       loteNome: lote.nome,
@@ -100,38 +167,60 @@ function getAtividadesLote(lote, cultura) {
       culturaEmoji: cultura.emoji,
       culturaCor: cultura.cor,
       data: dataStr,
+      dataPlanejada: dataStr,
       dia: row.dia,
       etapa: row.etapa || 'Atividade personalizada',
       produto: row.produto || '',
       dose: row.dose || '',
       tipo: row.tipo || 'manejo',
       isCustom: true,
-    };
-  }).filter(Boolean);
+      isViveiro: false,
+      done: false,
+    });
+  });
 
-  return [...staticActivities, ...customActivities];
+  return activities;
 }
 
 function AtividadeCard({ ativ, isHoje }) {
-  const cor = TIPO_COLOR[ativ.tipo] || '#6b7280';
+  const cor = ativ.done ? '#16a34a' : (TIPO_COLOR[ativ.tipo] || '#6b7280');
+  const dataDiferente = ativ.done && ativ.dataPlanejada && ativ.data !== ativ.dataPlanejada;
   return (
     <motion.div
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: 1, x: 0 }}
       className="flex items-start gap-3 p-3 rounded-xl mb-2"
-      style={{ background: isHoje ? `${cor}10` : 'white', border: `1px solid ${isHoje ? cor+'40' : 'hsl(214 20% 91%)'}` }}
+      style={{
+        background: ativ.done ? '#f0fdf4' : (isHoje ? `${cor}10` : 'white'),
+        border: `1px solid ${ativ.done ? '#bbf7d0' : (isHoje ? cor+'40' : 'hsl(214 20% 91%)')}`,
+        opacity: ativ.done ? 0.75 : 1,
+      }}
     >
       <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0"
         style={{ background: `${ativ.culturaCor || '#16a34a'}15` }}>
-        {ativ.culturaEmoji}
+        {ativ.done ? '✓' : ativ.culturaEmoji}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[12px] font-bold text-foreground">{ativ.etapa}</span>
-          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full"
-            style={{ background: `${cor}18`, color: cor }}>
-            {TIPO_LABEL[ativ.tipo] || ativ.tipo}
-          </span>
+          <span className={`text-[12px] font-bold ${ativ.done ? 'line-through text-gray-400' : 'text-foreground'}`}>{ativ.etapa}</span>
+          {!ativ.done && (
+            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full"
+              style={{ background: `${cor}18`, color: cor }}>
+              {TIPO_LABEL[ativ.tipo] || ativ.tipo}
+            </span>
+          )}
+          {ativ.done && (
+            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full"
+              style={{ background: '#dcfce7', color: '#16a34a' }}>
+              ✓ concluída
+            </span>
+          )}
+          {ativ.isViveiro && !ativ.done && (
+            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full"
+              style={{ background: '#eff6ff', color: '#2563eb' }}>
+              viveiro
+            </span>
+          )}
           {ativ.isCustom && (
             <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full"
               style={{ background: 'hsl(263 80% 95%)', color: '#7c3aed' }}>
@@ -143,7 +232,12 @@ function AtividadeCard({ ativ, isHoje }) {
           {ativ.loteNome} · {ativ.culturaNome}
           {ativ.produto && ativ.produto !== '—' ? ` · ${ativ.produto}` : ''}
         </p>
-        {ativ.dose && ativ.dose !== '—' && (
+        {dataDiferente && (
+          <p className="text-[10px] text-blue-500 mt-0.5">
+            Planejado: {ativ.dataPlanejada.split('-').reverse().join('/')} → Realizado: {ativ.data.split('-').reverse().join('/')}
+          </p>
+        )}
+        {ativ.dose && ativ.dose !== '—' && !ativ.done && (
           <p className="text-[10px] text-muted-foreground">{ativ.dose}</p>
         )}
       </div>

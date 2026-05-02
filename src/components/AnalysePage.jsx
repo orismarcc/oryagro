@@ -623,167 +623,237 @@ function monthLabel(key) {
   return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
 }
 
-/* ─── Projeção de Receita (bar chart) ─────────────────────── */
+/* ─── Production ramp-up curves by cultura type ──────────── */
+
+/**
+ * Returns annual production factor (0.0–1.0) for year N from planting.
+ * Year 0 = planting year, Year 1 = first full year, etc.
+ * Uses cultura-specific curves; defaults to a conservative 3-year ramp.
+ */
+function getRampFactor(culturaId, yearFromPlanting) {
+  const curves = {
+    // Perennial fruit trees: slow start, peak at year 5
+    acerola:   [0, 0.10, 0.30, 0.60, 0.85, 1.0],
+    mamao:     [0, 0.40, 0.80, 1.0,  1.0,  1.0],
+    banana:    [0, 0.50, 0.90, 1.0,  1.0,  1.0],
+    goiaba:    [0, 0.15, 0.40, 0.70, 0.90, 1.0],
+    maracuja:  [0, 0.60, 1.0,  1.0,  1.0,  1.0],
+    // Annual/semi-annual crops: faster ramp
+    _default:  [0, 0.70, 1.0,  1.0,  1.0,  1.0],
+  };
+  const curve = curves[culturaId] ?? curves._default;
+  if (yearFromPlanting <= 0) return curve[0] ?? 0;
+  if (yearFromPlanting >= curve.length) return curve[curve.length - 1];
+  return curve[yearFromPlanting];
+}
+
+/* ─── Projeção de Receita Anual (bar chart) ──────────────── */
 
 function ProjecaoReceitaCard({ lotes, eventosColheita }) {
-  // Build 14 months: -1 past → +12 ahead
   const now = new Date();
-  const months = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - 1 + i, 1);
-    return {
-      key: monthKey(d),
-      label: monthLabel(monthKey(d)),
-      isPast: d < new Date(now.getFullYear(), now.getMonth(), 1),
-      isCurrent: monthKey(d) === monthKey(now),
-    };
+  const currentYear = now.getFullYear();
+
+  // Default price per kg per cultura (user-editable)
+  const defaultPrices = {};
+  lotes.forEach(l => {
+    const c = getCultura(l.cultura_id);
+    if (!c) return;
+    if (!(c.id in defaultPrices)) {
+      defaultPrices[c.id] = c.venda?.precoUnitario ?? 3.5;
+    }
+  });
+  const [prices, setPrices] = useState(defaultPrices);
+
+  // Culture groups present
+  const culturaGroups = {};
+  lotes.forEach(l => {
+    const c = getCultura(l.cultura_id);
+    if (!c) return;
+    if (!culturaGroups[c.id]) culturaGroups[c.id] = { cultura: c, lotes: [] };
+    culturaGroups[c.id].lotes.push(l);
   });
 
-  // Projected by month
-  const projByMonth = {};
-  lotes.forEach(lote => {
-    const cultura = getCultura(lote.cultura_id);
-    if (!cultura) return;
-    const lc = safeResolveLifecycle(lote, cultura);
-    if (!lc?.dataPrimeiraProducao) return;
-    const mk = monthKey(lc.dataPrimeiraProducao);
-    const { receita } = calcProducaoLote(lote, cultura);
-    projByMonth[mk] = (projByMonth[mk] || 0) + receita;
+  // Find earliest planting year across all lotes
+  let minPlantYear = currentYear;
+  lotes.forEach(l => {
+    const y = new Date(l.data_plantio + 'T12:00:00').getFullYear();
+    if (y < minPlantYear) minPlantYear = y;
   });
 
-  // Actual by month from colheita eventos
-  const actualByMonth = {};
+  // Build year range: min plant year → min plant year + 6 (or current + 5, whichever is later)
+  const startYear = minPlantYear;
+  const endYear = Math.max(currentYear + 4, minPlantYear + 6);
+  const years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
+
+  // For each year, compute projected revenue across all lotes
+  const projByYear = {};
+  years.forEach(yr => {
+    let total = 0;
+    lotes.forEach(l => {
+      const c = getCultura(l.cultura_id);
+      if (!c) return;
+      const plantYear = new Date(l.data_plantio + 'T12:00:00').getFullYear();
+      const yearFromPlant = yr - plantYear;
+      const factor = getRampFactor(c.id, yearFromPlant);
+      if (factor === 0) return;
+
+      // Full-potential production
+      const priceKg = prices[c.id] ?? c.venda?.precoUnitario ?? 3.5;
+      let fullKg = 0;
+      const venda = c.venda;
+      if (venda?.producaoKgPorHa) {
+        fullKg = venda.producaoKgPorHa * (parseFloat(l.area_ha) || 1);
+      } else if (venda?.producaoKgPorM2) {
+        const area = (parseFloat(l.comprimento_m) || 20) * (parseFloat(l.largura_m) || 1.6);
+        fullKg = venda.producaoKgPorM2 * area;
+      } else if (venda?.producaoBase) {
+        fullKg = venda.producaoBase;
+      } else {
+        fullKg = (l.total_plantas || 0) * (venda?.kgPorPlanta ?? 15);
+      }
+      // For perennial trees: multiply by safras/year (default 2 for acerola)
+      const safrasAno = venda?.safrasAno ?? (c.id === 'acerola' ? 3 : 1);
+      total += fullKg * safrasAno * factor * priceKg;
+    });
+    projByYear[yr] = total;
+  });
+
+  // Actual revenue by year from vendas/colheita eventos
+  const actualByYear = {};
   eventosColheita.forEach(ev => {
     if (!ev.data) return;
-    const mk = ev.data.substring(0, 7);
+    const yr = parseInt(ev.data.substring(0, 4), 10);
     const lote = lotes.find(l => String(l.id) === String(ev.plantio_id));
     const cultura = lote ? getCultura(lote.cultura_id) : null;
     let receita = 0;
     try {
       const d = typeof ev.descricao === 'string' ? JSON.parse(ev.descricao) : (ev.descricao || {});
-      if (d?.qtd && cultura?.venda?.precoUnitario) {
-        receita = parseFloat(d.qtd) * cultura.venda.precoUnitario;
-      }
+      const priceKg = cultura ? (prices[cultura.id] ?? cultura?.venda?.precoUnitario ?? 0) : 0;
+      if (d?.qtd) receita = parseFloat(d.qtd) * priceKg;
     } catch { /* ignore */ }
-    actualByMonth[mk] = (actualByMonth[mk] || 0) + receita;
+    actualByYear[yr] = (actualByYear[yr] || 0) + receita;
   });
 
-  const allValues = [
-    ...months.map(m => projByMonth[m.key] || 0),
-    ...months.map(m => actualByMonth[m.key] || 0),
-  ];
-  const maxVal = Math.max(1, ...allValues);
+  const maxVal = Math.max(1,
+    ...years.map(y => projByYear[y] || 0),
+    ...years.map(y => actualByYear[y] || 0),
+  );
+  const totalProj5yr = years.slice(0, 5).reduce((s, y) => s + (projByYear[y] || 0), 0);
+  const hasCulturas = Object.keys(culturaGroups).length > 0;
 
-  const totalProj = Object.values(projByMonth).reduce((a, b) => a + b, 0);
-  const totalActual = Object.values(actualByMonth).reduce((a, b) => a + b, 0);
-  const hasActual = totalActual > 0;
-
-  if (totalProj === 0 && !hasActual) return null;
+  if (!hasCulturas) return null;
 
   return (
     <Card>
       <div className="px-4 pt-4 pb-1 flex items-center gap-2 border-b border-gray-50">
         <DollarSign size={14} className="text-green-500" />
-        <span className="text-[13px] font-bold text-gray-700">Projeção de Receita</span>
+        <span className="text-[13px] font-bold text-gray-700">Projeção de Receita — {startYear}–{endYear}</span>
       </div>
 
-      {/* Summary chips */}
-      <div className="px-4 pt-3 flex gap-2 flex-wrap">
-        {totalProj > 0 && (
-          <div className="flex items-center gap-1.5 bg-green-50 rounded-xl px-3 py-1.5">
-            <div className="w-2.5 h-2.5 rounded-sm bg-green-400 flex-shrink-0" />
-            <div>
-              <p className="text-[9px] text-green-600/70 font-medium leading-none">Projetada (próx. colheitas)</p>
-              <p className="text-[14px] font-bold text-green-700 leading-tight">{fmtBRL(totalProj)}</p>
-            </div>
+      {/* Price per kg editors */}
+      <div className="px-4 pt-3 flex flex-wrap gap-3">
+        {Object.values(culturaGroups).map(({ cultura }) => (
+          <div key={cultura.id} className="flex items-center gap-1.5">
+            <span className="text-[12px]">{cultura.emoji}</span>
+            <span className="text-[10px] text-gray-500 font-medium">{cultura.nome}:</span>
+            <span className="text-[10px] text-gray-400">R$</span>
+            <input
+              type="number"
+              min="0"
+              step="0.10"
+              value={prices[cultura.id] ?? ''}
+              onChange={e => setPrices(prev => ({ ...prev, [cultura.id]: parseFloat(e.target.value) || 0 }))}
+              className="w-14 text-[11px] font-bold text-green-700 bg-green-50 rounded-lg px-2 py-1 border-0 outline-none text-right"
+            />
+            <span className="text-[10px] text-gray-400">/kg</span>
           </div>
-        )}
-        {hasActual && (
-          <div className="flex items-center gap-1.5 bg-blue-50 rounded-xl px-3 py-1.5">
-            <div className="w-2.5 h-2.5 rounded-sm bg-blue-400 flex-shrink-0" />
-            <div>
-              <p className="text-[9px] text-blue-600/70 font-medium leading-none">Realizada (registrada)</p>
-              <p className="text-[14px] font-bold text-blue-700 leading-tight">{fmtBRL(totalActual)}</p>
-            </div>
-          </div>
-        )}
+        ))}
       </div>
 
-      {/* Bar chart — horizontal scroll */}
-      <div className="px-3 pt-3 pb-4 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-        <div className="flex items-end gap-1.5" style={{ minWidth: months.length * 44 }}>
-          {months.map(({ key, label, isPast, isCurrent }) => {
-            const proj = projByMonth[key] || 0;
-            const actual = actualByMonth[key] || 0;
-            const projH = Math.round((proj / maxVal) * 80);
-            const actualH = Math.round((actual / maxVal) * 80);
+      {/* 5-year total chip */}
+      {totalProj5yr > 0 && (
+        <div className="px-4 pt-2">
+          <div className="inline-flex items-center gap-1.5 bg-green-50 rounded-xl px-3 py-1.5">
+            <div className="w-2.5 h-2.5 rounded-sm bg-green-400" />
+            <div>
+              <p className="text-[9px] text-green-600/70 font-medium leading-none">Receita total projetada (5 anos)</p>
+              <p className="text-[14px] font-bold text-green-700 leading-tight">{fmtBRL(totalProj5yr)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bar chart */}
+      <div className="px-3 pt-3 pb-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex items-end gap-2" style={{ minWidth: years.length * 52 }}>
+          {years.map(yr => {
+            const proj = projByYear[yr] || 0;
+            const actual = actualByYear[yr] || 0;
+            const isPast = yr < currentYear;
+            const isCurrent = yr === currentYear;
+            const projH = Math.round((proj / maxVal) * 90);
+            const actualH = Math.round((actual / maxVal) * 90);
             const hasData = proj > 0 || actual > 0;
             return (
-              <div key={key} className="flex flex-col items-center flex-shrink-0" style={{ width: hasActual ? 38 : 30 }}>
-                {/* Value label */}
+              <div key={yr} className="flex flex-col items-center flex-shrink-0" style={{ width: 44 }}>
+                {/* Value on top */}
                 {hasData && (
                   <span className="text-[8px] text-gray-400 font-medium mb-0.5 text-center leading-none">
-                    {proj > 0 ? `${Math.round(proj / 1000)}k` : ''}
+                    {proj >= 1000 ? `${Math.round(proj / 1000)}k` : proj > 0 ? `${Math.round(proj)}` : ''}
                   </span>
                 )}
-                {/* Bars */}
-                <div className="flex items-end gap-0.5" style={{ height: 84 }}>
+                <div className="flex items-end gap-1" style={{ height: 94 }}>
                   {/* Projected bar */}
                   <motion.div
-                    className="rounded-t-sm flex-shrink-0"
+                    className="rounded-t flex-shrink-0"
                     style={{
-                      width: hasActual ? 14 : 24,
-                      height: projH || (hasData ? 2 : 0),
+                      width: actual > 0 ? 16 : 28,
                       backgroundColor: proj > 0
                         ? (isCurrent ? '#16a34a' : isPast ? '#86efac' : '#4ade80')
                         : 'transparent',
                     }}
                     initial={{ height: 0 }}
-                    animate={{ height: projH || (hasData ? 2 : 0) }}
-                    transition={{ duration: 0.6, ease: 'easeOut', delay: 0.05 }}
+                    animate={{ height: projH || (hasData && proj > 0 ? 2 : 0) }}
+                    transition={{ duration: 0.7, ease: 'easeOut', delay: 0.05 }}
                   />
                   {/* Actual bar */}
-                  {hasActual && (
+                  {actual > 0 && (
                     <motion.div
-                      className="rounded-t-sm flex-shrink-0"
-                      style={{
-                        width: 14,
-                        height: actualH || (actual > 0 ? 2 : 0),
-                        backgroundColor: actual > 0 ? '#60a5fa' : 'transparent',
-                      }}
+                      className="rounded-t flex-shrink-0"
+                      style={{ width: 16, backgroundColor: '#60a5fa' }}
                       initial={{ height: 0 }}
-                      animate={{ height: actualH || (actual > 0 ? 2 : 0) }}
-                      transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 }}
+                      animate={{ height: actualH || 2 }}
+                      transition={{ duration: 0.7, ease: 'easeOut', delay: 0.1 }}
                     />
                   )}
                 </div>
-                {/* Month label */}
-                <span
-                  className="text-[8px] font-semibold mt-1 text-center leading-none"
-                  style={{ color: isCurrent ? '#16a34a' : isPast ? '#cbd5e1' : '#94a3b8' }}
-                >
-                  {label}
+                {/* Year label */}
+                <span className="text-[9px] font-bold mt-1 text-center leading-none"
+                  style={{ color: isCurrent ? '#16a34a' : isPast ? '#cbd5e1' : '#94a3b8' }}>
+                  {yr}
                 </span>
-                {isCurrent && (
-                  <div className="w-1 h-1 rounded-full bg-green-400 mt-0.5" />
-                )}
+                {isCurrent && <div className="w-1 h-1 rounded-full bg-green-400 mt-0.5" />}
               </div>
             );
           })}
         </div>
         {/* Legend */}
-        {hasActual && (
-          <div className="flex items-center gap-4 mt-2 px-1">
-            <div className="flex items-center gap-1">
-              <div className="w-2.5 h-2.5 rounded-sm bg-green-400" />
-              <span className="text-[9px] text-gray-400">Projetada</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2.5 h-2.5 rounded-sm bg-blue-400" />
-              <span className="text-[9px] text-gray-400">Realizada</span>
-            </div>
+        <div className="flex items-center gap-4 mt-2 px-1">
+          <div className="flex items-center gap-1">
+            <div className="w-2.5 h-2.5 rounded-sm bg-green-400" />
+            <span className="text-[9px] text-gray-400">Projetada</span>
           </div>
-        )}
+          <div className="flex items-center gap-1">
+            <div className="w-2.5 h-2.5 rounded-sm bg-blue-400" />
+            <span className="text-[9px] text-gray-400">Realizada</span>
+          </div>
+        </div>
       </div>
+
+      {/* Disclaimer */}
+      <p className="px-4 pb-3 text-[9px] text-gray-400 leading-relaxed">
+        * Projeção baseada na curva média de produção por cultura. Resultados reais podem variar conforme manejo, clima e variedade.
+      </p>
     </Card>
   );
 }

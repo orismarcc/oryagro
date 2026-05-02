@@ -8,6 +8,7 @@ import {
 import CronogramaTimeline from './CronogramaTimeline';
 import { useWeather } from '../hooks/useWeather';
 import { PRECOS_INSUMOS } from '../data/precos';
+import { resolveLifecycle } from '../lib/lifecycle';
 import {
   loadDiario,
   addDiarioEntry,
@@ -31,12 +32,6 @@ function formatDatePtBR(iso) {
   return `${d}/${m}/${y}`;
 }
 
-function parseCicloDias(ciclo) {
-  if (!ciclo) return 60;
-  const matches = ciclo.match(/\d+/g);
-  if (!matches) return 60;
-  return parseInt(matches[matches.length - 1], 10);
-}
 
 function fmtNumber(n) {
   return n?.toLocaleString('pt-BR') ?? '—';
@@ -1100,13 +1095,9 @@ export default function LotePage({ lote, cultura, onBack }) {
   const [tab, setTab] = useState('cronograma');
   const cor = cultura.cor;
 
-  const diasDecorridos = Math.max(
-    0,
-    Math.floor((Date.now() - new Date(lote.data_plantio + 'T12:00:00')) / 86_400_000)
-  );
-
-  const cicloDias = parseCicloDias(cultura.ciclo);
-  const cycleProgress = Math.min(1, Math.max(0, diasDecorridos / cicloDias));
+  const lc = resolveLifecycle(lote, cultura);
+  const { diasDecorridos, progresso: cycleProgressPct, diasPrimeiraProducao: cicloDias, prontoParaColheita } = lc;
+  const cycleProgress = cycleProgressPct / 100;
 
   return (
     <div className="min-h-screen bg-background">
@@ -1212,7 +1203,9 @@ export default function LotePage({ lote, cultura, onBack }) {
             <div className="flex justify-between mb-1.5">
               <span className="text-[10px] text-white/55 font-semibold uppercase tracking-wide">Progresso do ciclo</span>
               <span className="text-[10px] text-white/80 font-bold">
-                {diasDecorridos} / {cicloDias} dias ({Math.round(cycleProgress * 100)}%)
+                {cicloDias > 1
+                  ? `${diasDecorridos} / ${cicloDias} dias (${cycleProgressPct}%)`
+                  : 'N/A'}
               </span>
             </div>
             <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.15)' }}>

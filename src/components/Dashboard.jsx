@@ -198,6 +198,14 @@ function PropriedadeCard({ propriedade, lotes, alertasCount, onSelect, index }) 
     }
   });
 
+  // Derived info from lotes
+  const areaTotal = lotesDaProp.reduce((s, l) => s + (parseFloat(l.area_ha) || 0), 0);
+  const culturaIds = [...new Set(lotesDaProp.map(l => l.cultura_id).filter(Boolean))];
+  const culturasNomes = culturaIds.map(id => CULTURAS[id]).filter(Boolean).map(c => `${c.emoji} ${c.nome}`);
+  const dataCadastro = propriedade.created_at
+    ? new Date(propriedade.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : null;
+
   return (
     <motion.button
       initial={{ opacity: 0, y: 10 }}
@@ -240,6 +248,30 @@ function PropriedadeCard({ propriedade, lotes, alertasCount, onSelect, index }) 
               </span>
             )}
           </div>
+
+          {/* Property info grid */}
+          {lotesDaProp.length > 0 && (
+            <div className="mt-2 pt-2 flex flex-wrap gap-x-3 gap-y-1"
+              style={{ borderTop: '1px solid hsl(214 20% 93%)' }}>
+              {areaTotal > 0 && (
+                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                  <span style={{ color: 'hsl(160 84% 27%)' }}>⬛</span>
+                  {areaTotal.toFixed(1)} ha cultivados
+                </span>
+              )}
+              {culturasNomes.length > 0 && (
+                <span className="text-[10px] text-muted-foreground truncate max-w-[160px]">
+                  {culturasNomes.slice(0, 2).join(', ')}{culturasNomes.length > 2 ? ` +${culturasNomes.length - 2}` : ''}
+                </span>
+              )}
+              {dataCadastro && (
+                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                  <CalendarDays size={9} style={{ color: 'hsl(160 84% 27%)' }} />
+                  Desde {dataCadastro}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <ChevronRight size={16} className="opacity-30 flex-shrink-0 mt-1" />
       </div>

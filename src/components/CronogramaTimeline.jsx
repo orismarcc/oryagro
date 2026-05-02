@@ -119,21 +119,14 @@ function Toggle({ enabled, onToggle, color }) {
 }
 
 // ── Lote picker pill ─────────────────────────────────────────────────────
+// Only shown when there are multiple lotes — never shows "Genérico" option.
 function LotePicker({ lotes, selectedId, onSelect, cor }) {
+  // If only one lote, no picker needed (auto-selected)
+  if (lotes.length <= 1) return null;
   return (
     <div className="mb-4">
-      <p className="section-label mb-2 px-1">Cronograma do lote</p>
+      <p className="section-label mb-2 px-1">Selecionar lote</p>
       <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-        <button
-          onClick={() => onSelect(null)}
-          className="flex-shrink-0 px-3 py-2 rounded-xl text-[11px] font-semibold transition-all"
-          style={!selectedId
-            ? { background: cor, color: '#fff' }
-            : { background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 40%)' }
-          }
-        >
-          Genérico
-        </button>
         {lotes.map(l => (
           <button
             key={l.id}
