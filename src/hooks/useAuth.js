@@ -28,10 +28,18 @@ export function useAuth() {
     setSession(null);
   };
 
+  const rawUser = session?.user ?? null;
+
+  // Resolve display name: user_metadata.display_name → fallback to email prefix
+  const displayName = rawUser
+    ? (rawUser.user_metadata?.display_name?.trim() || rawUser.email?.split('@')[0] || '')
+    : '';
+
   return {
     session,
     loading,
-    user: session?.user ?? null,
+    user: rawUser,
+    displayName,
     signOut,
   };
 }

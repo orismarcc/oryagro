@@ -27,7 +27,7 @@ const BOTTOM_NAV = [
 ];
 
 export default function App() {
-  const { session, loading: authLoading, user, signOut } = useAuth();
+  const { session, loading: authLoading, user, displayName, signOut } = useAuth();
 
   // Navigation state
   // mainView: 'dashboard' | 'cultura-picker' | 'cultura' | 'lote' | 'simulador' | 'comparacao' | 'analise' | 'propriedades' | 'propriedade' | 'estoque'
@@ -179,7 +179,7 @@ export default function App() {
                 onSelectPropriedade={handleSelectPropriedade}
                 onManagePropriedades={handleManagePropriedades}
                 onSignOut={signOut}
-                userName={user?.email}
+                userName={displayName}
               />
             )}
             {mainView === 'cultura-picker' && (
@@ -204,7 +204,7 @@ export default function App() {
               />
             )}
             {mainView === 'simulador'  && <SimuladorPage />}
-            {mainView === 'analise'    && <AnalysePage onSignOut={signOut} userName={user?.email} propriedades={propriedades} />}
+            {mainView === 'analise'    && <AnalysePage onSignOut={signOut} userName={displayName} propriedades={propriedades} />}
             {mainView === 'comparacao' && <ComparacaoCulturas />}
             {mainView === 'calendario' && <CalendarioPage />}
             {mainView === 'estoque' && (

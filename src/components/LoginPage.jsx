@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
-import { Sprout, Mail, Lock, AlertCircle, CheckCircle2, UserPlus, LogIn, Eye, EyeOff } from 'lucide-react';
+import { Sprout, Mail, Lock, AlertCircle, CheckCircle2, UserPlus, LogIn, Eye, EyeOff, User } from 'lucide-react';
 
 export default function LoginPage() {
   const [mode, setMode]           = useState('login'); // 'login' | 'signup'
   const [email, setEmail]         = useState('');
   const [password, setPassword]   = useState('');
   const [confirm, setConfirm]     = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [showPass, setShowPass]   = useState(false);
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState('');
@@ -19,6 +20,7 @@ export default function LoginPage() {
     setSuccess('');
     setPassword('');
     setConfirm('');
+    setDisplayName('');
   };
 
   const handleSubmit = async (e) => {
@@ -27,6 +29,10 @@ export default function LoginPage() {
     setSuccess('');
 
     if (mode === 'signup') {
+      if (!displayName.trim() || displayName.trim().length < 2) {
+        setError('Informe seu nome (mínimo 2 caracteres).');
+        return;
+      }
       if (password.length < 6) {
         setError('A senha deve ter no mínimo 6 caracteres.');
         return;
@@ -51,7 +57,11 @@ export default function LoginPage() {
         );
       }
     } else {
-      const { error: err } = await supabase.auth.signUp({ email, password });
+      const { error: err } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { display_name: displayName.trim() } },
+      });
       if (err) {
         setError(
           err.message.includes('already registered')
@@ -138,6 +148,25 @@ export default function LoginPage() {
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Nome — signup only */}
+              {mode === 'signup' && (
+                <Field label="Nome">
+                  <div className="relative">
+                    <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                    <input
+                      type="text"
+                      value={displayName}
+                      onChange={e => setDisplayName(e.target.value)}
+                      placeholder="Seu nome"
+                      required
+                      minLength={2}
+                      className="w-full pl-9 pr-3 py-3 rounded-xl text-[14px] outline-none"
+                      style={{ background: 'hsl(210 16% 96%)', border: '1.5px solid hsl(214 20% 88%)', color: 'hsl(215 20% 16%)' }}
+                    />
+                  </div>
+                </Field>
+              )}
+
               {/* Email */}
               <Field label="E-mail">
                 <div className="relative">
@@ -230,7 +259,7 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                disabled={loading || !email || !password || (mode === 'signup' && !confirm)}
+                disabled={loading || !email || !password || (mode === 'signup' && (!confirm || displayName.trim().length < 2))}
                 className="w-full py-3.5 rounded-2xl text-[14px] font-bold text-white transition-all active:scale-[0.98] disabled:opacity-50"
                 style={{ background: 'hsl(160 84% 27%)' }}
               >

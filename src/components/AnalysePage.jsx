@@ -6,6 +6,7 @@ import { loadTodosLotes, loadAllColheitaEventos } from '../hooks/useSupabaseSync
 import { loadMovimentosByLote, loadTodasVendas } from '../hooks/useGestao';
 import { resolveLifecycle, fmtDateBR } from '../lib/lifecycle';
 import { logDbError } from '../lib/logger';
+import { estimateKgAnual } from '../constants/cropYields';
 import {
   BarChart2,
   Sprout,
@@ -858,6 +859,125 @@ function ProjecaoReceitaCard({ lotes, eventosColheita }) {
   );
 }
 
+/* ─── Projeção de Produção Anual (kg) ────────────────────── */
+
+function ProjecaoKgCard({ lotes }) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+
+  // Build year range
+  let minPlantYear = currentYear;
+  lotes.forEach(l => {
+    const y = new Date(l.data_plantio + 'T12:00:00').getFullYear();
+    if (y < minPlantYear) minPlantYear = y;
+  });
+  const startYear = minPlantYear;
+  const endYear = Math.max(currentYear + 4, minPlantYear + 6);
+  const years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
+
+  // Group by cultura for stacked display
+  const culturaGroups = {};
+  lotes.forEach(l => {
+    const c = getCultura(l.cultura_id);
+    if (!c) return;
+    if (!culturaGroups[c.id]) culturaGroups[c.id] = { cultura: c, lotes: [] };
+    culturaGroups[c.id].lotes.push(l);
+  });
+
+  // Compute total kg per year
+  const kgByYear = {};
+  years.forEach(yr => {
+    let total = 0;
+    lotes.forEach(l => {
+      const c = getCultura(l.cultura_id);
+      if (!c) return;
+      const plantYear = new Date(l.data_plantio + 'T12:00:00').getFullYear();
+      const factor = getRampFactor(c.id, yr - plantYear);
+      const { kg } = estimateKgAnual(l, c.id, factor);
+      total += kg;
+    });
+    kgByYear[yr] = total;
+  });
+
+  const maxKg = Math.max(1, ...years.map(y => kgByYear[y] || 0));
+  const totalKgPico = Math.max(...years.map(y => kgByYear[y] || 0));
+  const hasCulturas = Object.keys(culturaGroups).length > 0;
+
+  if (!hasCulturas || maxKg <= 0) return null;
+
+  const fmtTon = (kg) => kg >= 1000 ? `${(kg / 1000).toFixed(1)}t` : `${Math.round(kg)}kg`;
+
+  return (
+    <Card>
+      <div className="px-4 pt-4 pb-1 flex items-center gap-2 border-b border-gray-50">
+        <Sprout size={14} className="text-green-500" />
+        <span className="text-[13px] font-bold text-gray-700">Produção Estimada — kg/ano</span>
+        {totalKgPico > 0 && (
+          <span className="ml-auto text-[10px] font-bold text-green-600 bg-green-50 rounded-full px-2 py-0.5">
+            Pico: {fmtTon(totalKgPico)}
+          </span>
+        )}
+      </div>
+
+      {/* Culture legend */}
+      {Object.keys(culturaGroups).length > 1 && (
+        <div className="px-4 pt-2 flex flex-wrap gap-2">
+          {Object.values(culturaGroups).map(({ cultura }) => (
+            <div key={cultura.id} className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: cultura.cor }} />
+              <span className="text-[10px] text-gray-500">{cultura.emoji} {cultura.nome}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Bar chart */}
+      <div className="px-3 pt-3 pb-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex items-end gap-2" style={{ minWidth: years.length * 52 }}>
+          {years.map(yr => {
+            const totalKg = kgByYear[yr] || 0;
+            const isPast = yr < currentYear;
+            const isCurrent = yr === currentYear;
+            const barH = Math.round((totalKg / maxKg) * 90);
+            return (
+              <div key={yr} className="flex flex-col items-center flex-shrink-0" style={{ width: 44 }}>
+                {totalKg > 0 && (
+                  <span className="text-[8px] text-gray-400 font-medium mb-0.5 text-center leading-none">
+                    {fmtTon(totalKg)}
+                  </span>
+                )}
+                <div style={{ height: 94 }} className="flex items-end">
+                  <motion.div
+                    className="rounded-t"
+                    style={{
+                      width: 28,
+                      backgroundColor: isCurrent ? '#16a34a' : isPast ? '#86efac' : '#4ade80',
+                    }}
+                    initial={{ height: 0 }}
+                    animate={{ height: barH || (totalKg > 0 ? 2 : 0) }}
+                    transition={{ duration: 0.7, ease: 'easeOut', delay: 0.05 }}
+                  />
+                </div>
+                <span
+                  className="text-[9px] font-bold mt-1 text-center leading-none"
+                  style={{ color: isCurrent ? '#16a34a' : isPast ? '#cbd5e1' : '#94a3b8' }}
+                >
+                  {yr}
+                </span>
+                {isCurrent && <div className="w-1 h-1 rounded-full bg-green-400 mt-0.5" />}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <p className="px-4 pb-3 text-[9px] text-gray-400 leading-relaxed">
+        * Estimativa baseada em benchmarks Embrapa por cultura. Manejo, clima e variedade afetam o resultado real.
+      </p>
+    </Card>
+  );
+}
+
 /* ─── Projeção de Produção por Cultura ────────────────────── */
 
 function ProjecaoProducaoCard({ lotes }) {
@@ -1130,6 +1250,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
   const [todasVendas, setTodasVendas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exportingPDF, setExportingPDF] = useState(false);
+  const [selectedLoteId, setSelectedLoteId] = useState(null); // null = all
 
   useEffect(() => {
     let cancelled = false;
@@ -1161,6 +1282,9 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
 
   /* Derived stats — only active lotes */
   const lotesAtivos = lotes.filter((l) => l.status === 'ativo');
+  const lotesFiltrados = selectedLoteId
+    ? lotesAtivos.filter((l) => String(l.id) === selectedLoteId)
+    : lotesAtivos;
 
   const totalPlantas = lotesAtivos.reduce((s, l) => s + (l.total_plantas || 0), 0);
   const areaAtiva = lotesAtivos.reduce((s, l) => s + (l.area_ha || 0), 0);
@@ -1201,25 +1325,79 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
           </div>
         </div>
 
-        {/* Glass stats row */}
-        <div className="flex gap-2">
-          <StatCard
-            icon={Leaf}
-            label="Total Lotes"
-            value={lotes.length}
-          />
-          <StatCard
-            icon={Sprout}
-            label="Total Plantas"
-            value={totalPlantas.toLocaleString('pt-BR')}
-          />
-          <StatCard
-            icon={TrendingUp}
-            label="Áreas Ativas (ha)"
-            value={`${areaAtiva.toFixed(2)} ha`}
-            accent="#86efac"
-          />
-        </div>
+        {/* KPI cards — 4 in a 2×2 grid */}
+        {(() => {
+          const currentYear = new Date().getFullYear();
+          // Compute prod/revenue estimates for current year
+          let kgAnoAtual = 0;
+          let receitaAnoAtual = 0;
+          let anoPico = currentYear;
+          let maxReceita = 0;
+          const yearsToCheck = Array.from({ length: 7 }, (_, i) => currentYear - 1 + i);
+          const projByYearKpi = {};
+          lotesFiltrados.forEach(l => {
+            const c = getCultura(l.cultura_id);
+            if (!c) return;
+            const plantYear = new Date(l.data_plantio + 'T12:00:00').getFullYear();
+            yearsToCheck.forEach(yr => {
+              const factor = getRampFactor(c.id, yr - plantYear);
+              const { kg } = estimateKgAnual(l, c.id, factor);
+              const priceKg = c.venda?.precoUnitario ?? 3.5;
+              projByYearKpi[yr] = (projByYearKpi[yr] || 0) + kg * priceKg;
+              if (yr === currentYear) {
+                kgAnoAtual += kg;
+                receitaAnoAtual += kg * priceKg;
+              }
+            });
+          });
+          yearsToCheck.forEach(yr => {
+            if ((projByYearKpi[yr] || 0) > maxReceita) {
+              maxReceita = projByYearKpi[yr];
+              anoPico = yr;
+            }
+          });
+          const areaFilt = lotesFiltrados.reduce((s, l) => s + (l.area_ha || 0), 0);
+          return (
+            <div className="grid grid-cols-2 gap-2">
+              <StatCard icon={TrendingUp} label="Área Cultivada" value={`${areaFilt.toFixed(1)} ha`} accent="#86efac" />
+              <StatCard icon={Leaf} label="Lotes Ativos" value={lotesFiltrados.length} />
+              <StatCard icon={Sprout} label={`Prod. ${currentYear} (kg)`} value={kgAnoAtual > 0 ? `${(kgAnoAtual / 1000).toFixed(1)}t` : '—'} accent="#fde68a" />
+              <StatCard icon={DollarSign} label={`Receita ${currentYear}`} value={receitaAnoAtual > 0 ? `R$${Math.round(receitaAnoAtual / 1000)}k` : '—'} accent="#86efac" />
+            </div>
+          );
+        })()}
+
+        {/* Per-lot filter pills */}
+        {lotesAtivos.length > 1 && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+            <button
+              onClick={() => setSelectedLoteId(null)}
+              className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all"
+              style={!selectedLoteId
+                ? { background: 'rgba(255,255,255,0.9)', color: 'hsl(160 84% 27%)' }
+                : { background: 'rgba(255,255,255,0.20)', color: 'rgba(255,255,255,0.75)' }}
+            >
+              Todos
+            </button>
+            {lotesAtivos.map((l) => {
+              const c = getCultura(l.cultura_id);
+              const isActive = selectedLoteId === String(l.id);
+              return (
+                <button
+                  key={l.id}
+                  onClick={() => setSelectedLoteId(isActive ? null : String(l.id))}
+                  className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all"
+                  style={isActive
+                    ? { background: 'rgba(255,255,255,0.9)', color: c?.cor || 'hsl(160 84% 27%)' }
+                    : { background: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.75)' }}
+                >
+                  {c?.emoji && <span>{c.emoji}</span>}
+                  <span className="truncate max-w-[80px]">{l.nome}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── Content ── */}
@@ -1237,7 +1415,17 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
               transition={{ duration: 0.4 }}
             >
               <SectionLabel>Projeção Financeira</SectionLabel>
-              <ProjecaoReceitaCard lotes={lotesAtivos} eventosColheita={eventosColheita} />
+              <ProjecaoReceitaCard lotes={lotesFiltrados} eventosColheita={eventosColheita} />
+            </motion.div>
+
+            {/* Produção em kg/ano */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.04 }}
+            >
+              <SectionLabel>Produção em kg/ano</SectionLabel>
+              <ProjecaoKgCard lotes={lotesFiltrados} />
             </motion.div>
 
             {/* Produção Estimada por Lote */}
@@ -1247,7 +1435,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
               transition={{ duration: 0.4, delay: 0.05 }}
             >
               <SectionLabel>Receita por Lote</SectionLabel>
-              <ProjecaoProducaoCard lotes={lotesAtivos} />
+              <ProjecaoProducaoCard lotes={lotesFiltrados} />
             </motion.div>
 
             {/* Custo × Receita × Margem */}
@@ -1257,7 +1445,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
               transition={{ duration: 0.4, delay: 0.12 }}
             >
               <SectionLabel>Custo × Margem</SectionLabel>
-              <CustoProducaoCard lotes={lotesAtivos} todasVendas={todasVendas} />
+              <CustoProducaoCard lotes={lotesFiltrados} todasVendas={todasVendas} />
             </motion.div>
 
             {/* Distribuição por Cultura */}
@@ -1267,7 +1455,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
               transition={{ duration: 0.4, delay: 0.08 }}
             >
               <SectionLabel>Distribuição</SectionLabel>
-              <DistribuicaoCard lotes={lotesAtivos} />
+              <DistribuicaoCard lotes={lotesFiltrados} />
             </motion.div>
 
             {/* Status dos Lotes */}
@@ -1277,7 +1465,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
               transition={{ duration: 0.4, delay: 0.1 }}
             >
               <SectionLabel>Status</SectionLabel>
-              <StatusCard lotes={lotesAtivos} />
+              <StatusCard lotes={lotesFiltrados} />
             </motion.div>
 
             {/* Próximas Colheitas */}
@@ -1287,7 +1475,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
               transition={{ duration: 0.4, delay: 0.15 }}
             >
               <SectionLabel>Próximas Colheitas</SectionLabel>
-              <ProximasColheitasCard lotes={lotesAtivos} />
+              <ProximasColheitasCard lotes={lotesFiltrados} />
             </motion.div>
 
             {/* Indicadores de Campo */}
@@ -1297,7 +1485,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
               transition={{ duration: 0.4, delay: 0.2 }}
             >
               <SectionLabel>Indicadores de Campo</SectionLabel>
-              <IndicadoresCampoCard lotes={lotesAtivos} allLotes={lotes} />
+              <IndicadoresCampoCard lotes={lotesFiltrados} allLotes={lotes} />
             </motion.div>
 
             {/* Resumo por Propriedade */}
@@ -1308,7 +1496,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
                 transition={{ duration: 0.4, delay: 0.25 }}
               >
                 <SectionLabel>Por Propriedade</SectionLabel>
-                <ResumoPorPropriedadeCard lotes={lotesAtivos} propriedades={propriedades} />
+                <ResumoPorPropriedadeCard lotes={lotesFiltrados} propriedades={propriedades} />
               </motion.div>
             ) : null}
 
@@ -1319,7 +1507,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
               transition={{ duration: 0.4, delay: 0.3 }}
             >
               <SectionLabel>Histórico de Lotes</SectionLabel>
-              <HistoricoList lotes={lotesAtivos} />
+              <HistoricoList lotes={lotesFiltrados} />
             </motion.div>
 
             {/* Safras Anteriores */}

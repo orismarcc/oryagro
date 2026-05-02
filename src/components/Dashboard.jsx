@@ -362,7 +362,7 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
               </div>
               <div>
                 <p className="text-white/60 text-xs font-medium">
-                  {userName ? `Olá, ${userName.split('@')[0]}` : 'Guia Hortícola'}
+                  {userName ? `Olá, ${userName}` : 'Guia Hortícola'}
                 </p>
                 <h1 className="font-display text-white text-xl font-extrabold leading-tight">OryAgro</h1>
               </div>
