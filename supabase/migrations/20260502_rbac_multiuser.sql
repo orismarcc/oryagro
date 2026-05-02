@@ -139,35 +139,57 @@ BEGIN
 END;
 $$;
 
+-- ── Helper SECURITY DEFINER functions (avoid RLS recursion) ──────────────────
+-- is_farm_member: returns true if auth.uid() is a member of the given farm.
+-- SECURITY DEFINER + owner=postgres bypasses RLS on farm_members, preventing
+-- the 42P17 infinite recursion that occurs when RLS policies on propriedades
+-- or plantios query farm_members directly.
+CREATE OR REPLACE FUNCTION public.is_farm_member(p_farm_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.farm_members
+    WHERE farm_id = p_farm_id AND user_id = auth.uid()
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_farm_admin(p_farm_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.farm_members
+    WHERE farm_id = p_farm_id AND user_id = auth.uid() AND role = 'admin'
+  );
+$$;
+
 -- ── RLS: propriedades — membros podem ler ────────────────────────────────────
+-- Uses is_farm_member() SECURITY DEFINER to avoid infinite recursion (42P17).
 DROP POLICY IF EXISTS "farm_members_can_read_propriedades" ON public.propriedades;
 CREATE POLICY "farm_members_can_read_propriedades" ON public.propriedades
   FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.farm_members fm
-      WHERE fm.farm_id = propriedades.id AND fm.user_id = auth.uid()
-    )
+    public.is_farm_member(propriedades.id)
   );
 
 -- ── RLS: plantios — membros podem ler e escrever ─────────────────────────────
+-- Uses is_farm_member() SECURITY DEFINER to avoid infinite recursion (42P17).
 DROP POLICY IF EXISTS "farm_members_can_read_plantios" ON public.plantios;
 CREATE POLICY "farm_members_can_read_plantios" ON public.plantios
   FOR SELECT USING (
-    propriedade_id IS NOT NULL
-    AND EXISTS (
-      SELECT 1 FROM public.farm_members fm
-      WHERE fm.farm_id = plantios.propriedade_id AND fm.user_id = auth.uid()
-    )
+    propriedade_id IS NOT NULL AND public.is_farm_member(propriedade_id)
   );
 
 DROP POLICY IF EXISTS "farm_members_can_write_plantios" ON public.plantios;
 CREATE POLICY "farm_members_can_write_plantios" ON public.plantios
   FOR INSERT WITH CHECK (
-    propriedade_id IS NOT NULL
-    AND EXISTS (
-      SELECT 1 FROM public.farm_members fm
-      WHERE fm.farm_id = plantios.propriedade_id AND fm.user_id = auth.uid()
-    )
+    propriedade_id IS NOT NULL AND public.is_farm_member(propriedade_id)
   );
 
 -- ── RLS: plantio_eventos — membros da farm ───────────────────────────────────
