@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown } from 'lucide-react';
-import { loadLotesByPropriedade } from '../hooks/useSupabaseSync';
+import { loadLotesByPropriedade, deleteLoteCompleto } from '../hooks/useSupabaseSync';
 import { loadEstoque } from '../hooks/useGestao';
 import { CULTURAS } from '../data/culturas';
 import { resolveLifecycle, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
@@ -43,13 +43,23 @@ function getStatusEtapas(cultura, lote) {
   } catch { return { atrasadas: 0, hoje: null, amanha: null, proxima: null }; }
 }
 
-function LoteSummaryCard({ lote, onSelect, index }) {
+function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete }) {
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
+
   const cultura = CULTURAS[lote.cultura_id];
   if (!cultura) return null;
   const cor = cultura.cor;
   const lc  = resolveLifecycle(lote, cultura);
   const { diasDecorridos, progresso, prontoParaColheita, diasParaColheita, faseAtual, faseIndex } = lc;
   const faseColor = faseAtual ? getFaseColor(faseIndex) : null;
+
+  const handleDelete = async (e) => {
+    e.stopPropagation();
+    setDeleting(true);
+    await onDeleteLote(lote.id);
+    setDeleting(false);
+  };
 
   const isCampo = cultura.tipo === 'campo';
   const dimensao = isCampo
@@ -72,14 +82,17 @@ function LoteSummaryCard({ lote, onSelect, index }) {
   })();
 
   return (
-    <motion.button
+    <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: (index ?? 0) * 0.05, duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-      onClick={() => onSelect(lote)}
-      className="card-interactive w-full text-left p-4"
+      className="card w-full p-4 relative"
       style={{ borderLeft: `3px solid ${cor}` }}
     >
+      <button
+        onClick={() => onSelect(lote)}
+        className="w-full text-left"
+      >
       {/* Header row */}
       <div className="flex items-start gap-3 mb-3">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{ background: `${cor}15` }}>
@@ -187,7 +200,38 @@ function LoteSummaryCard({ lote, onSelect, index }) {
           </div>
         );
       })()}
-    </motion.button>
+      </button>
+
+      {/* Delete control */}
+      {canDelete && (
+        <div className="mt-2.5 pt-2.5 flex justify-end" style={{ borderTop: '1px solid hsl(214 20% 92%)' }}>
+          {confirmDelete ? (
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-muted-foreground mr-1">Excluir lote?</span>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="text-[10px] font-bold px-2.5 py-1 rounded-lg"
+                style={{ background: '#fee2e2', color: '#dc2626' }}>
+                {deleting ? '…' : 'Confirmar'}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); }}
+                className="text-[10px] font-medium px-2.5 py-1 rounded-lg"
+                style={{ background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }}>
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
+              className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-red-500 transition-colors py-0.5 px-1">
+              <Trash2 size={11} /> Excluir lote
+            </button>
+          )}
+        </div>
+      )}
+    </motion.div>
   );
 }
 
@@ -394,6 +438,13 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
     });
   }, [propriedade.id]);
 
+  const handleDeleteLote = async (id) => {
+    const ok = await deleteLoteCompleto(id);
+    if (ok) setLotes(prev => prev.filter(l => l.id !== id));
+  };
+
+  const canDeleteLote = can(userRole, FARM_ACTIONS.DELETE_ANY);
+
   return (
     <div className="min-h-screen bg-background">
       <div className="gradient-hero px-5 pt-5 pb-6">
@@ -448,7 +499,16 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
           </div>
         ) : (
           <div className="space-y-3">
-            {lotes.map((lote, i) => <LoteSummaryCard key={lote.id} lote={lote} onSelect={onSelectLote} index={i} />)}
+            {lotes.map((lote, i) => (
+              <LoteSummaryCard
+                key={lote.id}
+                lote={lote}
+                onSelect={onSelectLote}
+                index={i}
+                onDeleteLote={handleDeleteLote}
+                canDelete={canDeleteLote}
+              />
+            ))}
           </div>
         )}
 

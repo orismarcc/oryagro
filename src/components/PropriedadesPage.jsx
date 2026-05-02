@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, Pencil, Trash2, Building2, Layers, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Building2, Layers, ChevronRight, AlertTriangle } from 'lucide-react';
 import {
   loadPropriedades, createPropriedade, updatePropriedade, deletePropriedade, countLotesByPropriedade,
 } from '../hooks/useSupabaseSync';
@@ -55,15 +55,17 @@ function PropriedadeForm({ initial, onSave, onCancel, saving }) {
 }
 
 export default function PropriedadesPage({ onBack, onSelectPropriedade }) {
-  const { getUserRole } = useFarm();
+  const { getUserRole, refreshMemberships } = useFarm();
 
   const [propriedades, setPropriedades] = useState([]);
   const [loteCounts, setLoteCounts]     = useState({});
   const [loading, setLoading]           = useState(true);
   const [showForm, setShowForm]         = useState(false);
   const [editingId, setEditingId]       = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [deletingId, setDeletingId]     = useState(null);
   const [saving, setSaving]             = useState(false);
+  const [createError, setCreateError]   = useState(null);
 
   const reload = async () => {
     const [props, counts] = await Promise.all([loadPropriedades(), countLotesByPropriedade()]);
@@ -75,8 +77,16 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade }) {
 
   const handleCreate = async (payload) => {
     setSaving(true);
+    setCreateError(null);
     const row = await createPropriedade(payload);
-    if (row) { setPropriedades(prev => [...prev, row]); setShowForm(false); }
+    if (row) {
+      setPropriedades(prev => [...prev, row].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')));
+      setLoteCounts(prev => ({ ...prev, [row.id]: 0 }));
+      setShowForm(false);
+      await refreshMemberships();
+    } else {
+      setCreateError('Não foi possível criar a propriedade. Tente novamente.');
+    }
     setSaving(false);
   };
 
@@ -88,15 +98,13 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade }) {
   };
 
   const handleDelete = async (id) => {
-    const count = loteCounts[id] || 0;
-    if (count > 0) {
-      alert(`Esta propriedade tem ${count} lote(s) vinculado(s). Mova ou exclua os lotes antes de remover a propriedade.`);
-      return;
-    }
-    if (!window.confirm('Excluir esta propriedade? O estoque vinculado também será excluído.')) return;
+    setConfirmDeleteId(null);
     setDeletingId(id);
     const ok = await deletePropriedade(id);
-    if (ok) setPropriedades(prev => prev.filter(p => p.id !== id));
+    if (ok) {
+      setPropriedades(prev => prev.filter(p => p.id !== id));
+      await refreshMemberships();
+    }
     setDeletingId(null);
   };
 
@@ -155,18 +163,38 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade }) {
                           <span className="text-[11px] text-muted-foreground">{count} lote{count !== 1 ? 's' : ''}</span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button onClick={e => { e.stopPropagation(); setEditingId(p.id); setShowForm(false); }}
-                          className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground transition-colors">
-                          <Pencil size={13} />
-                        </button>
-                        {can(getUserRole(p.id), FARM_ACTIONS.DELETE_ANY) && (
-                          <button onClick={e => { e.stopPropagation(); handleDelete(p.id); }} disabled={deletingId === p.id}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-500 transition-colors">
-                            <Trash2 size={13} />
-                          </button>
+                      <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                        {confirmDeleteId === p.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleDelete(p.id)}
+                              disabled={deletingId === p.id}
+                              className="text-[10px] font-bold px-2 py-1 rounded-lg"
+                              style={{ background: '#fee2e2', color: '#dc2626' }}>
+                              {deletingId === p.id ? '…' : 'Excluir'}
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="text-[10px] font-medium px-2 py-1 rounded-lg"
+                              style={{ background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }}>
+                              Cancelar
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <button onClick={() => { setEditingId(p.id); setShowForm(false); }}
+                              className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground transition-colors">
+                              <Pencil size={13} />
+                            </button>
+                            {can(getUserRole(p.id), FARM_ACTIONS.DELETE_ANY) && (
+                              <button onClick={() => { setConfirmDeleteId(p.id); setEditingId(null); }}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-500 transition-colors">
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                            <ChevronRight size={14} className="opacity-30" />
+                          </>
                         )}
-                        <ChevronRight size={14} className="opacity-30" />
                       </div>
                     </button>
                   </motion.div>
@@ -177,7 +205,12 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade }) {
             <AnimatePresence>
               {showForm && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22 }} style={{ overflow: 'hidden' }}>
-                  <PropriedadeForm onSave={handleCreate} onCancel={() => setShowForm(false)} saving={saving} />
+                  <PropriedadeForm onSave={handleCreate} onCancel={() => { setShowForm(false); setCreateError(null); }} saving={saving} />
+                  {createError && (
+                    <p className="text-[12px] font-medium mt-2 px-1" style={{ color: '#dc2626' }}>
+                      {createError}
+                    </p>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>

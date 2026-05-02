@@ -37,16 +37,10 @@ ALTER TABLE public.farm_members ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "farm_members_read" ON public.farm_members;
 CREATE POLICY "farm_members_read" ON public.farm_members
   FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.propriedades p
-      WHERE p.id = farm_members.farm_id
-        AND (
-          p.user_id = auth.uid()
-          OR EXISTS (
-            SELECT 1 FROM public.farm_members fm2
-            WHERE fm2.farm_id = p.id AND fm2.user_id = auth.uid()
-          )
-        )
+    farm_members.user_id = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM public.propriedades
+      WHERE id = farm_members.farm_id AND user_id = auth.uid()
     )
   );
 

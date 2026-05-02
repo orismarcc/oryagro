@@ -302,12 +302,39 @@ export async function updatePropriedade(id, { nome, descricao }) {
 }
 
 /**
- * Delete a property by id. Returns true on success.
- * Note: plantios become orphaned (propriedade_id → NULL). Estoque is cascade-deleted.
- * Check for linked lotes before calling.
+ * Delete a property and all its lotes (cascade).
+ * Order: cronograma_atividades → plantio_eventos → plantios → propriedade.
+ * Estoque is FK-cascade-deleted by the DB when the propriedade row is removed.
  */
 export async function deletePropriedade(id) {
+  // 1. Get all plantio IDs for this property
+  const { data: plantiosRows } = await supabase
+    .from('plantios')
+    .select('id')
+    .eq('propriedade_id', id);
+  const plantioIds = (plantiosRows || []).map(r => r.id);
+
+  if (plantioIds.length > 0) {
+    // 2. Delete schedule activities and timeline events
+    await supabase.from('cronograma_atividades').delete().in('plantio_id', plantioIds);
+    await supabase.from('plantio_eventos').delete().in('plantio_id', plantioIds);
+    // 3. Delete lotes
+    await supabase.from('plantios').delete().eq('propriedade_id', id);
+  }
+
+  // 4. Delete property (estoque cascade-deleted by FK)
   const { error } = await supabase.from('propriedades').delete().eq('id', id);
+  return !error;
+}
+
+/**
+ * Delete a single lote and all its related data (events + schedule activities).
+ * Returns true on success.
+ */
+export async function deleteLoteCompleto(id) {
+  await supabase.from('cronograma_atividades').delete().eq('plantio_id', id);
+  await supabase.from('plantio_eventos').delete().eq('plantio_id', id);
+  const { error } = await supabase.from('plantios').delete().eq('id', id);
   return !error;
 }
 
