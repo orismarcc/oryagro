@@ -128,3 +128,97 @@ export async function loadMovimentos(insumoId) {
     .limit(30);
   return data || [];
 }
+
+/**
+ * Load all 'saida' movements for a specific plantio, joined with insumo price.
+ * Used to calculate input cost per lote.
+ */
+export async function loadMovimentosByLote(plantioId) {
+  const userId = await getUserId();
+  if (!userId) return [];
+  const { data } = await supabase
+    .from('estoque_movimentos')
+    .select('*, insumo:estoque_insumos(nome, unidade, preco_unitario)')
+    .eq('user_id', userId)
+    .eq('plantio_id', plantioId)
+    .eq('tipo', 'saida')
+    .order('data', { ascending: false });
+  return data || [];
+}
+
+/**
+ * Update mao_obra_total for a plantio. Returns updated row or null.
+ */
+export async function updateLoteMaoObra(plantioId, maoObraTotal) {
+  const { data, error } = await supabase
+    .from('plantios')
+    .update({ mao_obra_total: maoObraTotal ?? 0, updated_at: new Date().toISOString() })
+    .eq('id', plantioId)
+    .select()
+    .single();
+  if (error) { logDbError('updateLoteMaoObra', error); return null; }
+  return data;
+}
+
+// ── Vendas ────────────────────────────────────────────────────────────────────
+
+/**
+ * Load all sales records for a plantio, newest first.
+ */
+export async function loadVendas(plantioId) {
+  const userId = await getUserId();
+  if (!userId) return [];
+  const { data } = await supabase
+    .from('vendas')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('plantio_id', plantioId)
+    .order('data', { ascending: false });
+  return data || [];
+}
+
+/**
+ * Load all sales records for the current user, newest first.
+ */
+export async function loadTodasVendas() {
+  const userId = await getUserId();
+  if (!userId) return [];
+  const { data } = await supabase
+    .from('vendas')
+    .select('*')
+    .eq('user_id', userId)
+    .order('data', { ascending: false });
+  return data || [];
+}
+
+/**
+ * Create a venda record. Returns the new row or null.
+ */
+export async function addVenda({ plantioId, data, quantidade, unidade, precoUnitario, destino, observacao }) {
+  const userId = await getUserId();
+  if (!userId) return null;
+  const { data: row, error } = await supabase
+    .from('vendas')
+    .insert({
+      user_id: userId,
+      plantio_id: plantioId,
+      data,
+      quantidade,
+      unidade: unidade || 'kg',
+      preco_unitario: precoUnitario || 0,
+      destino: destino || 'outros',
+      observacao: observacao || null,
+    })
+    .select()
+    .single();
+  if (error) { logDbError('addVenda', error); return null; }
+  return row;
+}
+
+/**
+ * Delete a venda record by id.
+ */
+export async function deleteVenda(id) {
+  const { error } = await supabase.from('vendas').delete().eq('id', id);
+  return !error;
+}

@@ -13,6 +13,7 @@ import EstoquePage from './components/EstoquePage';
 import PropriedadesPage from './components/PropriedadesPage';
 import PropriedadePage from './components/PropriedadePage';
 import MigrationWizard from './components/MigrationWizard';
+import NetworkStatusBanner from './components/NetworkStatus';
 import { CULTURAS } from './data/culturas';
 import { useAuth } from './hooks/useAuth';
 import { loadPropriedades, loadTodosLotes } from './hooks/useSupabaseSync';
@@ -155,6 +156,7 @@ export default function App() {
   // ── App ──
   return (
     <div className="min-h-screen bg-background">
+      <NetworkStatusBanner />
       <main className="pb-36">
         <AnimatePresence mode="wait">
           <motion.div

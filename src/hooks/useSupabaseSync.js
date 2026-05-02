@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { logDbError } from '../lib/logger';
+import { cacheSet, cacheGet } from './useOfflineCache';
 
 /** Retorna o user_id do usuário autenticado ou null */
 async function getUserId() {
@@ -86,13 +87,25 @@ export async function loadLotes(culturaId) {
 export async function loadTodosLotes(limit = 8) {
   const userId = await getUserId();
   if (!userId) return [];
-  const { data } = await supabase
+
+  // Offline: return cached data if available
+  const cacheKey = `lotes_${userId}_${limit}`;
+  if (!navigator.onLine) {
+    const cached = cacheGet(cacheKey);
+    if (cached) return cached;
+  }
+
+  const { data, error } = await supabase
     .from('plantios')
     .select('*')
     .eq('user_id', userId)
     .order('data_plantio', { ascending: false })
     .limit(limit);
-  return data || [];
+
+  if (!error && data) {
+    cacheSet(cacheKey, data);
+  }
+  return data || (cacheGet(cacheKey) ?? []);
 }
 
 /**
@@ -222,12 +235,24 @@ export async function syncCronogramaStatus(plantioId, culturaId, atividade) {
 export async function loadPropriedades() {
   const userId = await getUserId();
   if (!userId) return [];
-  const { data } = await supabase
+
+  // Offline: return cached data if available
+  const cacheKey = `propriedades_${userId}`;
+  if (!navigator.onLine) {
+    const cached = cacheGet(cacheKey);
+    if (cached) return cached;
+  }
+
+  const { data, error } = await supabase
     .from('propriedades')
     .select('*')
     .eq('user_id', userId)
     .order('nome');
-  return data || [];
+
+  if (!error && data) {
+    cacheSet(cacheKey, data);
+  }
+  return data || (cacheGet(cacheKey) ?? []);
 }
 
 /**

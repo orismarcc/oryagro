@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { CULTURAS } from '../data/culturas';
+import { exportarRelatorioPDF } from '../lib/pdfExport';
 import { loadTodosLotes, loadAllColheitaEventos } from '../hooks/useSupabaseSync';
+import { loadMovimentosByLote, loadTodasVendas } from '../hooks/useGestao';
 import { resolveLifecycle, fmtDateBR } from '../lib/lifecycle';
 import { logDbError } from '../lib/logger';
 import {
@@ -16,6 +18,8 @@ import {
   Clock,
   Activity,
   DollarSign,
+  Wrench,
+  FileDown,
 } from 'lucide-react';
 
 /* ─── helpers ─────────────────────────────────────────────── */
@@ -868,6 +872,159 @@ function ProjecaoProducaoCard({ lotes }) {
   );
 }
 
+/* ─── Custo de Produção e Margem ──────────────────────────── */
+
+function CustoProducaoCard({ lotes, todasVendas }) {
+  const [movimentosPorLote, setMovimentosPorLote] = useState({});
+  const [loadingCustos, setLoadingCustos] = useState(true);
+
+  useEffect(() => {
+    if (lotes.length === 0) { setLoadingCustos(false); return; }
+    let cancelled = false;
+    Promise.all(
+      lotes.map(l => loadMovimentosByLote(l.id).then(movs => ({ id: l.id, movs })))
+    ).then(results => {
+      if (cancelled) return;
+      const map = {};
+      results.forEach(({ id, movs }) => { map[id] = movs; });
+      setMovimentosPorLote(map);
+      setLoadingCustos(false);
+    }).catch(() => { if (!cancelled) setLoadingCustos(false); });
+    return () => { cancelled = true; };
+  }, [lotes]);
+
+  if (loadingCustos) {
+    return (
+      <Card>
+        <div className="px-4 py-6 flex items-center justify-center gap-2">
+          <div className="w-4 h-4 border-2 border-green-200 border-t-green-500 rounded-full animate-spin" />
+          <span className="text-[12px] text-gray-400">Calculando custos…</span>
+        </div>
+      </Card>
+    );
+  }
+
+  const rows = lotes.map(lote => {
+    const cultura = getCultura(lote.cultura_id);
+    if (!cultura) return null;
+
+    // Insumo cost: sum(movimento.quantidade * insumo.preco_unitario) for saída movements
+    const movs = movimentosPorLote[lote.id] || [];
+    const custoInsumos = movs.reduce((sum, m) => {
+      const preco = m.insumo?.preco_unitario ?? 0;
+      return sum + (m.quantidade * preco);
+    }, 0);
+
+    // Labor cost: from mao_obra_total field on lote
+    const maoObra = parseFloat(lote.mao_obra_total) || 0;
+
+    // Total cost
+    const custoTotal = custoInsumos + maoObra;
+
+    // Revenue: from vendas (actual) or projected
+    const vendasLote = todasVendas.filter(v => String(v.plantio_id) === String(lote.id));
+    const receitaReal = vendasLote.reduce((s, v) => s + (v.quantidade * v.preco_unitario), 0);
+    const { receita: receitaProjetada } = calcProducaoLote(lote, cultura);
+
+    const hasReal = receitaReal > 0;
+    const receita = hasReal ? receitaReal : receitaProjetada;
+    const margem = receita - custoTotal;
+    const pctMargem = receita > 0 ? Math.round((margem / receita) * 100) : null;
+
+    return { lote, cultura, custoInsumos, maoObra, custoTotal, receitaReal, receitaProjetada, receita, margem, pctMargem, hasReal };
+  }).filter(Boolean);
+
+  const lotesComCusto = rows.filter(r => r.custoTotal > 0 || r.receita > 0);
+  if (lotesComCusto.length === 0) return null;
+
+  const totalCusto   = lotesComCusto.reduce((s, r) => s + r.custoTotal, 0);
+  const totalReceita = lotesComCusto.reduce((s, r) => s + r.receita, 0);
+  const totalMargem  = totalReceita - totalCusto;
+
+  return (
+    <Card>
+      <div className="px-4 pt-4 pb-1 flex items-center gap-2 border-b border-gray-50">
+        <Wrench size={14} className="text-green-500" />
+        <span className="text-[13px] font-bold text-gray-700">Custo × Receita × Margem</span>
+      </div>
+
+      {/* Summary totals */}
+      <div className="px-4 pt-3 pb-2 grid grid-cols-3 gap-2">
+        <div className="bg-red-50 rounded-xl px-3 py-2">
+          <p className="text-[9px] text-red-600/70 font-medium leading-none">Custo Total</p>
+          <p className="text-[13px] font-bold text-red-700 leading-tight mt-0.5">{fmtBRL(totalCusto)}</p>
+        </div>
+        <div className="bg-green-50 rounded-xl px-3 py-2">
+          <p className="text-[9px] text-green-600/70 font-medium leading-none">Receita</p>
+          <p className="text-[13px] font-bold text-green-700 leading-tight mt-0.5">{fmtBRL(totalReceita)}</p>
+        </div>
+        <div className={`rounded-xl px-3 py-2 ${totalMargem >= 0 ? 'bg-emerald-50' : 'bg-orange-50'}`}>
+          <p className={`text-[9px] font-medium leading-none ${totalMargem >= 0 ? 'text-emerald-600/70' : 'text-orange-600/70'}`}>Margem</p>
+          <p className={`text-[13px] font-bold leading-tight mt-0.5 ${totalMargem >= 0 ? 'text-emerald-700' : 'text-orange-700'}`}>{fmtBRL(totalMargem)}</p>
+        </div>
+      </div>
+
+      {/* Per-lote breakdown */}
+      <div className="divide-y divide-gray-50">
+        {lotesComCusto.map(({ lote, cultura, custoInsumos, maoObra, custoTotal, receita, margem, pctMargem, hasReal }) => {
+          const cor = cultura.cor;
+          const isPositive = margem >= 0;
+          return (
+            <div key={lote.id} className="px-4 py-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[14px]">{cultura.emoji}</span>
+                <p className="text-[12px] font-bold text-gray-800 truncate flex-1">{lote.nome}</p>
+                {pctMargem !== null && (
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isPositive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                    {isPositive ? '+' : ''}{pctMargem}%
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Insumos</span>
+                  <span className="font-semibold text-gray-600">{fmtBRL(custoInsumos)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Mão de obra</span>
+                  <span className="font-semibold text-gray-600">{fmtBRL(maoObra)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Receita {hasReal ? '(real)' : '(proj.)'}</span>
+                  <span className="font-semibold text-green-700">{fmtBRL(receita)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Margem</span>
+                  <span className={`font-bold ${isPositive ? 'text-emerald-700' : 'text-red-600'}`}>{fmtBRL(margem)}</span>
+                </div>
+              </div>
+
+              {/* Cost bar */}
+              {custoTotal > 0 && receita > 0 && (
+                <div className="mt-2 h-1.5 w-full bg-gray-100 rounded-full overflow-hidden flex">
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ backgroundColor: '#f87171', width: 0 }}
+                    animate={{ width: `${Math.min(100, (custoTotal / Math.max(custoTotal, receita)) * 100)}%` }}
+                    transition={{ duration: 0.7, ease: 'easeOut' }}
+                  />
+                  <motion.div
+                    className="h-full"
+                    style={{ backgroundColor: '#4ade80', width: 0 }}
+                    animate={{ width: `${Math.max(0, (margem / Math.max(custoTotal, receita)) * 100)}%` }}
+                    transition={{ duration: 0.7, ease: 'easeOut', delay: 0.05 }}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
 /* ─── Empty state ─────────────────────────────────────────── */
 
 function EmptyState() {
@@ -900,16 +1057,19 @@ function Spinner() {
 export default function AnalysePage({ onSignOut, userName, propriedades = [] }) {
   const [lotes, setLotes] = useState([]);
   const [eventosColheita, setEventosColheita] = useState([]);
+  const [todasVendas, setTodasVendas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [exportingPDF, setExportingPDF] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([loadTodosLotes(500), loadAllColheitaEventos()])
-      .then(([data, eventos]) => {
+    Promise.all([loadTodosLotes(500), loadAllColheitaEventos(), loadTodasVendas()])
+      .then(([data, eventos, vendas]) => {
         if (!cancelled) {
           setLotes(Array.isArray(data) ? data : []);
           setEventosColheita(Array.isArray(eventos) ? eventos : []);
+          setTodasVendas(Array.isArray(vendas) ? vendas : []);
           setLoading(false);
         }
       })
@@ -919,6 +1079,15 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
       });
     return () => { cancelled = true; };
   }, []);
+
+  const handleExportPDF = async () => {
+    setExportingPDF(true);
+    try {
+      await exportarRelatorioPDF(lotes, eventosColheita, todasVendas, propriedades);
+    } finally {
+      setExportingPDF(false);
+    }
+  };
 
   /* Derived stats — only active lotes */
   const lotesAtivos = lotes.filter((l) => l.status === 'ativo');
@@ -941,15 +1110,25 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
               )}
             </div>
           </div>
-          {onSignOut && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={onSignOut}
-              className="flex items-center gap-1.5 text-[11px] text-white/70 hover:text-white transition-colors bg-white/10 rounded-lg px-3 py-1.5"
+              onClick={handleExportPDF}
+              disabled={exportingPDF || lotes.length === 0}
+              className="flex items-center gap-1.5 text-[11px] text-white/70 hover:text-white transition-colors bg-white/10 rounded-lg px-3 py-1.5 disabled:opacity-40"
             >
-              <LogOut size={12} />
-              Sair
+              <FileDown size={12} />
+              {exportingPDF ? 'Gerando…' : 'PDF'}
             </button>
-          )}
+            {onSignOut && (
+              <button
+                onClick={onSignOut}
+                className="flex items-center gap-1.5 text-[11px] text-white/70 hover:text-white transition-colors bg-white/10 rounded-lg px-3 py-1.5"
+              >
+                <LogOut size={12} />
+                Sair
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Glass stats row */}
@@ -999,6 +1178,16 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [] }) 
             >
               <SectionLabel>Receita por Lote</SectionLabel>
               <ProjecaoProducaoCard lotes={lotesAtivos} />
+            </motion.div>
+
+            {/* Custo × Receita × Margem */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.12 }}
+            >
+              <SectionLabel>Custo × Margem</SectionLabel>
+              <CustoProducaoCard lotes={lotesAtivos} todasVendas={todasVendas} />
             </motion.div>
 
             {/* Distribuição por Cultura */}
