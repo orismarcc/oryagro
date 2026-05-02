@@ -361,236 +361,285 @@ function TabInsumos({ cultura, lote }) {
 }
 
 // ─── Tab: Colheita ───────────────────────────────────────────────────────────
+// Reads colheita-type steps from the cronograma (static + custom rows added by user)
+// and shows a summary: upcoming harvests, done harvests, next date.
 
-function TabColheita({ cultura, lote, canDelete }) {
-  const COLHEITA_KEY = `lote_colheita_${lote.id}`;
+const COLHEITA_COR = '#7c3aed';
+
+function TabColheita({ cultura, lote }) {
   const cor = cultura.cor;
 
-  const [history, setHistory] = useState(() => safeLS(COLHEITA_KEY, []));
+  // ── helpers (inline to avoid import dependency) ──
+  function addDaysLocal(d, n) {
+    const r = new Date(d); r.setDate(r.getDate() + n); return r;
+  }
+  function isoLocal(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
 
-  const [form, setForm] = useState({
-    data: today(),
-    quantidade: '',
-    preco: cultura.venda?.precoUnitario ?? 0,
-    notas: '',
+  // Resolve viveiro shift
+  const shift = (() => {
+    if (lote.metodo_propagacao && cultura?.metodosPropagacao) {
+      const m = cultura.metodosPropagacao.find(x => x.key === lote.metodo_propagacao);
+      if (m?.diasViveiro) return m.diasViveiro;
+    }
+    return safeLS(`lote_mudas_${lote.id}`, null) === '1' ? 15 : 0;
+  })();
+
+  const plantioDate = new Date(lote.data_plantio + 'T12:00:00');
+  const doneStatus  = safeLS(`cronograma_status_lote_${lote.id}`, {});
+  const customRows  = safeLS(`cronograma_custom_lote_${lote.id}`, []);
+  const todayStr    = today();
+
+  // Build list of colheita events
+  const colheitas = [];
+
+  // 1. Static cronograma steps with tipo === 'colheita'
+  (cultura.cronograma || []).forEach((etapa, i) => {
+    if (etapa.tipo !== 'colheita') return;
+    const dia          = etapa.dia + shift;
+    const dataPlanned  = isoLocal(addDaysLocal(plantioDate, dia));
+    const st           = doneStatus[`default_${i}`];
+    const dataReal     = (st?.status === 'feito' && st?.data) ? st.data : null;
+    colheitas.push({
+      id: `static_${i}`,
+      etapa:       etapa.etapa,
+      dia,
+      dataPlanned,
+      dataReal,
+      done:        st?.status === 'feito',
+      isCustom:    false,
+      produto:     etapa.produto || '',
+      notas:       st?.obs || '',
+    });
   });
 
-  const updateHistory = (next) => {
-    setHistory(next);
-    saveLS(COLHEITA_KEY, next);
-  };
+  // 2. Custom rows with tipo === 'colheita'
+  customRows.forEach((row, i) => {
+    if (row.tipo !== 'colheita') return;
+    let dataPlanned;
+    if (row.dataPrevista) {
+      dataPlanned = row.dataPrevista;
+    } else if (row.dia !== '' && row.dia !== null && row.dia !== undefined) {
+      const diaNum = parseInt(row.dia, 10);
+      if (!isNaN(diaNum)) dataPlanned = isoLocal(addDaysLocal(plantioDate, diaNum + shift));
+    }
+    if (!dataPlanned) return;
+    const st = doneStatus[`custom_${i}`];
+    colheitas.push({
+      id:         `custom_${i}`,
+      etapa:      row.etapa || 'Colheita',
+      dia:        row.dia,
+      dataPlanned,
+      dataReal:   (st?.status === 'feito' && st?.data) ? st.data : null,
+      done:       st?.status === 'feito',
+      isCustom:   true,
+      produto:    row.produto || '',
+      notas:      row.obs || st?.obs || '',
+    });
+  });
 
-  const handleAdd = () => {
-    if (!form.quantidade || parseFloat(form.quantidade) <= 0) return;
-    const entry = {
-      id: Date.now().toString(),
-      data: form.data,
-      quantidade: parseFloat(form.quantidade),
-      preco: parseFloat(form.preco) || 0,
-      notas: form.notas,
-    };
-    const next = [entry, ...history];
-    updateHistory(next);
-    setForm(f => ({ ...f, quantidade: '', notas: '', data: today() }));
-  };
+  colheitas.sort((a, b) => a.dataPlanned.localeCompare(b.dataPlanned));
 
-  const handleDelete = (id) => updateHistory(history.filter(h => h.id !== id));
+  const doneCount    = colheitas.filter(c => c.done).length;
+  const pendingCount = colheitas.filter(c => !c.done).length;
+  const nextColheita = colheitas.find(c => !c.done && c.dataPlanned >= todayStr);
 
-  const sorted = [...history].sort((a, b) => b.data.localeCompare(a.data));
+  // Days until next harvest
+  const diasAteProxima = nextColheita
+    ? Math.ceil((new Date(nextColheita.dataPlanned + 'T12:00:00') - new Date(todayStr + 'T12:00:00')) / 86_400_000)
+    : null;
 
-  // Summary
-  const totalQty    = history.reduce((s, h) => s + h.quantidade, 0);
-  const totalReceita = history.reduce((s, h) => s + h.quantidade * h.preco, 0);
-  const precoMedio  = totalQty > 0 ? totalReceita / totalQty : 0;
-
-  const sobrevivencia = cultura.venda?.sobrevivencia ?? 100;
-  const receitaEstimada =
-    (lote.total_plantas || 0) * (sobrevivencia / 100) * (cultura.venda?.precoUnitario ?? 0);
-  const diferenca = totalReceita - receitaEstimada;
-
-  const unidade = cultura.venda?.unidade ?? 'un';
-
-  const previewReceita = (parseFloat(form.quantidade) || 0) * (parseFloat(form.preco) || 0);
+  if (colheitas.length === 0) {
+    return (
+      <div className="px-4 pt-5 pb-8 max-w-2xl mx-auto">
+        <div className="text-center py-16">
+          <TrendingUp size={36} className="mx-auto mb-3 opacity-20" style={{ color: COLHEITA_COR }} />
+          <p className="text-[14px] font-bold text-foreground mb-1">Nenhuma colheita no cronograma</p>
+          <p className="text-[12px] text-muted-foreground leading-relaxed">
+            Adicione uma atividade do tipo <strong>Colheita</strong> na aba{' '}
+            <span className="font-semibold" style={{ color: cor }}>Cronograma</span> para ver o resumo aqui.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="px-4 pt-5 pb-8 max-w-2xl mx-auto">
 
-      {/* Summary card */}
-      {history.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="card p-4 mb-5"
-          style={{ borderColor: `${cor}30` }}
-        >
-          <p className="section-label mb-3">Resumo</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">Total colhido</p>
-              <p className="text-[15px] font-black" style={{ color: cor }}>{fmtNumber(Math.round(totalQty * 100) / 100)} {unidade}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">Receita real</p>
-              <p className="text-[15px] font-black" style={{ color: cor }}>{fmtBRL(totalReceita)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">Preço médio</p>
-              <p className="text-[14px] font-bold text-foreground">{fmtBRL(precoMedio)}/{unidade}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">Estimado</p>
-              <p className="text-[14px] font-bold text-foreground">{fmtBRL(receitaEstimada)}</p>
-            </div>
-          </div>
-
-          {/* Difference */}
-          <div
-            className="mt-3 flex items-center justify-between rounded-xl px-3 py-2.5"
-            style={{
-              background: diferenca >= 0 ? 'hsl(142 69% 95%)' : 'hsl(4 80% 96%)',
-              border: `1px solid ${diferenca >= 0 ? 'hsl(142 69% 85%)' : 'hsl(4 80% 88%)'}`,
-            }}
-          >
-            <p className="text-[12px] font-semibold" style={{ color: diferenca >= 0 ? '#059669' : '#dc2626' }}>
-              {diferenca >= 0 ? '▲' : '▼'} {diferenca >= 0 ? 'Acima' : 'Abaixo'} do estimado
-            </p>
-            <p className="text-[14px] font-black" style={{ color: diferenca >= 0 ? '#059669' : '#dc2626' }}>
-              {diferenca >= 0 ? '+' : ''}{fmtBRL(diferenca)}
-            </p>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Register form */}
-      <p className="section-label mb-3">Registrar Colheita</p>
-      <div className="card p-4 mb-5">
-        <div className="grid grid-cols-2 gap-3 mb-3">
+      {/* ── Summary banner ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="card p-4 mb-5"
+        style={{ borderColor: `${COLHEITA_COR}30` }}
+      >
+        <p className="section-label mb-3">Resumo das Colheitas</p>
+        <div className="grid grid-cols-3 gap-3 mb-3">
           <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Data</label>
-            <input
-              type="date"
-              value={form.data}
-              onChange={e => setForm(f => ({ ...f, data: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
-            />
+            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">Total previstas</p>
+            <p className="text-[20px] font-black leading-none" style={{ color: COLHEITA_COR }}>{colheitas.length}</p>
           </div>
           <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">
-              Quantidade ({unidade})
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="any"
-              placeholder="0"
-              value={form.quantidade}
-              onChange={e => setForm(f => ({ ...f, quantidade: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-            />
+            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">Realizadas</p>
+            <p className="text-[20px] font-black leading-none" style={{ color: '#16a34a' }}>{doneCount}</p>
           </div>
           <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">
-              Preço / {unidade}
-            </label>
-            <div className="flex items-center gap-1">
-              <span className="text-[12px] text-muted-foreground font-semibold">R$</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.preco}
-                onChange={e => setForm(f => ({ ...f, preco: e.target.value }))}
-                className="flex-1 rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Notas</label>
-            <input
-              type="text"
-              placeholder="Opcional"
-              value={form.notas}
-              onChange={e => setForm(f => ({ ...f, notas: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
-            />
+            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">Pendentes</p>
+            <p className="text-[20px] font-black leading-none" style={{ color: pendingCount > 0 ? '#d97706' : 'hsl(215 16% 55%)' }}>{pendingCount}</p>
           </div>
         </div>
 
-        {/* Preview */}
-        {parseFloat(form.quantidade) > 0 && (
-          <p className="text-[12px] text-muted-foreground mb-3">
-            Receita:{' '}
-            <span className="font-semibold text-foreground">
-              {form.quantidade} {unidade} × {fmtBRL(parseFloat(form.preco) || 0)} = <span style={{ color: cor }}>{fmtBRL(previewReceita)}</span>
-            </span>
-          </p>
+        {/* Progress bar */}
+        <div className="h-2 rounded-full overflow-hidden mb-2" style={{ background: 'hsl(210 16% 93%)' }}>
+          <div
+            className="h-full rounded-full transition-all duration-700"
+            style={{ width: `${colheitas.length > 0 ? (doneCount / colheitas.length) * 100 : 0}%`, background: '#16a34a' }}
+          />
+        </div>
+
+        {/* Next harvest countdown */}
+        {nextColheita && (
+          <div
+            className="flex items-center justify-between rounded-xl px-3 py-2.5 mt-1"
+            style={{ background: `${COLHEITA_COR}0d`, border: `1px solid ${COLHEITA_COR}25` }}
+          >
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Próxima colheita</p>
+              <p className="text-[13px] font-bold text-foreground mt-0.5">{nextColheita.etapa}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[11px] font-semibold" style={{ color: COLHEITA_COR }}>
+                {formatDatePtBR(nextColheita.dataPlanned)}
+              </p>
+              {diasAteProxima !== null && (
+                <p className="text-[10px] text-muted-foreground">
+                  {diasAteProxima === 0 ? 'Hoje!' : diasAteProxima < 0 ? `${Math.abs(diasAteProxima)}d atrás` : `em ${diasAteProxima}d`}
+                </p>
+              )}
+            </div>
+          </div>
         )}
+      </motion.div>
 
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={handleAdd}
-          disabled={!form.quantidade || parseFloat(form.quantidade) <= 0}
-          className="w-full py-3 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
-          style={{ background: cor }}
-        >
-          <Plus size={15} />
-          Registrar Colheita
-        </motion.button>
-      </div>
+      {/* ── Colheita list ── */}
+      <p className="section-label mb-3">Calendário de Colheitas</p>
+      <div className="flex flex-col gap-2.5">
+        {colheitas.map((c, i) => {
+          const isPast    = c.dataPlanned < todayStr;
+          const isToday   = c.dataPlanned === todayStr;
+          const statusBg  = c.done ? '#dcfce7'
+                          : isToday ? '#fff7ed'
+                          : isPast ? '#fee2e2'
+                          : `${COLHEITA_COR}0d`;
+          const statusBorder = c.done ? '#86efac'
+                             : isToday ? '#fed7aa'
+                             : isPast ? '#fca5a5'
+                             : `${COLHEITA_COR}30`;
+          const statusColor = c.done ? '#16a34a'
+                            : isToday ? '#ea580c'
+                            : isPast ? '#dc2626'
+                            : COLHEITA_COR;
 
-      {/* History */}
-      {sorted.length > 0 && (
-        <>
-          <p className="section-label mb-3">Histórico</p>
-          <div className="flex flex-col gap-2">
-            {sorted.map(entry => {
-              const receita = entry.quantidade * entry.preco;
-              return (
-                <motion.div
-                  key={entry.id}
-                  layout
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  className="card p-4 flex items-center gap-3"
+          return (
+            <motion.div
+              key={c.id}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.04, duration: 0.2 }}
+              className="card p-4"
+              style={{ borderLeft: `3px solid ${statusColor}`, opacity: c.done ? 0.8 : 1 }}
+            >
+              <div className="flex items-start gap-3">
+                {/* Icon */}
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
+                  style={{ background: statusBg }}
                 >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <CheckCircle2 size={12} style={{ color: cor }} />
-                      <span className="text-[12px] font-semibold text-foreground">{formatDatePtBR(entry.data)}</span>
-                      <span className="text-[12px] text-muted-foreground">
-                        {entry.quantidade} {unidade}
+                  {c.done ? '✓' : '🌾'}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  {/* Name + badges */}
+                  <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                    <p className={`text-[13px] font-bold leading-tight ${c.done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                      {c.etapa}
+                    </p>
+                    {c.done && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                        style={{ background: '#dcfce7', color: '#16a34a' }}>
+                        ✓ realizada
                       </span>
-                      <span className="text-[11px] text-muted-foreground">· R$ {entry.preco?.toFixed(2)}/un</span>
-                    </div>
-                    <p className="text-[13px] font-bold" style={{ color: cor }}>= {fmtBRL(receita)}</p>
-                    {entry.notas && (
-                      <p className="text-[11px] text-muted-foreground mt-0.5">{entry.notas}</p>
+                    )}
+                    {!c.done && isToday && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                        style={{ background: '#fff7ed', color: '#ea580c' }}>
+                        hoje
+                      </span>
+                    )}
+                    {!c.done && isPast && !isToday && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                        style={{ background: '#fee2e2', color: '#dc2626' }}>
+                        atrasada
+                      </span>
+                    )}
+                    {c.isCustom && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                        style={{ background: '#f3e8ff', color: '#7c3aed' }}>
+                        personalizada
+                      </span>
                     )}
                   </div>
-                  {canDelete && (
-                    <motion.button
-                      whileTap={{ scale: 0.85 }}
-                      onClick={() => handleDelete(entry.id)}
-                      className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0"
-                    >
-                      <Trash2 size={14} />
-                    </motion.button>
-                  )}
-                </motion.div>
-              );
-            })}
-          </div>
-        </>
-      )}
 
-      {history.length === 0 && (
-        <div className="text-center py-12">
-          <TrendingUp size={32} className="mx-auto mb-3 text-muted-foreground opacity-30" />
-          <p className="text-[13px] text-muted-foreground">Nenhuma colheita registrada ainda</p>
-        </div>
-      )}
+                  {/* Dates */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-[11px] font-semibold" style={{ color: statusColor }}>
+                      📅 Prevista: {formatDatePtBR(c.dataPlanned)}
+                      {c.dia !== undefined && c.dia !== null && c.dia !== '' && (
+                        <span className="text-muted-foreground font-normal"> (Dia {c.dia})</span>
+                      )}
+                    </span>
+                    {c.done && c.dataReal && c.dataReal !== c.dataPlanned && (
+                      <span className="text-[11px] text-blue-600 font-medium">
+                        Realizada: {formatDatePtBR(c.dataReal)}
+                      </span>
+                    )}
+                    {c.done && c.dataReal && c.dataReal === c.dataPlanned && (
+                      <span className="text-[11px]" style={{ color: '#16a34a' }}>
+                        Realizada no prazo
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Produto */}
+                  {c.produto && (
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{c.produto}</p>
+                  )}
+
+                  {/* Notas */}
+                  {c.notas && (
+                    <p className="text-[11px] text-muted-foreground italic mt-0.5">"{c.notas}"</p>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Hint */}
+      <div
+        className="mt-5 flex items-start gap-2.5 px-4 py-3 rounded-2xl"
+        style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 90%)' }}
+      >
+        <span className="text-base flex-shrink-0">💡</span>
+        <p className="text-[12px] text-muted-foreground leading-relaxed">
+          Para adicionar ou registrar colheitas, vá até a aba{' '}
+          <strong className="text-foreground">Cronograma</strong> e adicione ou marque como concluída uma atividade do tipo{' '}
+          <strong style={{ color: COLHEITA_COR }}>Colheita</strong>.
+        </p>
+      </div>
     </div>
   );
 }
@@ -1289,7 +1338,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null }) {
             <TabInsumos cultura={cultura} lote={lote} />
           )}
           {tab === 'colheita' && (
-            <TabColheita cultura={cultura} lote={lote} canDelete={canDelete} />
+            <TabColheita cultura={cultura} lote={lote} />
           )}
           {tab === 'vendas' && (
             <TabVendas cultura={cultura} lote={lote} canDelete={canDelete} />

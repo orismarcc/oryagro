@@ -417,7 +417,7 @@ function MonthView({ monthStart, atividadesPorDia, today, selectedDay, setSelect
             <button
               key={iso}
               onClick={() => setSelectedDay(isSelected ? null : iso)}
-              className="relative flex flex-col items-start p-1 min-h-[56px] transition-colors"
+              className="relative flex flex-col items-start p-1 min-h-[72px] transition-colors"
               style={{
                 background: isSelected
                   ? 'hsl(160 84% 95%)'
@@ -444,19 +444,30 @@ function MonthView({ monthStart, atividadesPorDia, today, selectedDay, setSelect
                 {cell.getDate()}
               </span>
 
-              {/* Activity dots */}
+              {/* Activity pills with label */}
               <div className="flex flex-col gap-[2px] w-full">
-                {dots.map((a, idx) => (
-                  <span
-                    key={idx}
-                    className="block w-full rounded-sm"
-                    style={{
-                      height: '3px',
-                      background: TIPO_COLOR[a.tipo] || '#6b7280',
-                      opacity: inMonth ? 1 : 0.4,
-                    }}
-                  />
-                ))}
+                {dots.map((a, idx) => {
+                  const bg = a.done ? '#dcfce7' : (TIPO_COLOR[a.tipo] || '#6b7280');
+                  const fg = a.done ? '#15803d' : 'white';
+                  return (
+                    <span
+                      key={idx}
+                      className="block w-full rounded truncate"
+                      style={{
+                        background: bg,
+                        color: fg,
+                        opacity: inMonth ? 1 : 0.35,
+                        fontSize: '8px',
+                        fontWeight: 700,
+                        lineHeight: '13px',
+                        padding: '0 2px',
+                        letterSpacing: '-0.01em',
+                      }}
+                    >
+                      {a.etapa}
+                    </span>
+                  );
+                })}
                 {extra > 0 && (
                   <span
                     className="text-[8px] font-bold leading-none"

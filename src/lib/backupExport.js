@@ -42,7 +42,7 @@ export async function exportPropriedadeBackup(propriedadeId, propriedadeNome) {
     // 1. Fetch property row
     const { data: propRow, error: propErr } = await supabase
       .from('propriedades')
-      .select('nome, descricao, localizacao, area_total_ha, created_at')
+      .select('nome, descricao, created_at')
       .eq('id', propriedadeId)
       .single();
     if (propErr) { logDbError('exportPropriedadeBackup/propriedades', propErr); throw propErr; }
@@ -139,10 +139,8 @@ export async function exportPropriedadeBackup(propriedadeId, propriedadeNome) {
       format:     'oryagro-property-backup',
       exportedAt: new Date().toISOString(),
       propriedade: {
-        nome:          propRow.nome,
-        descricao:     propRow.descricao,
-        localizacao:   propRow.localizacao,
-        area_total_ha: propRow.area_total_ha,
+        nome:      propRow.nome,
+        descricao: propRow.descricao,
       },
       lotes,
       estoque: { insumos: insumosFull },
@@ -195,11 +193,9 @@ export async function importPropriedadeBackup(jsonData, userId) {
     const { data: newProp, error: propErr } = await supabase
       .from('propriedades')
       .insert({
-        nome:          prop.nome          || 'Propriedade Importada',
-        descricao:     prop.descricao     || null,
-        localizacao:   prop.localizacao   || null,
-        area_total_ha: prop.area_total_ha || null,
-        user_id:       userId,
+        nome:      prop.nome      || 'Propriedade Importada',
+        descricao: prop.descricao || null,
+        user_id:   userId,
       })
       .select()
       .single();
