@@ -13,6 +13,7 @@ import EstoquePage from './components/EstoquePage';
 import PropriedadesPage from './components/PropriedadesPage';
 import PropriedadePage from './components/PropriedadePage';
 import MigrationWizard from './components/MigrationWizard';
+import SettingsPage from './components/SettingsPage';
 import NetworkStatusBanner from './components/NetworkStatus';
 import { CULTURAS } from './data/culturas';
 import { useAuth } from './hooks/useAuth';
@@ -150,6 +151,9 @@ function AppInner({ session, displayName, signOut }) {
     else setMainView('dashboard');
   };
 
+  const handleGoSettings = () => setMainView('configuracoes');
+  const handleBackFromSettings = () => setMainView('dashboard');
+
   const handleAddLoteFromPropriedade = () => {
     setMainView('cultura-picker');
   };
@@ -195,6 +199,7 @@ function AppInner({ session, displayName, signOut }) {
                 onSelectPropriedade={handleSelectPropriedade}
                 onManagePropriedades={handleManagePropriedades}
                 onSignOut={signOut}
+                onGoSettings={handleGoSettings}
                 userName={displayName}
               />
             )}
@@ -224,6 +229,9 @@ function AppInner({ session, displayName, signOut }) {
             {mainView === 'analise'    && <AnalysePage onSignOut={signOut} userName={displayName} propriedades={propriedades} userRole={userRole} />}
             {mainView === 'comparacao' && <ComparacaoCulturas />}
             {mainView === 'calendario' && <CalendarioPage />}
+            {mainView === 'configuracoes' && (
+              <SettingsPage onBack={handleBackFromSettings} />
+            )}
             {mainView === 'estoque' && (
               <EstoquePage propriedadeId={selectedPropriedade?.id ?? null} onBack={handleBackFromEstoque} />
             )}

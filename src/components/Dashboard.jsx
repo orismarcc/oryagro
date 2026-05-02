@@ -4,7 +4,7 @@ import { CULTURAS } from '../data/culturas';
 import { loadTodosLotes, loadPropriedades } from '../hooks/useSupabaseSync';
 import { loadEstoque } from '../hooks/useGestao';
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
-import { Plus, CalendarDays, Sprout, CheckCircle2, LogOut, Layers, AlertCircle, Clock, ArrowRight, Leaf, Building2, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Plus, CalendarDays, Sprout, CheckCircle2, LogOut, Layers, AlertCircle, Clock, ArrowRight, Leaf, Building2, ChevronRight, AlertTriangle, Settings } from 'lucide-react';
 
 function getStatusEtapas(cultura, lote) {
   if (!cultura?.cronograma) return { atrasadas: 0, hoje: null, amanha: null, proxima: null };
@@ -312,7 +312,7 @@ function EmptyLotes({ onAdd }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade, onManagePropriedades, onSignOut, userName }) {
+export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade, onManagePropriedades, onSignOut, onGoSettings, userName }) {
   const [lotes, setLotes]                   = useState([]);
   const [propriedades, setPropriedades]     = useState([]);
   const [alertasPorProp, setAlertasPorProp] = useState({});
@@ -367,9 +367,18 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
                 <h1 className="font-display text-white text-xl font-extrabold leading-tight">OryAgro</h1>
               </div>
             </div>
-            <button onClick={onSignOut} className="flex items-center gap-1.5 text-white/50 hover:text-white/80 transition-colors p-1.5">
-              <LogOut size={15} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={onGoSettings}
+                className="flex items-center gap-1.5 text-white/50 hover:text-white/80 transition-colors p-1.5"
+                title="Configurações"
+              >
+                <Settings size={15} />
+              </button>
+              <button onClick={onSignOut} className="flex items-center gap-1.5 text-white/50 hover:text-white/80 transition-colors p-1.5">
+                <LogOut size={15} />
+              </button>
+            </div>
           </div>
 
           {/* Stats */}

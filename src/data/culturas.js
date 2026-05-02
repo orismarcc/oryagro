@@ -389,7 +389,7 @@ export const CULTURAS = {
       precoUnitario: 3.50,
       sobrevivencia: 92,
       unidade: 'kg',
-      producaoKgPorHa: 15000,
+      producaoKgPorHa: 25000,
     },
     cronograma: [
       { dia: 0, etapa: 'Plantio das mudas', produto: 'Mudas enxertadas', dose: '625 mudas/ha', forma: 'Covas de 40×40×40cm, espaçamento 4×4m. Tutorar as mudas nos primeiros meses', tipo: 'plantio' },
