@@ -368,7 +368,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
           data: confirmDate,
           tipo: 'colheita',
           descricao: JSON.stringify({
-            quantidade: parseFloat(harvestData.qtd) || 0,
+            qtd: parseFloat(harvestData.qtd) || 0,
             unidade: harvestData.unidade,
             polpa: harvestData.polpa ? (parseFloat(harvestData.qtdPolpa) || 0) : null,
             unidadePolpa: harvestData.polpa ? harvestData.unidadePolpa : null,
@@ -425,7 +425,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
           data: isoDate,
           tipo: 'colheita',
           descricao: JSON.stringify({
-            quantidade: parseFloat(addHarvest.qtd) || 0,
+            qtd: parseFloat(addHarvest.qtd) || 0,
             unidade: addHarvest.unidade,
             polpa: addHarvest.polpa ? (parseFloat(addHarvest.qtdPolpa) || 0) : null,
             unidadePolpa: addHarvest.polpa ? addHarvest.unidadePolpa : null,
