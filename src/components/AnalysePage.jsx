@@ -6,7 +6,7 @@ import { loadTodosLotes, loadAllColheitaEventos } from '../hooks/useSupabaseSync
 import { loadMovimentosByLote, loadTodasVendas } from '../hooks/useGestao';
 import { resolveLifecycle, fmtDateBR } from '../lib/lifecycle';
 import { logDbError } from '../lib/logger';
-import { estimateKgAnual } from '../constants/cropYields';
+import { estimateKgAnual, getProductionBase } from '../constants/cropYields';
 import { can, FARM_ACTIONS } from '../lib/permissions';
 import {
   BarChart2,
@@ -699,23 +699,10 @@ function ProjecaoReceitaCard({ lotes, eventosColheita }) {
       const factor = getRampFactor(c.id, yearFromPlant);
       if (factor === 0) return;
 
-      // Full-potential production
+      // Full-potential production via single source of truth (no safrasAno multiplier)
       const priceKg = prices[c.id] ?? c.venda?.precoUnitario ?? 3.5;
-      let fullKg = 0;
-      const venda = c.venda;
-      if (venda?.producaoKgPorHa) {
-        fullKg = venda.producaoKgPorHa * (parseFloat(l.area_ha) || 1);
-      } else if (venda?.producaoKgPorM2) {
-        const area = (parseFloat(l.comprimento_m) || 20) * (parseFloat(l.largura_m) || 1.6);
-        fullKg = venda.producaoKgPorM2 * area;
-      } else if (venda?.producaoBase) {
-        fullKg = venda.producaoBase;
-      } else {
-        fullKg = (l.total_plantas || 0) * (venda?.kgPorPlanta ?? 15);
-      }
-      // For perennial trees: multiply by safras/year (default 2 for acerola)
-      const safrasAno = venda?.safrasAno ?? (c.id === 'acerola' ? 3 : 1);
-      total += fullKg * safrasAno * factor * priceKg;
+      const { kg } = estimateKgAnual(l, c.id, factor);
+      total += kg * priceKg;
     });
     projByYear[yr] = total;
   });
@@ -885,6 +872,24 @@ function ProjecaoKgCard({ lotes }) {
     culturaGroups[c.id].lotes.push(l);
   });
 
+  // Identify lotes with no production basis (unavailable method)
+  const unavailableLotes = lotes.filter(l => {
+    const c = getCultura(l.cultura_id);
+    if (!c) return false;
+    const base = getProductionBase(l, c.id);
+    return base.method === 'unavailable';
+  });
+
+  // Basis label per lote (for legend)
+  const basisLabel = (l) => {
+    const c = getCultura(l.cultura_id);
+    if (!c) return '⚠️';
+    const base = getProductionBase(l, c.id);
+    if (base.method === 'plants') return '🌱';
+    if (base.method === 'cultivated_area') return '📐';
+    return '⚠️';
+  };
+
   // Compute total kg per year
   const kgByYear = {};
   years.forEach(yr => {
@@ -920,15 +925,32 @@ function ProjecaoKgCard({ lotes }) {
         )}
       </div>
 
-      {/* Culture legend */}
-      {Object.keys(culturaGroups).length > 1 && (
-        <div className="px-4 pt-2 flex flex-wrap gap-2">
-          {Object.values(culturaGroups).map(({ cultura }) => (
-            <div key={cultura.id} className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: cultura.cor }} />
-              <span className="text-[10px] text-gray-500">{cultura.emoji} {cultura.nome}</span>
+      {/* Culture legend with basis tags */}
+      <div className="px-4 pt-2 flex flex-wrap gap-2">
+        {lotes.map(l => {
+          const c = getCultura(l.cultura_id);
+          if (!c) return null;
+          return (
+            <div key={l.id} className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: c.cor }} />
+              <span className="text-[10px] text-gray-500">
+                {basisLabel(l)} {l.nome}
+              </span>
             </div>
-          ))}
+          );
+        })}
+      </div>
+
+      {/* Warning: lotes with no production basis */}
+      {unavailableLotes.length > 0 && (
+        <div className="mx-4 mt-2 mb-1 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-start gap-2">
+          <span className="text-[13px] leading-none mt-0.5">⚠️</span>
+          <div>
+            <p className="text-[11px] font-bold text-amber-700 leading-tight">Dados insuficientes</p>
+            <p className="text-[10px] text-amber-600/80 leading-snug mt-0.5">
+              {unavailableLotes.map(l => l.nome).join(', ')} — sem contagem de plantas nem área cadastrada. Esses lotes não aparecem na projeção.
+            </p>
+          </div>
         </div>
       )}
 
@@ -1041,7 +1063,7 @@ function ProjecaoProducaoCard({ lotes }) {
                     <span className="text-[9px] text-gray-400">
                       {diasRestantes != null && diasRestantes <= 60
                         ? `em ${diasRestantes}d`
-                        : harvestDate.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })}
+                        : String(harvestDate.getFullYear())}
                     </span>
                   ) : null}
                 </div>
