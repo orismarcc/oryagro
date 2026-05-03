@@ -6,6 +6,16 @@ import { loadEstoque } from '../hooks/useGestao';
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
 import { Plus, CalendarDays, Sprout, CheckCircle2, LogOut, Layers, AlertCircle, Clock, ArrowRight, Leaf, Building2, ChevronRight, AlertTriangle, Settings } from 'lucide-react';
 
+// I-01: stable step ID matching CronogramaTimeline.makeStableId
+function makeStableId(prefix, etapa) {
+  const slug = etapa
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+  return `${prefix}_${slug}`;
+}
+
 function getStatusEtapas(cultura, lote) {
   if (!cultura?.cronograma) return { atrasadas: 0, hoje: null, amanha: null, proxima: null };
   try {
@@ -13,26 +23,24 @@ function getStatusEtapas(cultura, lote) {
       0, Math.floor((Date.now() - new Date(lote.data_plantio + 'T12:00:00')) / 86_400_000)
     );
     const doneStatus = JSON.parse(localStorage.getItem(`cronograma_status_lote_${lote.id}`)) || {};
-    // Resolve viveiro shift from method (mirrors CronogramaTimeline logic)
     const metodoObj = lote.metodo_propagacao && cultura.metodosPropagacao
       ? cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao) ?? null
       : null;
     const shift = metodoObj?.diasViveiro
       ?? (localStorage.getItem(`lote_mudas_${lote.id}`) === '1' ? 15 : 0);
 
-    // viveiro steps (index offset)
-    const viveiroCount = metodoObj?.etapasViveiro?.length ?? 0;
-
     const steps = [
-      ...(metodoObj?.etapasViveiro?.map((e, i) => ({
-        ...e, _id: `viveiro_${i}`,
-        done: doneStatus[`viveiro_${i}`]?.status === 'feito',
+      // I-01: use slug-based stable IDs (matches CronogramaTimeline post-migration)
+      ...(metodoObj?.etapasViveiro?.map(e => ({
+        ...e,
+        _id: makeStableId('viveiro', e.etapa),
+        done: doneStatus[makeStableId('viveiro', e.etapa)]?.status === 'feito',
       })) ?? []),
-      ...cultura.cronograma.map((e, i) => ({
+      ...cultura.cronograma.map(e => ({
         ...e,
         dia: e.dia + shift,
-        _id: `default_${i}`,
-        done: doneStatus[`default_${i}`]?.status === 'feito',
+        _id: makeStableId('default', e.etapa),
+        done: doneStatus[makeStableId('default', e.etapa)]?.status === 'feito',
       })),
     ];
     const pending = steps.filter(s => !s.done);
@@ -312,6 +320,105 @@ function EmptyLotes({ onAdd }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+// ── EstaSemanaSection ─────────────────────────────────────────────────────────
+
+function EstaSemanaSection({ lotes }) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  const hoje = new Date();
+  const em7dias = new Date(hoje.getTime() + 7 * 86_400_000);
+
+  // Collect all upcoming steps in the next 7 days across all lotes
+  const itens = [];
+  lotes.forEach(lote => {
+    const cultura = CULTURAS[lote.cultura_id];
+    if (!cultura?.cronograma) return;
+    try {
+      const dataPlantio = new Date(lote.data_plantio + 'T12:00:00');
+      const doneStatus = JSON.parse(localStorage.getItem(`cronograma_status_lote_${lote.id}`)) || {};
+      const metodoObj = lote.metodo_propagacao && cultura.metodosPropagacao
+        ? cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao) ?? null
+        : null;
+      const shift = metodoObj?.diasViveiro
+        ?? (localStorage.getItem(`lote_mudas_${lote.id}`) === '1' ? 15 : 0);
+
+      const steps = [
+        ...(metodoObj?.etapasViveiro?.map(e => ({ ...e, _id: `viveiro_${e.etapa.toLowerCase().replace(/\s+/g, '_')}` })) ?? []),
+        ...cultura.cronograma.map(e => ({ ...e, dia: e.dia + shift, _id: `default_${e.etapa.toLowerCase().replace(/\s+/g, '_')}` })),
+      ];
+
+      steps.forEach(step => {
+        const done = doneStatus[step._id]?.status === 'feito';
+        if (done) return;
+        const dataEtapa = new Date(dataPlantio.getTime() + step.dia * 86_400_000);
+        if (dataEtapa >= hoje && dataEtapa <= em7dias) {
+          itens.push({ lote, cultura, etapa: step.etapa, data: dataEtapa, dia: step.dia });
+        }
+      });
+    } catch { /* ignore */ }
+  });
+
+  // Sort by date (most urgent first)
+  itens.sort((a, b) => a.data - b.data);
+
+  if (lotes.length === 0) return null;
+
+  return (
+    <div className="mb-5">
+      <button
+        onClick={() => setCollapsed(c => !c)}
+        className="flex items-center gap-2 mb-3 w-full text-left"
+      >
+        <p className="section-label flex-1">📅 Esta Semana</p>
+        <span className="text-[10px] text-muted-foreground">{collapsed ? 'mostrar' : 'ocultar'}</span>
+      </button>
+
+      {!collapsed && (
+        <div className="card overflow-hidden">
+          {itens.length === 0 ? (
+            <p className="px-4 py-4 text-[12px] text-muted-foreground text-center">
+              Nenhuma atividade nos próximos 7 dias
+            </p>
+          ) : (
+            <div className="divide-y" style={{ divideColor: 'hsl(214 20% 92%)' }}>
+              {itens.map((item, idx) => {
+                const diasRestam = Math.ceil((item.data - hoje) / 86_400_000);
+                const isHoje = diasRestam === 0;
+                const isAmanha = diasRestam === 1;
+                const cor = item.cultura.cor;
+                return (
+                  <div key={`${item.lote.id}_${item.etapa}_${idx}`}
+                    className="flex items-center gap-3 px-4 py-3"
+                    style={{ borderBottom: idx < itens.length - 1 ? '1px solid hsl(214 20% 92%)' : 'none' }}
+                  >
+                    <span className="text-[18px] flex-shrink-0">{item.cultura.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-bold text-foreground truncate">{item.lote.nome}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{item.etapa}</p>
+                    </div>
+                    <span
+                      className="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                      style={
+                        isHoje
+                          ? { background: '#fff7ed', color: '#ea580c' }
+                          : isAmanha
+                            ? { background: '#dbeafe', color: '#2563eb' }
+                            : { background: `${cor}15`, color: cor }
+                      }
+                    >
+                      {isHoje ? 'Hoje' : isAmanha ? 'Amanhã' : item.data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade, onManagePropriedades, onSignOut, onGoSettings, userName }) {
   const [lotes, setLotes]                   = useState([]);
   const [propriedades, setPropriedades]     = useState([]);
@@ -427,6 +534,8 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
           <EmptyLotes onAdd={onManagePropriedades} />
         ) : (
           <>
+            <EstaSemanaSection lotes={lotes} />
+
             {propriedades.length > 0 && (
               <div className="mb-5">
                 <p className="section-label mb-3 px-1">Suas propriedades</p>

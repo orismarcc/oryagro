@@ -174,6 +174,13 @@ function getAtividadesLote(lote, cultura) {
     customRows = raw ? JSON.parse(raw) : [];
   } catch { customRows = []; }
 
+  // I-03 fix: resolve real done status for custom rows from localStorage
+  let customDoneStatus = {};
+  try {
+    const raw = localStorage.getItem(`cronograma_status_lote_${lote.id}`);
+    customDoneStatus = raw ? JSON.parse(raw) : {};
+  } catch { customDoneStatus = {}; }
+
   customRows.forEach((row, i) => {
     let dataStr;
     if (row.dataPrevista) {
@@ -185,6 +192,9 @@ function getAtividadesLote(lote, cultura) {
       }
     }
     if (!dataStr) return;
+    // I-03: use actual status stored by CronogramaTimeline (key: custom_${originalIndex})
+    const stepStatus = customDoneStatus[`custom_${i}`] || null;
+    const doneData = (stepStatus?.status === 'feito' && stepStatus?.data) ? stepStatus.data : null;
     activities.push({
       id: `${lote.id}_custom_${i}`,
       loteId: lote.id,
@@ -193,7 +203,7 @@ function getAtividadesLote(lote, cultura) {
       culturaNome: cultura.nome,
       culturaEmoji: cultura.emoji,
       culturaCor: cultura.cor,
-      data: dataStr,
+      data: doneData || dataStr,
       dataPlanejada: dataStr,
       dia: row.dia,
       etapa: row.etapa || 'Atividade personalizada',
@@ -202,7 +212,7 @@ function getAtividadesLote(lote, cultura) {
       tipo: row.tipo || 'manejo',
       isCustom: true,
       isViveiro: false,
-      done: false,
+      done: stepStatus?.status === 'feito',  // I-03: real status, not hardcoded false
     });
   });
 
@@ -543,7 +553,7 @@ export default function CalendarioPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadTodosLotes(50).then(data => { setLotes(data); setLoading(false); });
+    loadTodosLotes(100).then(data => { setLotes(data); setLoading(false); }); // I-05: same limit as Dashboard
   }, []);
 
   const today = isoDate(new Date());

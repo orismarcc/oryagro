@@ -640,7 +640,17 @@ function getRampFactor(culturaId, yearFromPlanting) {
     banana:    [0, 0.50, 0.90, 1.0,  1.0,  1.0],
     goiaba:    [0, 0.15, 0.40, 0.70, 0.90, 1.0],
     maracuja:  [0, 0.60, 1.0,  1.0,  1.0,  1.0],
-    // Annual/semi-annual crops: faster ramp
+    // Culturas anuais de ciclo curto: atingem 100% já no ano 0 (do plantio)
+    alface:    [0.80, 1.0, 1.0, 1.0, 1.0, 1.0],
+    coentro:   [0.80, 1.0, 1.0, 1.0, 1.0, 1.0],
+    rucula:    [0.80, 1.0, 1.0, 1.0, 1.0, 1.0],
+    // Culturas anuais de ciclo longo: produzem no próprio ano
+    feijao:    [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    milho:     [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    soja:      [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    mandioca:  [0, 1.0, 1.0, 1.0, 1.0, 1.0],   // ciclo 18 meses: nada no ano 0
+    abacaxi:   [0, 0.80, 1.0, 1.0, 1.0, 1.0],  // ciclo ~12-18 meses
+    // Annual/semi-annual crops: faster ramp (conservative fallback)
     _default:  [0, 0.70, 1.0,  1.0,  1.0,  1.0],
   };
   const curve = curves[culturaId] ?? curves._default;
@@ -1154,11 +1164,31 @@ function CustoProducaoCard({ lotes, todasVendas }) {
   const totalReceita = lotesComCusto.reduce((s, r) => s + r.receita, 0);
   const totalMargem  = totalReceita - totalCusto;
 
+  // Custo por kg: total de saídas (insumos) / total de kg estimados
+  const totalInsumosSaida = lotesComCusto.reduce((s, r) => s + r.custoInsumos, 0);
+  const totalKgEstimado = lotes.reduce((s, l) => {
+    const c = getCultura(l.cultura_id);
+    if (!c) return s;
+    const plantYear = new Date(l.data_plantio + 'T12:00:00').getFullYear();
+    const currentYear = new Date().getFullYear();
+    const factor = getRampFactor(c.id, currentYear - plantYear);
+    const { kg } = estimateKgAnual(l, c.id, factor);
+    return s + kg;
+  }, 0);
+  const custoKg = totalInsumosSaida > 0 && totalKgEstimado > 0
+    ? totalInsumosSaida / totalKgEstimado
+    : null;
+
   return (
     <Card>
       <div className="px-4 pt-4 pb-1 flex items-center gap-2 border-b border-gray-50">
         <Wrench size={14} className="text-green-500" />
         <span className="text-[13px] font-bold text-gray-700">Custo × Receita × Margem</span>
+        {custoKg !== null && (
+          <span className="ml-auto text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">
+            R$ {custoKg.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kg
+          </span>
+        )}
       </div>
 
       {/* Summary totals */}

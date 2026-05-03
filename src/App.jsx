@@ -85,9 +85,14 @@ function AppInner({ session, displayName, signOut }) {
   };
 
   // From Dashboard: user clicks an existing lot card → dedicated LotePage
+  // I-06: also resolve selectedPropriedade so getUserRole() returns the correct role
   const handleSelectLote = (lote) => {
     setSelectedLote(lote);
     setLoteOpenedFrom('dashboard');
+    if (lote.propriedade_id) {
+      const prop = propriedades.find(p => p.id === lote.propriedade_id) ?? null;
+      setSelectedPropriedade(prop);
+    }
     setMainView('lote');
   };
 

@@ -182,10 +182,13 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade }) {
                           </div>
                         ) : (
                           <>
-                            <button onClick={() => { setEditingId(p.id); setShowForm(false); }}
-                              className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground transition-colors">
-                              <Pencil size={13} />
-                            </button>
+                            {/* I-10: only admin/owner can edit property name/description */}
+                            {can(getUserRole(p.id), FARM_ACTIONS.EDIT_FARM) && (
+                              <button onClick={() => { setEditingId(p.id); setShowForm(false); }}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground transition-colors">
+                                <Pencil size={13} />
+                              </button>
+                            )}
                             {can(getUserRole(p.id), FARM_ACTIONS.DELETE_ANY) && (
                               <button onClick={() => { setConfirmDeleteId(p.id); setEditingId(null); }}
                                 className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-500 transition-colors">

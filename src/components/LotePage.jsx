@@ -17,6 +17,8 @@ import {
   addVenda,
   deleteVenda,
   updateLoteMaoObra,
+  updateLoteStatus,
+  arquivarCicloLote,
 } from '../hooks/useGestao';
 import { can, FARM_ACTIONS } from '../lib/permissions';
 
@@ -1150,11 +1152,29 @@ const TABS = [
 export default function LotePage({ lote, cultura, onBack, userRole = null }) {
   const canDelete = can(userRole, FARM_ACTIONS.DELETE_ANY);
   const [tab, setTab] = useState('cronograma');
+  const [concluindo, setConcluindo] = useState(false);
+  const [concluido, setConcluido] = useState(lote.status === 'concluido');
   const cor = cultura.cor;
 
   const lc = resolveLifecycle(lote, cultura);
   const { diasDecorridos, progresso: cycleProgressPct, diasPrimeiraProducao: cicloDias, prontoParaColheita } = lc;
   const cycleProgress = cycleProgressPct / 100;
+
+  const handleConcluir = async () => {
+    if (!window.confirm('Marcar este lote como concluído? Isso arquivará o ciclo no histórico.')) return;
+    setConcluindo(true);
+    try {
+      // Load vendas to compute summary
+      const vendas = await loadVendas(lote.id);
+      arquivarCicloLote(lote, vendas, []);
+      await updateLoteStatus(lote.id, 'concluido');
+      setConcluido(true);
+    } catch {
+      // silently fail
+    } finally {
+      setConcluindo(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -1192,14 +1212,33 @@ export default function LotePage({ lote, cultura, onBack, userRole = null }) {
         </div>
 
         <div className="relative z-10 px-5 pt-4 pb-5">
-          {/* Back button */}
-          <button
-            onClick={onBack}
-            className="flex items-center gap-1.5 text-white/60 text-[12px] font-medium mb-4 hover:text-white transition-colors"
-          >
-            <ArrowLeft size={14} />
-            Voltar
-          </button>
+          {/* Back button + Concluir */}
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1.5 text-white/60 text-[12px] font-medium hover:text-white transition-colors"
+            >
+              <ArrowLeft size={14} />
+              Voltar
+            </button>
+            {!concluido && canDelete && (
+              <button
+                onClick={handleConcluir}
+                disabled={concluindo}
+                className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all disabled:opacity-50"
+                style={{ background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.25)' }}
+              >
+                <CheckCircle2 size={12} />
+                {concluindo ? 'Concluindo…' : 'Concluir Lote'}
+              </button>
+            )}
+            {concluido && (
+              <span className="flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-xl"
+                style={{ background: 'rgba(22,163,74,0.25)', color: '#86efac', border: '1px solid rgba(22,163,74,0.35)' }}>
+                <CheckCircle2 size={12} /> Concluído
+              </span>
+            )}
+          </div>
 
           {/* Cultura + Lote name row */}
           <motion.div

@@ -62,17 +62,20 @@ export async function exportPropriedadeBackup(propriedadeId, propriedadeNome) {
         { data: diario,     error: diErr  },
         { data: vendas,     error: veErr  },
       ] = await Promise.all([
+        // B-06 fix: use real columns (notas, quantidade, area_ha — not descricao/observacoes)
         supabase.from('plantio_eventos')
-          .select('id, plantio_id, tipo, descricao, data, observacoes, created_at')
+          .select('id, plantio_id, tipo, data, quantidade, area_ha, notas, created_at')
           .eq('plantio_id', plantio.id),
         supabase.from('cronograma_atividades')
           .select('*')
           .eq('plantio_id', plantio.id),
+        // B-02 fix: use real column 'texto' (not titulo/descricao)
         supabase.from('diario_campo')
-          .select('id, plantio_id, data, titulo, descricao, tipo, created_at')
+          .select('id, plantio_id, data, tipo, texto, created_at')
           .eq('plantio_id', plantio.id),
+        // B-03 fix: use real column names (data/quantidade/unidade/preco_unitario/destino/observacao)
         supabase.from('vendas')
-          .select('id, plantio_id, data_venda, quantidade_kg, preco_kg, comprador, observacoes, created_at')
+          .select('id, plantio_id, data, quantidade, unidade, preco_unitario, destino, observacao, created_at')
           .eq('plantio_id', plantio.id),
       ]);
 
@@ -204,9 +207,8 @@ export async function importPropriedadeBackup(jsonData, userId) {
       return { success: false, error: `Erro ao criar propriedade: ${propErr.message}` };
     }
 
-    const loteIdMap   = {}; // _originalId → new DB id
-    const lotes       = jsonData.lotes   || [];
-    const insumos     = (jsonData.estoque?.insumos) || [];
+    const lotes   = jsonData.lotes   || [];
+    const insumos = (jsonData.estoque?.insumos) || [];
 
     // 3. Insert lotes and their sub-tables
     for (const lote of lotes) {
@@ -239,7 +241,6 @@ export async function importPropriedadeBackup(jsonData, userId) {
         return { success: false, error: `Erro ao importar lote "${lote.nome}": ${loteErr.message}` };
       }
 
-      if (lote._originalId) loteIdMap[lote._originalId] = newLote.id;
       const newLoteId = newLote.id;
 
       // 3b. Eventos
@@ -263,23 +264,31 @@ export async function importPropriedadeBackup(jsonData, userId) {
         if (crErr) logDbError('importPropriedadeBackup/cronograma_atividades', crErr);
       }
 
-      // 3d. Diário
+      // 3d. Diário — B-02 fix: map only real columns (texto, not titulo/descricao)
       if (lote.diario?.length) {
         const diPayload = lote.diario.map(d => ({
-          ...omitKeys(d, ['id', 'plantio_id', 'user_id']),
           plantio_id: newLoteId,
           user_id:    userId,
+          data:       d.data,
+          tipo:       d.tipo,
+          // backward-compat: old backups may have titulo/descricao instead of texto
+          texto:      d.texto || d.descricao || d.titulo || '',
         }));
         const { error: diErr } = await supabase.from('diario_campo').insert(diPayload);
         if (diErr) logDbError('importPropriedadeBackup/diario_campo', diErr);
       }
 
-      // 3e. Vendas
+      // 3e. Vendas — B-03 fix: map only real columns (data/quantidade/unidade/preco_unitario/destino/observacao)
       if (lote.vendas?.length) {
         const vePayload = lote.vendas.map(v => ({
-          ...omitKeys(v, ['id', 'plantio_id', 'user_id']),
-          plantio_id: newLoteId,
-          user_id:    userId,
+          plantio_id:    newLoteId,
+          user_id:       userId,
+          data:          v.data || v.data_venda,
+          quantidade:    v.quantidade ?? v.quantidade_kg,
+          unidade:       v.unidade || 'kg',
+          preco_unitario: v.preco_unitario ?? v.preco_kg,
+          destino:       v.destino || v.comprador || null,
+          observacao:    v.observacao || v.observacoes || null,
         }));
         const { error: veErr } = await supabase.from('vendas').insert(vePayload);
         if (veErr) logDbError('importPropriedadeBackup/vendas', veErr);

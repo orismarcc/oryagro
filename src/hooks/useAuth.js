@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase';
 export function useAuth() {
   const [session, setSession] = useState(undefined); // undefined = loading
   const [loading, setLoading] = useState(true);
+  // O-08: display_name from profiles table overrides user_metadata
+  const [profileDisplayName, setProfileDisplayName] = useState(null);
 
   useEffect(() => {
     // Get existing session
@@ -23,16 +25,36 @@ export function useAuth() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // O-08: fetch display_name from profiles table when session changes
+  useEffect(() => {
+    if (!session?.user?.id) { setProfileDisplayName(null); return; }
+    supabase
+      .from('profiles')
+      .select('display_name')
+      .eq('id', session.user.id)
+      .single()
+      .then(({ data }) => {
+        setProfileDisplayName(data?.display_name?.trim() || null);
+      })
+      .catch(() => setProfileDisplayName(null));
+  }, [session?.user?.id]);
+
   const signOut = async () => {
     await supabase.auth.signOut();
     setSession(null);
+    setProfileDisplayName(null);
   };
 
   const rawUser = session?.user ?? null;
 
-  // Resolve display name: user_metadata.display_name → fallback to email prefix
+  // O-08: Priority: profiles.display_name → user_metadata.display_name → email prefix
   const displayName = rawUser
-    ? (rawUser.user_metadata?.display_name?.trim() || rawUser.email?.split('@')[0] || '')
+    ? (
+        profileDisplayName ||
+        rawUser.user_metadata?.display_name?.trim() ||
+        rawUser.email?.split('@')[0] ||
+        ''
+      )
     : '';
 
   return {

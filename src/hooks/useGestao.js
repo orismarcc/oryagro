@@ -97,21 +97,29 @@ export async function addMovimento({ insumoId, tipo, quantidade, observacao, dat
     });
   if (mErr) { logDbError('addMovimento', mErr); return null; }
 
-  // 2. Atualizar quantidade no estoque (fetch + update)
+  // 2. Atualizar quantidade no estoque via RPC atômico (I-08: evita race condition)
   const delta = tipo === 'entrada' ? quantidade : -quantidade;
-  const { data: current } = await supabase
-    .from('estoque_insumos')
-    .select('quantidade')
-    .eq('id', insumoId)
-    .single();
-  if (current) {
-    await supabase
+  const { error: rpcErr } = await supabase.rpc('adjust_insumo_quantidade', {
+    p_insumo_id: insumoId,
+    p_delta: delta,
+  });
+  if (rpcErr) {
+    // Fallback: read-then-update (não atômico, mas mantém funcionamento)
+    logDbError('addMovimento:rpc_fallback', rpcErr);
+    const { data: current } = await supabase
       .from('estoque_insumos')
-      .update({
-        quantidade: Math.max(0, current.quantidade + delta),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', insumoId);
+      .select('quantidade')
+      .eq('id', insumoId)
+      .single();
+    if (current) {
+      await supabase
+        .from('estoque_insumos')
+        .update({
+          quantidade: Math.max(0, current.quantidade + delta),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', insumoId);
+    }
   }
   return true;
 }
@@ -221,4 +229,52 @@ export async function addVenda({ plantioId, data, quantidade, unidade, precoUnit
 export async function deleteVenda(id) {
   const { error } = await supabase.from('vendas').delete().eq('id', id);
   return !error;
+}
+
+/**
+ * Update the status field of a plantio (e.g. 'ativo' → 'concluido').
+ * Returns the updated row or null.
+ */
+export async function updateLoteStatus(id, status) {
+  const { data, error } = await supabase
+    .from('plantios')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) { logDbError('updateLoteStatus', error); return null; }
+  return data;
+}
+
+/**
+ * Archive a summary of the completed lote cycle to localStorage.
+ * Key: ciclo_historico_${lote.id}
+ */
+export function arquivarCicloLote(lote, vendas = [], _eventos = []) {
+  try {
+    const totalVendasKg = vendas.reduce((s, v) => s + (v.quantidade ?? 0), 0);
+    const receitaTotal  = vendas.reduce((s, v) => s + (v.quantidade ?? 0) * (v.preco_unitario ?? 0), 0);
+    const dataPlantio   = lote.data_plantio;
+    const dataConclusao = new Date().toISOString().slice(0, 10);
+    const diasCicloReal = dataPlantio
+      ? Math.max(0, Math.floor((Date.now() - new Date(dataPlantio + 'T12:00:00')) / 86_400_000))
+      : null;
+
+    const ciclo = {
+      loteId:        lote.id,
+      nome:          lote.nome,
+      culturaId:     lote.cultura_id,
+      dataPlantio,
+      dataConclusao,
+      totalVendasKg,
+      receitaTotal,
+      diasCicloReal,
+      archivedAt:    new Date().toISOString(),
+    };
+
+    localStorage.setItem(`ciclo_historico_${lote.id}`, JSON.stringify(ciclo));
+    return ciclo;
+  } catch {
+    return null;
+  }
 }

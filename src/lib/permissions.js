@@ -15,10 +15,14 @@ export const FARM_ACTIONS = {
   EDIT_LOT:           'EDIT_LOT',
   MARK_TASK_DONE:     'MARK_TASK_DONE',
   CREATE_EVENT:       'CREATE_EVENT',
+  // Estoque (I-09): technician can view but not edit/delete
+  VIEW_ESTOQUE:       'VIEW_ESTOQUE',
+  EDIT_ESTOQUE:       'EDIT_ESTOQUE',
   // Admin-only
   VIEW_ANALYSIS:      'VIEW_ANALYSIS',
   DELETE_ANY:         'DELETE_ANY',
   MANAGE_MEMBERS:     'MANAGE_MEMBERS',
+  EDIT_FARM:          'EDIT_FARM',          // edit property name/description (I-10)
   EDIT_FARM_SETTINGS: 'EDIT_FARM_SETTINGS',
   EXPORT_PDF:         'EXPORT_PDF',
 };
@@ -33,6 +37,7 @@ const PERMISSIONS = {
     FARM_ACTIONS.EDIT_LOT,
     FARM_ACTIONS.MARK_TASK_DONE,
     FARM_ACTIONS.CREATE_EVENT,
+    FARM_ACTIONS.VIEW_ESTOQUE,   // technician can view stock
   ]),
 };
 

@@ -349,15 +349,38 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Calcula dias restantes de uso baseado nos últimos 30 dias de movimentos tipo 'saida'.
+ * Retorna null se não houver histórico suficiente.
+ */
+function calcDiasRestantes(insumo, movimentos) {
+  const hoje = new Date();
+  const limite = new Date(hoje.getTime() - 30 * 86_400_000);
+  const saidasRecentes = movimentos.filter(m => {
+    if (m.tipo !== 'saida') return false;
+    if (!m.data) return false;
+    return new Date(m.data + 'T12:00:00') >= limite;
+  });
+  if (saidasRecentes.length === 0) return null;
+  const totalSaida = saidasRecentes.reduce((s, m) => s + (m.quantidade ?? 0), 0);
+  if (totalSaida <= 0) return null;
+  const taxaDiaria = totalSaida / 30;
+  return Math.floor(insumo.quantidade / taxaDiaria);
+}
+
 export default function EstoquePage({ propriedadeId = null, onBack }) {
   const { getUserRole } = useFarm();
-  const canDelete = can(getUserRole(propriedadeId), FARM_ACTIONS.DELETE_ANY);
+  const userRole = getUserRole(propriedadeId);
+  const canDelete = can(userRole, FARM_ACTIONS.DELETE_ANY);
+  // I-09: technician can view but not add/edit/delete stock
+  const canEdit   = can(userRole, FARM_ACTIONS.EDIT_ESTOQUE);
 
   const [insumos,    setInsumos]    = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [movModal,   setMovModal]   = useState(null);   // insumo object | null
   const [addModal,   setAddModal]   = useState(false);
   const [editModal,  setEditModal]  = useState(null);   // insumo object | null
+  const [diasPorInsumo, setDiasPorInsumo] = useState({}); // { [insumoId]: dias | null }
 
   const reload = () => loadEstoque(propriedadeId).then(setInsumos);
 
@@ -365,6 +388,24 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
     reload().then(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propriedadeId]);
+
+  // Load movimentos for all insumos to compute dias restantes
+  useEffect(() => {
+    if (insumos.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      insumos.map(i => loadMovimentos(i.id).then(movs => ({ id: i.id, movs })))
+    ).then(results => {
+      if (cancelled) return;
+      const map = {};
+      results.forEach(({ id, movs }) => {
+        const insumo = insumos.find(i => i.id === id);
+        if (insumo) map[id] = calcDiasRestantes(insumo, movs);
+      });
+      setDiasPorInsumo(map);
+    });
+    return () => { cancelled = true; };
+  }, [insumos]);
 
   const alertas = insumos.filter(i => i.quantidade <= i.quantidade_minima && i.quantidade_minima > 0);
 
@@ -396,13 +437,16 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
       {/* Action bar */}
       <div className="px-4 pt-4 pb-2 max-w-2xl mx-auto flex items-center justify-between">
         <p className="section-label">Insumos cadastrados</p>
-        <button
-          onClick={() => setAddModal(true)}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold text-white"
-          style={{ background: 'hsl(160 84% 27%)' }}
-        >
-          <Plus size={13} /> Adicionar insumo
-        </button>
+        {/* I-09: only admin/owner can add insumos */}
+        {canEdit && (
+          <button
+            onClick={() => setAddModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold text-white"
+            style={{ background: 'hsl(160 84% 27%)' }}
+          >
+            <Plus size={13} /> Adicionar insumo
+          </button>
+        )}
       </div>
 
       <div className="px-4 pt-2 pb-32 max-w-2xl mx-auto space-y-4">
@@ -445,6 +489,8 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
               const pct = insumo.quantidade_minima > 0
                 ? Math.min(100, (insumo.quantidade / (insumo.quantidade_minima * 2)) * 100)
                 : 50;
+              const dias = diasPorInsumo[insumo.id] ?? null;
+              const diasCor = dias !== null && dias < 7 ? '#dc2626' : dias !== null && dias < 30 ? '#d97706' : '#6b7280';
               return (
                 <motion.div key={insumo.id}
                   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
@@ -457,25 +503,32 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
                         {insumo.quantidade} {insumo.unidade}
                         {insumo.quantidade_minima > 0 && ` · mín. ${insumo.quantidade_minima} ${insumo.unidade}`}
                       </p>
+                      {dias !== null && (
+                        <p className="text-[10px] font-bold mt-0.5" style={{ color: diasCor }}>
+                          ~{dias} dia{dias !== 1 ? 's' : ''} restante{dias !== 1 ? 's' : ''}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
-                      {/* Editar */}
-                      <button
-                        onClick={() => setEditModal(insumo)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
-                        style={{ color: 'hsl(215 16% 50%)' }}
-                        title="Editar"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      {/* Movimentar */}
+                      {/* Editar — I-09: apenas admin/dono */}
+                      {canEdit && (
+                        <button
+                          onClick={() => setEditModal(insumo)}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+                          style={{ color: 'hsl(215 16% 50%)' }}
+                          title="Editar"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      )}
+                      {/* Movimentar — todos podem registrar uso */}
                       <button
                         onClick={() => setMovModal(insumo)}
                         className="px-3 py-1.5 rounded-xl text-[11px] font-bold"
                         style={{ background: `${cor}15`, color: cor }}>
                         Movimentar
                       </button>
-                      {/* Deletar */}
+                      {/* Deletar — I-09: apenas admin/dono */}
                       {canDelete && (
                         <button
                           onClick={() => handleDelete(insumo.id)}

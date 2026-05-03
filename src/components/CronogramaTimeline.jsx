@@ -8,7 +8,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import { Plus, Printer, Trash2, CheckCircle2, Circle, ChevronRight, CalendarDays, X, Layers, AlertCircle, Leaf } from 'lucide-react';
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
 import { loadEstoque, addMovimento } from '../hooks/useGestao';
-import { addEvento } from '../hooks/useSupabaseSync';
+import { addEvento, syncCronogramaStatus } from '../hooks/useSupabaseSync';
 import { logDbError } from '../lib/logger';
 
 const TIPO_META = {
@@ -56,6 +56,8 @@ function makeStableId(prefix, etapa) {
 }
 
 function migrateLegacyStatus(stored, vivSteps, baseSteps) {
+  // O-01: skip migration if already done (flag set on previous run)
+  if (stored._migrated) return stored;
   let changed = false;
   const migrated = {};
 
@@ -75,7 +77,14 @@ function migrateLegacyStatus(stored, vivSteps, baseSteps) {
     }
   });
 
-  return changed ? migrated : stored;
+  // O-01: stamp _migrated flag so future mounts skip this loop
+  if (changed) {
+    migrated._migrated = true;
+    return migrated;
+  }
+  // Also stamp on existing stored object so we skip next time
+  stored._migrated = true;
+  return stored;
 }
 
 // Scale numeric values in a dose string by a factor
@@ -193,6 +202,16 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
     polpa: false, qtdPolpa: '', unidadePolpa: 'kg'
   });
 
+  // ── Mudas flag (legacy fallback) — declared BEFORE the useEffect that uses it ──
+  const usaMudas = selectedLote
+    ? localStorage.getItem(`lote_mudas_${selectedLote.id}`) === '1'
+    : false;
+
+  // ── Resolve propagation method from lote — declared BEFORE the useEffect that uses it ──
+  const metodoObj = (selectedLote?.metodo_propagacao && cultura.metodosPropagacao)
+    ? (cultura.metodosPropagacao.find(m => m.key === selectedLote.metodo_propagacao) ?? null)
+    : null;
+
   // Reload status/custom from storage when key changes
   useEffect(() => {
     try {
@@ -230,16 +249,6 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
 
   const fator = loteArea / baseArea;
   const isScaled = Math.abs(fator - 1) > 0.02;
-
-  // ── Mudas flag (legacy fallback) ──
-  const usaMudas = selectedLote
-    ? localStorage.getItem(`lote_mudas_${selectedLote.id}`) === '1'
-    : false;
-
-  // ── Resolve propagation method from lote ──
-  const metodoObj = (selectedLote?.metodo_propagacao && cultura.metodosPropagacao)
-    ? (cultura.metodosPropagacao.find(m => m.key === selectedLote.metodo_propagacao) ?? null)
-    : null;
 
   const diasViveiroAtual = metodoObj
     ? (metodoObj.diasViveiro || 0)
@@ -341,6 +350,20 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
 
   const confirmStep = async (id) => {
     setStatus(s => ({ ...s, [id]: { status: 'feito', data: confirmDate } }));
+    // I-04 / Sugestão 1: persist step status to Supabase for multi-device sync
+    if (selectedLote?.id && confirming) {
+      syncCronogramaStatus(selectedLote.id, cultura.id, {
+        dia:      confirming.dia,
+        etapa:    confirming.etapa,
+        produto:  confirming.produto  || '',
+        dose:     confirming.dose     || '',
+        forma:    confirming.forma    || '',
+        tipo:     confirming.tipo     || 'manejo',
+        status:   'feito',
+        data:     confirmDate,
+        isCustom: confirming._custom  || false,
+      });
+    }
 
     // Debitar estoque (adubo/foliar)
     if (
@@ -387,27 +410,26 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
 
   const undoStep = (id) => {
     setStatus(s => { const n = { ...s }; delete n[id]; return n; });
-  };
-
-  // Add dialog: save to localStorage calendario_events for colheita
-  const saveColheitaToCalendario = (isoDate, etapaLabel) => {
-    if (!isoDate) return;
-    try {
-      const existingEvents = JSON.parse(localStorage.getItem('calendario_events') || '[]');
-      const newEvent = {
-        id: `cronograma_${selectedLote?.id}_${Date.now()}`,
-        date: isoDate,
-        tipo: 'colheita',
-        label: etapaLabel || 'Colheita',
-        loteId: selectedLote?.id,
-        loteName: selectedLote?.nome,
-        culturaId: cultura.id,
-      };
-      localStorage.setItem('calendario_events', JSON.stringify([...existingEvents, newEvent]));
-    } catch (err) {
-      logDbError('saveColheitaToCalendario', err);
+    // I-04 / Sugestão 1: reflect undo in Supabase — find the step data from allEvents
+    if (selectedLote?.id) {
+      const step = allEvents.find(e => e._id === id);
+      if (step) {
+        syncCronogramaStatus(selectedLote.id, cultura.id, {
+          dia:      step.dia,
+          etapa:    step.etapa,
+          produto:  step.produto  || '',
+          dose:     step.dose     || '',
+          forma:    step.forma    || '',
+          tipo:     step.tipo     || 'manejo',
+          status:   'pendente',
+          data:     null,
+          isCustom: step._custom  || false,
+        });
+      }
     }
   };
+  // I-15: removed saveColheitaToCalendario — CalendarioPage now reads directly
+  // from cronograma_custom_lote_${id} and cronograma_status_lote_${id} (no duplicate store needed)
 
   // ── Add dialog submit ──
   const handleAddRow = async () => {
@@ -438,12 +460,6 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
       // Also auto-mark as done in status
       const tempId = `custom_${customRows.length}`;
       setStatus(s => ({ ...s, [tempId]: { status: 'feito', data: isoDate } }));
-    }
-
-    // For colheita: save to calendario
-    if (newRow.tipo === 'colheita') {
-      const isoDate = newRow.dataPrevista || computeDataPrevista(diaNum);
-      if (isoDate) saveColheitaToCalendario(isoDate, newRow.etapa);
     }
 
     setCustomRows(r => [...r, rowToAdd]);

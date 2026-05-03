@@ -10,6 +10,16 @@ import { supabase } from '../lib/supabase';
 import { can, FARM_ACTIONS } from '../lib/permissions';
 import BackupModal from './BackupModal';
 
+// I-01: stable step ID matching CronogramaTimeline.makeStableId
+function makeStableId(prefix, etapa) {
+  const slug = etapa
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+  return `${prefix}_${slug}`;
+}
+
 function getStatusEtapas(cultura, lote) {
   if (!cultura?.cronograma) return { atrasadas: 0, hoje: null, amanha: null, proxima: null };
   try {
@@ -24,15 +34,17 @@ function getStatusEtapas(cultura, lote) {
       ?? (localStorage.getItem(`lote_mudas_${lote.id}`) === '1' ? 15 : 0);
 
     const steps = [
-      ...(metodoObj?.etapasViveiro?.map((e, i) => ({
-        ...e, _id: `viveiro_${i}`,
-        done: doneStatus[`viveiro_${i}`]?.status === 'feito',
+      // I-01: use slug-based stable IDs (matches CronogramaTimeline post-migration)
+      ...(metodoObj?.etapasViveiro?.map(e => ({
+        ...e,
+        _id: makeStableId('viveiro', e.etapa),
+        done: doneStatus[makeStableId('viveiro', e.etapa)]?.status === 'feito',
       })) ?? []),
-      ...cultura.cronograma.map((e, i) => ({
+      ...cultura.cronograma.map(e => ({
         ...e,
         dia: e.dia + shift,
-        _id: `default_${i}`,
-        done: doneStatus[`default_${i}`]?.status === 'feito',
+        _id: makeStableId('default', e.etapa),
+        done: doneStatus[makeStableId('default', e.etapa)]?.status === 'feito',
       })),
     ];
     const pending = steps.filter(s => !s.done);

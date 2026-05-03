@@ -47,6 +47,15 @@ export const CROP_YIELDS = {
     safrasAno: 1,
     source: 'Embrapa Mandioca e Fruticultura, 2022',
   },
+  goiaba: {
+    cropName: 'Goiaba',
+    unit: 'per_hectare',
+    defaultYieldValue: 30_000,    // kg/ha/year at full maturity
+    yieldRangeMin: 20_000,
+    yieldRangeMax: 40_000,
+    safrasAno: 2,                 // informational: 2 flushes/year
+    source: 'Embrapa Mandioca e Fruticultura, 2022',
+  },
   maracuja: {
     cropName: 'Maracujá',
     unit: 'per_hectare',

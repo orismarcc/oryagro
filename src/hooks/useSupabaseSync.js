@@ -262,10 +262,11 @@ export async function loadPropriedades() {
     return owned || (cacheGet(cacheKey) ?? []);
   }
 
-  // Flatten and deduplicate
+  // Flatten and deduplicate by id (I-14: guard against duplicate memberships)
+  const seen = new Set();
   const farms = (data || [])
     .map(row => row.propriedades)
-    .filter(Boolean)
+    .filter(p => p && !seen.has(p.id) && seen.add(p.id))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 
   cacheSet(cacheKey, farms);
@@ -315,9 +316,11 @@ export async function deletePropriedade(id) {
   const plantioIds = (plantiosRows || []).map(r => r.id);
 
   if (plantioIds.length > 0) {
-    // 2. Delete schedule activities and timeline events
+    // 2. Delete all child data for each plantio
     await supabase.from('cronograma_atividades').delete().in('plantio_id', plantioIds);
     await supabase.from('plantio_eventos').delete().in('plantio_id', plantioIds);
+    await supabase.from('vendas').delete().in('plantio_id', plantioIds);
+    await supabase.from('diario_campo').delete().in('plantio_id', plantioIds);
     // 3. Delete lotes
     await supabase.from('plantios').delete().eq('propriedade_id', id);
   }
@@ -334,6 +337,8 @@ export async function deletePropriedade(id) {
 export async function deleteLoteCompleto(id) {
   await supabase.from('cronograma_atividades').delete().eq('plantio_id', id);
   await supabase.from('plantio_eventos').delete().eq('plantio_id', id);
+  await supabase.from('vendas').delete().eq('plantio_id', id);
+  await supabase.from('diario_campo').delete().eq('plantio_id', id);
   const { error } = await supabase.from('plantios').delete().eq('id', id);
   return !error;
 }
