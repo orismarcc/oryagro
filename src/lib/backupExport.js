@@ -110,7 +110,7 @@ export async function exportPropriedadeBackup(propriedadeId, propriedadeNome) {
     // 4. Fetch estoque_insumos
     const { data: insumos, error: insErr } = await supabase
       .from('estoque_insumos')
-      .select('id, nome, unidade, quantidade, quantidade_minima, preco_unitario, propriedade_id, created_at')
+      .select('id, nome, unidade, quantidade, quantidade_minima, preco_unitario, propriedade_id')
       .eq('propriedade_id', propriedadeId);
     if (insErr) { logDbError('exportPropriedadeBackup/estoque_insumos', insErr); throw insErr; }
 
@@ -118,7 +118,7 @@ export async function exportPropriedadeBackup(propriedadeId, propriedadeNome) {
     const insumosFull = await Promise.all((insumos || []).map(async (insumo) => {
       const { data: movimentos, error: movErr } = await supabase
         .from('estoque_movimentos')
-        .select('id, insumo_id, tipo, quantidade, data, observacoes, created_at')
+        .select('id, insumo_id, tipo, quantidade, data, observacao, created_at')
         .eq('insumo_id', insumo.id);
       if (movErr) logDbError('exportPropriedadeBackup/estoque_movimentos', movErr);
 
