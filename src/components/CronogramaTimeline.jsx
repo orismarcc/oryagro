@@ -8,7 +8,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import { Plus, Printer, Trash2, CheckCircle2, Circle, ChevronRight, CalendarDays, X, Layers, AlertCircle, Leaf } from 'lucide-react';
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
 import { loadEstoque, addMovimento } from '../hooks/useGestao';
-import { addEvento, syncCronogramaStatus } from '../hooks/useSupabaseSync';
+import { addEvento, syncCronogramaStatus, loadCronogramaAtividades } from '../hooks/useSupabaseSync';
 import { logDbError } from '../lib/logger';
 
 const TIPO_META = {
@@ -185,6 +185,8 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
   const [customRows, setCustomRows] = useState([]);
   const [confirming, setConfirming] = useState(null);
   const [confirmDate, setConfirmDate] = useState(todayISO());
+  const [removingId, setRemovingId] = useState(null); // Feature 1: inline remove confirm
+  const [descricaoStep, setDescricaoStep] = useState(null); // Feature 2: bottom sheet
   const [addDialog, setAddDialog]   = useState(false);
   const [newRow, setNewRow]         = useState({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo', insumo_id: '', dataPrevista: '' });
   const [insumos, setInsumos]   = useState([]);
@@ -212,18 +214,74 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
     ? (cultura.metodosPropagacao.find(m => m.key === selectedLote.metodo_propagacao) ?? null)
     : null;
 
-  // Reload status/custom from storage when key changes
+  // Reload status/custom from storage when key changes, then merge with Supabase
   useEffect(() => {
+    // 1. Load from localStorage immediately (fast initial render, offline fallback)
+    const vivSteps = metodoObj?.etapasViveiro ?? (usaMudas ? [{ etapa: 'Semeadura em bandeja' }] : []);
+    let localStatus = {};
+    let localCustomRows = [];
     try {
       const raw = JSON.parse(localStorage.getItem(storageKey)) || {};
-      const vivSteps  = metodoObj?.etapasViveiro ?? (usaMudas ? [{ etapa: 'Semeadura em bandeja' }] : []);
-      const migrated  = migrateLegacyStatus(raw, vivSteps, cultura.cronograma);
+      const migrated = migrateLegacyStatus(raw, vivSteps, cultura.cronograma);
       if (migrated !== raw) localStorage.setItem(storageKey, JSON.stringify(migrated));
-      setStatus(migrated);
-    } catch { setStatus({}); }
-    try { setCustomRows(JSON.parse(localStorage.getItem(customKey)) || []); } catch { setCustomRows([]); }
+      localStatus = migrated;
+    } catch { localStatus = {}; }
+    try { localCustomRows = JSON.parse(localStorage.getItem(customKey)) || []; } catch { localCustomRows = []; }
+
+    setStatus(localStatus);
+    setCustomRows(localCustomRows);
     setConfirming(null);
     setHarvestData({ enabled: false, qtd: '', unidade: 'kg', polpa: false, qtdPolpa: '', unidadePolpa: 'kg' });
+
+    // 2. Rehydrate from Supabase (source of truth for multi-device sync)
+    if (selectedLote?.id) {
+      loadCronogramaAtividades(selectedLote.id).then(dbRows => {
+        if (!dbRows.length) return; // nada no banco ainda — localStorage está OK
+
+        const dbStatus = {};
+        const dbCustomDefs = [];
+
+        dbRows.forEach(row => {
+          if (row.is_custom) {
+            // Reconstrói a definição da atividade customizada
+            dbCustomDefs.push({
+              dia:     row.dia_previsto,
+              etapa:   row.etapa,
+              produto: row.produto || '',
+              dose:    row.dose || '',
+              forma:   row.forma_aplicacao || '',
+              tipo:    row.tipo || 'manejo',
+            });
+          } else {
+            // Determina o prefixo do ID estável (viveiro vs default)
+            const isViveiro = vivSteps.some(e => e.etapa === row.etapa);
+            const _id = makeStableId(isViveiro ? 'viveiro' : 'default', row.etapa);
+            if (row.status && row.status !== 'pendente') {
+              dbStatus[_id] = { status: row.status, data: row.data_execucao };
+            }
+          }
+        });
+
+        // Status das atividades customizadas (indexado por posição no array)
+        const customDbRows = dbRows.filter(r => r.is_custom);
+        customDbRows.forEach((row, i) => {
+          if (row.status && row.status !== 'pendente') {
+            dbStatus[`custom_${i}`] = { status: row.status, data: row.data_execucao };
+          }
+        });
+
+        // Merge: Supabase prevalece sobre localStorage para status com valor
+        const merged = { ...localStatus, ...dbStatus };
+        const finalCustomRows = dbCustomDefs.length > 0 ? dbCustomDefs : localCustomRows;
+
+        // Mantém localStorage sincronizado (cache offline)
+        localStorage.setItem(storageKey, JSON.stringify(merged));
+        if (dbCustomDefs.length > 0) localStorage.setItem(customKey, JSON.stringify(finalCustomRows));
+
+        setStatus(merged);
+        setCustomRows(finalCustomRows);
+      });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey, customKey]);
 
@@ -343,7 +401,9 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
         return { ...e, ...override, dia: scaleBaseDia(e.dia), _id: makeStableId('default', e.etapa), _custom: false };
       }),
     ...customRows.map((e, i) => ({ ...e, _id: `custom_${i}`, _custom: true })),
-  ].sort((a, b) => a.dia - b.dia);
+  ]
+  .filter(e => status[e._id]?.status !== 'removida')
+  .sort((a, b) => a.dia - b.dia);
 
   const feitos   = allEvents.filter(e => status[e._id]?.status === 'feito').length;
   const progress = allEvents.length > 0 ? feitos / allEvents.length : 0;
@@ -428,6 +488,35 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
       }
     }
   };
+  // Feature 1: permanent step removal
+  const removeStep = async (step) => {
+    // 1. Update local state immediately
+    setStatus(s => ({ ...s, [step._id]: { status: 'removida' } }));
+
+    // 2. Sync to Supabase
+    if (selectedLote?.id) {
+      syncCronogramaStatus(selectedLote.id, cultura.id, {
+        dia: step.dia,
+        etapa: step.etapa,
+        produto: step.produto || '',
+        dose: step.dose || '',
+        forma: step.forma || '',
+        tipo: step.tipo || 'manejo',
+        status: 'removida',
+        data: null,
+        isCustom: step._custom || false,
+      });
+    }
+
+    // 3. If custom row, also remove from customRows array
+    if (step._custom) {
+      const idx = parseInt(step._id.replace('custom_', ''));
+      setCustomRows(rows => rows.filter((_, i) => i !== idx));
+    }
+
+    setRemovingId(null);
+  };
+
   // I-15: removed saveColheitaToCalendario — CalendarioPage now reads directly
   // from cronograma_custom_lote_${id} and cronograma_status_lote_${id} (no duplicate store needed)
 
@@ -463,6 +552,24 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
     }
 
     setCustomRows(r => [...r, rowToAdd]);
+
+    // Sync custom activity to Supabase so it persists cross-device
+    if (selectedLote?.id) {
+      const jaFeita = newRow.tipo === 'colheita' && addHarvest.jaRealizada;
+      const isoDate = newRow.dataPrevista || computeDataPrevista(diaNum) || null;
+      syncCronogramaStatus(selectedLote.id, cultura.id, {
+        dia:     diaNum,
+        etapa:   rowToAdd.etapa,
+        produto: rowToAdd.produto || '',
+        dose:    rowToAdd.dose || '',
+        forma:   rowToAdd.forma || '',
+        tipo:    rowToAdd.tipo || 'manejo',
+        status:  jaFeita ? 'feito' : 'pendente',
+        data:    jaFeita ? isoDate : null,
+        isCustom: true,
+      });
+    }
+
     setNewRow({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo', insumo_id: '', dataPrevista: '' });
     setAddHarvest({ jaRealizada: false, qtd: '', unidade: 'kg', polpa: false, qtdPolpa: '', unidadePolpa: 'kg' });
     setAddDialog(false);
@@ -621,7 +728,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
               initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: rowIdx * 0.045, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className="flex gap-3"
+              className="flex gap-3 group"
             >
               {/* ── Left: day circle + connector ── */}
               <div className="flex flex-col items-center flex-shrink-0" style={{ width: 48 }}>
@@ -725,19 +832,53 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                             ↗ Amanhã
                           </span>
                         )}
-                        {ev._custom && (
-                          <motion.button
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => setCustomRows(r => r.filter((_, i) => i !== cidx))}
-                            className="p-1 rounded-lg text-muted-foreground hover:text-red-500 transition-colors"
-                          >
-                            <Trash2 size={12} />
-                          </motion.button>
-                        )}
+                        {/* Feature 1: inline remove confirm (shown for ALL steps) */}
+                        <AnimatePresence mode="wait">
+                          {removingId === ev._id ? (
+                            <motion.div
+                              key="confirm-remove"
+                              initial={{ opacity: 0, scale: 0.85 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.85 }}
+                              transition={{ duration: 0.15 }}
+                              className="flex items-center gap-1"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <span className="text-[10px] font-bold text-red-600">Remover?</span>
+                              <button
+                                onClick={e => { e.stopPropagation(); removeStep(ev); }}
+                                className="text-[10px] font-black px-2 py-0.5 rounded-full text-white"
+                                style={{ background: '#dc2626' }}
+                              >
+                                Sim
+                              </button>
+                              <button
+                                onClick={e => { e.stopPropagation(); setRemovingId(null); }}
+                                className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                                style={{ background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 40%)' }}
+                              >
+                                Não
+                              </button>
+                            </motion.div>
+                          ) : (
+                            <motion.button
+                              key="trash-btn"
+                              whileTap={{ scale: 0.9 }}
+                              className="p-1 rounded-lg text-muted-foreground hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
+                              onClick={e => { e.stopPropagation(); setRemovingId(ev._id); }}
+                            >
+                              <Trash2 size={12} />
+                            </motion.button>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </div>
 
-                    <p className={`text-[14px] font-bold leading-snug ${isDone ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                    {/* Feature 2: clicking name opens description bottom sheet */}
+                    <p
+                      className={`text-[14px] font-bold leading-snug cursor-pointer ${isDone ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                      onClick={() => setDescricaoStep(ev)}
+                    >
                       {ev.etapa}
                     </p>
 
@@ -1277,6 +1418,65 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Feature 2: Bottom sheet — step description ── */}
+      <AnimatePresence>
+        {descricaoStep && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col justify-end"
+            style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}
+            onClick={() => setDescricaoStep(null)}
+          >
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+              className="relative rounded-t-3xl p-6 pb-10"
+              style={{ background: 'white', maxHeight: '60vh', overflowY: 'auto' }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Drag handle */}
+              <div className="w-10 h-1 rounded-full bg-gray-200 mx-auto mb-4" />
+
+              {/* Tipo badge */}
+              {(() => {
+                const m = TIPO_META[descricaoStep.tipo] || TIPO_META.manejo;
+                return (
+                  <span
+                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full mb-3"
+                    style={{ background: m.bg, color: m.color }}
+                  >
+                    {m.emoji} {m.label}
+                  </span>
+                );
+              })()}
+
+              {/* Nome */}
+              <h3 className="font-display text-[17px] font-bold text-foreground mb-3">
+                {descricaoStep.etapa}
+              </h3>
+
+              {/* Descrição */}
+              <p className="text-[14px] text-muted-foreground leading-relaxed">
+                {descricaoStep.descricao || 'Sem descrição disponível para esta etapa.'}
+              </p>
+
+              {/* Fechar */}
+              <button
+                onClick={() => setDescricaoStep(null)}
+                className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full"
+                style={{ background: 'hsl(210 16% 93%)' }}
+              >
+                <X size={14} />
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

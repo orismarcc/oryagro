@@ -42,7 +42,7 @@ function getStatusEtapas(cultura, lote) {
         _id: makeStableId('default', e.etapa),
         done: doneStatus[makeStableId('default', e.etapa)]?.status === 'feito',
       })),
-    ];
+    ].filter(s => doneStatus[s._id]?.status !== 'removida');
     const pending = steps.filter(s => !s.done);
     const atrasadas = pending.filter(s => s.dia < diasDecorridos).length;
     const hoje   = pending.find(s => s.dia === diasDecorridos) || null;

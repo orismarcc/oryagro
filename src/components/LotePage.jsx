@@ -4,6 +4,7 @@ import {
   ArrowLeft, CalendarDays, Sprout, Package, TrendingUp,
   Cloud, CheckCircle2, Plus, Trash2, AlertTriangle,
   Thermometer, Droplets, ShoppingCart, BookOpen, Loader2, PenLine,
+  HardHat,
 } from 'lucide-react';
 import CronogramaTimeline from './CronogramaTimeline';
 import { useWeather } from '../hooks/useWeather';
@@ -19,7 +20,11 @@ import {
   updateLoteMaoObra,
   updateLoteStatus,
   arquivarCicloLote,
+  loadMaoObraRegistros,
+  addMaoObraRegistro,
+  deleteMaoObraRegistro,
 } from '../hooks/useGestao';
+import { loadCompradores, addParcelas } from '../hooks/useCompradores';
 import { can, FARM_ACTIONS } from '../lib/permissions';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -646,6 +651,232 @@ function TabColheita({ cultura, lote }) {
   );
 }
 
+// ─── Tab: Mão de Obra ────────────────────────────────────────────────────────
+
+function formatPeriodo(dataInicio, dataFim) {
+  if (!dataInicio) return '';
+  const fmtShort = (iso) => {
+    const [, m, d] = iso.split('-');
+    return `${d}/${m}`;
+  };
+  if (dataFim) {
+    return `${fmtShort(dataInicio)} – ${formatDatePtBR(dataFim)}`;
+  }
+  return formatDatePtBR(dataInicio);
+}
+
+function TabMaoObra({ lote, cor, canDelete }) {
+  const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
+
+  const [registros, setRegistros] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+  const [form, setForm] = useState({
+    dataInicio: today(),
+    dataFim: '',
+    valor: '',
+    descricao: '',
+  });
+
+  const fetchRegistros = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await loadMaoObraRegistros(lote.id);
+      setRegistros(data ?? []);
+    } catch {
+      setRegistros([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [lote.id]);
+
+  useEffect(() => {
+    fetchRegistros();
+  }, [fetchRegistros]);
+
+  const handleAdd = async () => {
+    if (!form.dataInicio || !form.valor || parseFloat(form.valor) <= 0) return;
+    setSaving(true);
+    try {
+      await addMaoObraRegistro({
+        plantioId:  lote.id,
+        dataInicio: form.dataInicio,
+        dataFim:    form.dataFim || null,
+        valor:      parseFloat(form.valor),
+        descricao:  form.descricao || null,
+      });
+      await fetchRegistros();
+      setForm({ dataInicio: today(), dataFim: '', valor: '', descricao: '' });
+    } catch {
+      // fail silently
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await deleteMaoObraRegistro(id);
+      setRegistros(prev => prev.filter(r => r.id !== id));
+    } catch {}
+    setConfirmDeleteId(null);
+  };
+
+  const totalMaoObra = registros.reduce((s, r) => s + (r.valor ?? 0), 0);
+
+  return (
+    <div
+      className="px-4 pt-5 max-w-2xl mx-auto overflow-y-auto"
+      style={{ paddingBottom: SAFE_BOTTOM, scrollbarWidth: 'none' }}
+    >
+      {/* Total */}
+      {registros.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="card p-4 mb-5"
+          style={{ borderColor: `${cor}30` }}
+        >
+          <p className="section-label mb-1">Total Mão de Obra</p>
+          <p className="text-[22px] font-black" style={{ color: cor }}>{fmtBRL(totalMaoObra)}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">{registros.length} registro{registros.length !== 1 ? 's' : ''}</p>
+        </motion.div>
+      )}
+
+      {/* Formulário */}
+      <p className="section-label mb-3">Registrar Mão de Obra</p>
+      <div className="card p-4 mb-5">
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Data início</label>
+            <input
+              type="date"
+              value={form.dataInicio}
+              onChange={e => setForm(f => ({ ...f, dataInicio: e.target.value }))}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': cor }}
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Até (opcional)</label>
+            <input
+              type="date"
+              value={form.dataFim}
+              onChange={e => setForm(f => ({ ...f, dataFim: e.target.value }))}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': cor }}
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Valor (R$)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0,00"
+              value={form.valor}
+              onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': cor }}
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Descrição (opcional)</label>
+            <input
+              type="text"
+              placeholder="Ex: Capina, Colheita"
+              value={form.descricao}
+              onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': cor }}
+            />
+          </div>
+        </div>
+
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          onClick={handleAdd}
+          disabled={saving || !form.dataInicio || !form.valor || parseFloat(form.valor) <= 0}
+          className="w-full py-3 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
+          style={{ background: cor }}
+        >
+          {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+          Registrar
+        </motion.button>
+      </div>
+
+      {/* Lista */}
+      <p className="section-label mb-3">Registros</p>
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 size={24} className="animate-spin text-muted-foreground" />
+        </div>
+      ) : registros.length === 0 ? (
+        <div className="text-center py-12">
+          <HardHat size={32} className="mx-auto mb-3 text-muted-foreground opacity-30" />
+          <p className="text-[13px] text-muted-foreground">Nenhum registro de mão de obra ainda</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {registros.map(r => (
+            <motion.div
+              key={r.id}
+              layout
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="card p-4 flex items-start gap-3"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <span
+                    className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                    style={{ background: `${cor}18`, color: cor }}
+                  >
+                    {formatPeriodo(r.data_inicio, r.data_fim)}
+                  </span>
+                  {r.descricao && (
+                    <span className="text-[12px] text-muted-foreground">{r.descricao}</span>
+                  )}
+                </div>
+                <p className="text-[14px] font-bold" style={{ color: cor }}>{fmtBRL(r.valor)}</p>
+              </div>
+              {canDelete && (
+                confirmDeleteId === r.id ? (
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => handleDelete(r.id)}
+                      className="text-[11px] font-bold px-2 py-1 rounded-lg bg-red-100 text-red-600"
+                    >
+                      Confirmar
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="text-[11px] font-bold px-2 py-1 rounded-lg bg-gray-100 text-gray-500"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <motion.button
+                    whileTap={{ scale: 0.85 }}
+                    onClick={() => setConfirmDeleteId(r.id)}
+                    className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5"
+                  >
+                    <Trash2 size={14} />
+                  </motion.button>
+                )
+              )}
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Tab: Vendas ─────────────────────────────────────────────────────────────
 
 const DESTINO_OPTIONS = [
@@ -677,6 +908,18 @@ function DestinoBadge({ destino }) {
   );
 }
 
+// Helper: generate installment preview
+function gerarParcelas(totalValor, numParcelas, primeiroVencimento) {
+  if (!totalValor || !numParcelas || !primeiroVencimento) return [];
+  const valorParcela = Math.round((totalValor / numParcelas) * 100) / 100;
+  return Array.from({ length: numParcelas }, (_, i) => {
+    const base = new Date(primeiroVencimento + 'T12:00:00');
+    base.setDate(base.getDate() + i * 30);
+    const iso = `${base.getFullYear()}-${String(base.getMonth()+1).padStart(2,'0')}-${String(base.getDate()).padStart(2,'0')}`;
+    return { numeroParcela: i + 1, valor: valorParcela, dataVencimento: iso };
+  });
+}
+
 function TabVendas({ cultura, lote, canDelete }) {
   const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
   const cor = cultura.cor;
@@ -686,6 +929,10 @@ function TabVendas({ cultura, lote, canDelete }) {
   const [loadingVendas, setLoadingVendas] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Compradores
+  const [compradores, setCompradores] = useState([]);
+
+  // Form state
   const [form, setForm] = useState({
     data: today(),
     quantidade: '',
@@ -693,7 +940,24 @@ function TabVendas({ cultura, lote, canDelete }) {
     precoUnitario: cultura.venda?.precoUnitario ?? 0,
     destino: 'feira',
     observacao: '',
+    compradorId: '',
   });
+
+  // Pagamento
+  const [tipoPagamento, setTipoPagamento] = useState('avista'); // 'avista' | 'parcelado'
+    const [avistaStatus, setAvistaStatus] = useState('pago'); // 'pago' | 'pendente'
+  const [avistaData, setAvistaData] = useState(today());
+  const [numParcelas, setNumParcelas] = useState(2);
+  const [primeiroVencimento, setPrimeiroVencimento] = useState(today());
+  const [parcelasEditaveis, setParcelasEditaveis] = useState([]);
+
+  // Auto-generate parcelas preview when relevant inputs change
+  useEffect(() => {
+    if (tipoPagamento !== 'parcelado') return;
+    const total = (parseFloat(form.quantidade) || 0) * (parseFloat(form.precoUnitario) || 0);
+    const geradas = gerarParcelas(total, parseInt(numParcelas) || 1, primeiroVencimento);
+    setParcelasEditaveis(geradas);
+  }, [tipoPagamento, form.quantidade, form.precoUnitario, numParcelas, primeiroVencimento]);
 
   const fetchVendas = useCallback(async () => {
     setLoadingVendas(true);
@@ -711,19 +975,54 @@ function TabVendas({ cultura, lote, canDelete }) {
     fetchVendas();
   }, [fetchVendas]);
 
+  useEffect(() => {
+    loadCompradores().then(data => setCompradores(data ?? []));
+  }, []);
+
   const handleAddVenda = async () => {
     if (!form.quantidade || parseFloat(form.quantidade) <= 0) return;
     setSaving(true);
     try {
-      await addVenda({
-        plantioId: lote.id,
-        data: form.data,
-        quantidade: parseFloat(form.quantidade),
-        unidade: form.unidade,
+      const novaVenda = await addVenda({
+        plantioId:     lote.id,
+        data:          form.data,
+        quantidade:    parseFloat(form.quantidade),
+        unidade:       form.unidade,
         precoUnitario: parseFloat(form.precoUnitario) || 0,
-        destino: form.destino,
-        observacao: form.observacao,
+        destino:       form.destino,
+        observacao:    form.observacao,
+        compradorId:   form.compradorId || null,
       });
+
+      if (novaVenda) {
+        const totalVenda = (parseFloat(form.quantidade) || 0) * (parseFloat(form.precoUnitario) || 0);
+
+        if (tipoPagamento === 'parcelado') {
+          // Use editáveis (user may have changed individual values/dates)
+          const parcelas = parcelasEditaveis.map((p, i) => ({
+            numeroParcela:  i + 1,
+            valor:          parseFloat(p.valor) || 0,
+            dataVencimento: p.dataVencimento,
+          }));
+          await addParcelas(novaVenda.id, parcelas);
+        } else if (tipoPagamento === 'avista' && avistaStatus === 'pago') {
+          await addParcelas(novaVenda.id, [{
+            numeroParcela:  1,
+            valor:          totalVenda,
+            dataVencimento: avistaData,
+            status:         'pago',
+            dataPagamento:  avistaData,
+          }]);
+        } else {
+          // à vista pendente
+          await addParcelas(novaVenda.id, [{
+            numeroParcela:  1,
+            valor:          totalVenda,
+            dataVencimento: avistaData,
+          }]);
+        }
+      }
+
       await fetchVendas();
       // Reset form but keep destino and unidade
       setForm(f => ({
@@ -732,7 +1031,13 @@ function TabVendas({ cultura, lote, canDelete }) {
         quantidade: '',
         precoUnitario: cultura.venda?.precoUnitario ?? 0,
         observacao: '',
+        compradorId: '',
       }));
+      setAvistaData(today());
+      setAvistaStatus('pago');
+      setPrimeiroVencimento(today());
+      setNumParcelas(2);
+      setParcelasEditaveis([]);
     } catch {
       // fail silently
     } finally {
@@ -751,10 +1056,12 @@ function TabVendas({ cultura, lote, canDelete }) {
 
   // Summary
   const totalQty = vendas.reduce((s, v) => s + (v.quantidade ?? 0), 0);
-  const totalReceita = vendas.reduce((s, v) => s + (v.quantidade ?? 0) * (v.precoUnitario ?? 0), 0);
+  const totalReceita = vendas.reduce((s, v) => s + (v.quantidade ?? 0) * (v.preco_unitario ?? 0), 0);
   const precoMedio = totalQty > 0 ? totalReceita / totalQty : 0;
 
   const previewTotal = (parseFloat(form.quantidade) || 0) * (parseFloat(form.precoUnitario) || 0);
+
+  const compradorSelecionado = compradores.find(c => c.id === form.compradorId);
 
   return (
     <div
@@ -863,6 +1170,141 @@ function TabVendas({ cultura, lote, canDelete }) {
           </div>
         </div>
 
+        {/* Comprador selector */}
+        <div className="mb-3">
+          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Comprador</label>
+          <select
+            value={form.compradorId}
+            onChange={e => setForm(f => ({ ...f, compradorId: e.target.value }))}
+            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+            style={{ '--tw-ring-color': cor }}
+          >
+            <option value="">Sem comprador</option>
+            {compradores.filter(c => c.status !== 'inativo').map(c => (
+              <option key={c.id} value={c.id}>{c.nome}{c.tipo ? ` (${c.tipo})` : ''}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Pagamento config */}
+        <div className="mb-3">
+          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-2">Pagamento</label>
+          {/* Toggle */}
+          <div className="flex gap-1 p-0.5 rounded-xl mb-3"
+            style={{ background: 'hsl(210 16% 93%)' }}>
+            {[['avista', 'À vista'], ['parcelado', 'Parcelado']].map(([v, l]) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setTipoPagamento(v)}
+                className="flex-1 py-1.5 rounded-[10px] text-[12px] font-bold transition-all"
+                style={tipoPagamento === v
+                  ? { background: cor, color: 'white' }
+                  : { background: 'transparent', color: 'hsl(215 16% 40%)' }}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+
+          {tipoPagamento === 'avista' && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Data pagamento</label>
+                <input
+                  type="date"
+                  value={avistaData}
+                  onChange={e => setAvistaData(e.target.value)}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+                  style={{ '--tw-ring-color': cor }}
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Status</label>
+                <select
+                  value={avistaStatus}
+                  onChange={e => setAvistaStatus(e.target.value)}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+                  style={{ '--tw-ring-color': cor }}
+                >
+                  <option value="pago">Pago</option>
+                  <option value="pendente">Pendente</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {tipoPagamento === 'parcelado' && (
+            <div>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Nº de parcelas</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="24"
+                    value={numParcelas}
+                    onChange={e => setNumParcelas(Math.min(24, Math.max(1, parseInt(e.target.value) || 1)))}
+                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+                    style={{ '--tw-ring-color': cor }}
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Primeiro vencimento</label>
+                  <input
+                    type="date"
+                    value={primeiroVencimento}
+                    onChange={e => setPrimeiroVencimento(e.target.value)}
+                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+                    style={{ '--tw-ring-color': cor }}
+                  />
+                </div>
+              </div>
+
+              {/* Parcelas preview/edit */}
+              {parcelasEditaveis.length > 0 && (
+                <div className="rounded-xl overflow-hidden border border-input mb-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 text-muted-foreground"
+                    style={{ background: 'hsl(210 16% 97%)' }}>
+                    Parcelas (editáveis)
+                  </p>
+                  {parcelasEditaveis.map((p, i) => (
+                    <div key={i} className="flex items-center gap-2 px-3 py-2"
+                      style={{ borderTop: i > 0 ? '1px solid hsl(214 20% 91%)' : undefined }}>
+                      <span className="text-[11px] font-bold text-muted-foreground w-5 flex-shrink-0">{i+1}.</span>
+                      <input
+                        type="date"
+                        value={p.dataVencimento}
+                        onChange={e => {
+                          const updated = [...parcelasEditaveis];
+                          updated[i] = { ...updated[i], dataVencimento: e.target.value };
+                          setParcelasEditaveis(updated);
+                        }}
+                        className="flex-1 rounded-lg border border-input bg-background px-2 py-1 text-[12px] focus:outline-none focus:ring-1"
+                      />
+                      <div className="flex items-center gap-0.5 flex-shrink-0">
+                        <span className="text-[10px] text-muted-foreground">R$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={p.valor}
+                          onChange={e => {
+                            const updated = [...parcelasEditaveis];
+                            updated[i] = { ...updated[i], valor: parseFloat(e.target.value) || 0 };
+                            setParcelasEditaveis(updated);
+                          }}
+                          className="w-20 rounded-lg border border-input bg-background px-2 py-1 text-[12px] font-semibold text-right focus:outline-none focus:ring-1"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Preview */}
         {parseFloat(form.quantidade) > 0 && (
           <p className="text-[12px] text-muted-foreground mb-3">
@@ -899,7 +1341,7 @@ function TabVendas({ cultura, lote, canDelete }) {
       ) : (
         <div className="flex flex-col gap-2">
           {sorted.map(entry => {
-            const total = (entry.quantidade ?? 0) * (entry.precoUnitario ?? 0);
+            const total = (entry.quantidade ?? 0) * (entry.preco_unitario ?? 0);
             return (
               <motion.div
                 key={entry.id}
@@ -915,7 +1357,7 @@ function TabVendas({ cultura, lote, canDelete }) {
                     <span className="text-[12px] text-muted-foreground">
                       {entry.quantidade} {entry.unidade}
                     </span>
-                    <span className="text-[11px] text-muted-foreground">· {fmtBRL(entry.precoUnitario)}/un</span>
+                    <span className="text-[11px] text-muted-foreground">· {fmtBRL(entry.preco_unitario)}/un</span>
                     {entry.destino && <DestinoBadge destino={entry.destino} />}
                   </div>
                   <p className="text-[13px] font-bold" style={{ color: cor }}>{fmtBRL(total)}</p>
@@ -1146,6 +1588,7 @@ const TABS = [
   { value: 'insumos',    label: 'Insumos',    Icon: Package },
   { value: 'colheita',   label: 'Colheita',   Icon: TrendingUp },
   { value: 'vendas',     label: 'Vendas',     Icon: ShoppingCart },
+  { value: 'mao_obra',   label: 'M. de Obra', Icon: HardHat },
   { value: 'diario',     label: 'Diário',     Icon: BookOpen },
 ];
 
@@ -1381,6 +1824,9 @@ export default function LotePage({ lote, cultura, onBack, userRole = null }) {
           )}
           {tab === 'vendas' && (
             <TabVendas cultura={cultura} lote={lote} canDelete={canDelete} />
+          )}
+          {tab === 'mao_obra' && (
+            <TabMaoObra lote={lote} cor={cor} canDelete={canDelete} />
           )}
           {tab === 'diario' && (
             <TabDiario lote={lote} canDelete={canDelete} />

@@ -202,7 +202,7 @@ export async function loadTodasVendas() {
 /**
  * Create a venda record. Returns the new row or null.
  */
-export async function addVenda({ plantioId, data, quantidade, unidade, precoUnitario, destino, observacao }) {
+export async function addVenda({ plantioId, data, quantidade, unidade, precoUnitario, destino, observacao, compradorId }) {
   const userId = await getUserId();
   if (!userId) return null;
   const { data: row, error } = await supabase
@@ -216,6 +216,7 @@ export async function addVenda({ plantioId, data, quantidade, unidade, precoUnit
       preco_unitario: precoUnitario || 0,
       destino: destino || 'outros',
       observacao: observacao || null,
+      ...(compradorId ? { comprador_id: compradorId } : {}),
     })
     .select()
     .single();
@@ -247,10 +248,10 @@ export async function updateLoteStatus(id, status) {
 }
 
 /**
- * Archive a summary of the completed lote cycle to localStorage.
+ * Archive a summary of the completed lote cycle to localStorage AND Supabase.
  * Key: ciclo_historico_${lote.id}
  */
-export function arquivarCicloLote(lote, vendas = [], _eventos = []) {
+export async function arquivarCicloLote(lote, vendas = [], _eventos = [], movimentos = [], maoObraRegistros = []) {
   try {
     const totalVendasKg = vendas.reduce((s, v) => s + (v.quantidade ?? 0), 0);
     const receitaTotal  = vendas.reduce((s, v) => s + (v.quantidade ?? 0) * (v.preco_unitario ?? 0), 0);
@@ -260,6 +261,9 @@ export function arquivarCicloLote(lote, vendas = [], _eventos = []) {
       ? Math.max(0, Math.floor((Date.now() - new Date(dataPlantio + 'T12:00:00')) / 86_400_000))
       : null;
 
+    const custoInsumos  = movimentos.reduce((s, m) => s + (m.quantidade * (m.insumo?.preco_unitario ?? 0)), 0);
+    const custoMaoObra  = maoObraRegistros.reduce((s, r) => s + (r.valor ?? 0), 0);
+
     const ciclo = {
       loteId:        lote.id,
       nome:          lote.nome,
@@ -268,13 +272,113 @@ export function arquivarCicloLote(lote, vendas = [], _eventos = []) {
       dataConclusao,
       totalVendasKg,
       receitaTotal,
+      custoInsumos,
+      custoMaoObra,
       diasCicloReal,
       archivedAt:    new Date().toISOString(),
     };
 
+    // Persist to localStorage as fallback
     localStorage.setItem(`ciclo_historico_${lote.id}`, JSON.stringify(ciclo));
+
+    // Also persist to Supabase (fire-and-forget; errors are logged but don't block)
+    saveCicloHistorico({
+      loteId:        lote.id,
+      loteNome:      lote.nome,
+      culturaId:     lote.cultura_id,
+      dataPlantio,
+      dataConclusao,
+      totalVendasKg,
+      receitaTotal,
+      custoInsumos,
+      custoMaoObra,
+      diasCicloReal,
+    }).catch(err => logDbError('arquivarCicloLote:saveCicloHistorico', err));
+
     return ciclo;
   } catch {
     return null;
   }
+}
+
+// ── Mão de obra ───────────────────────────────────────────────
+
+export async function loadMaoObraRegistros(plantioId) {
+  const userId = await getUserId();
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from('mao_obra_registros')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('plantio_id', plantioId)
+    .order('data_inicio', { ascending: false });
+  if (error) { logDbError('loadMaoObraRegistros', error); return []; }
+  return data || [];
+}
+
+export async function addMaoObraRegistro({ plantioId, dataInicio, dataFim, valor, descricao }) {
+  const userId = await getUserId();
+  if (!userId) return null;
+  const { data: row, error } = await supabase
+    .from('mao_obra_registros')
+    .insert({
+      user_id:     userId,
+      plantio_id:  plantioId,
+      data_inicio: dataInicio,
+      data_fim:    dataFim || null,
+      valor:       valor,
+      descricao:   descricao || null,
+    })
+    .select()
+    .single();
+  if (error) { logDbError('addMaoObraRegistro', error); return null; }
+  return row;
+}
+
+export async function deleteMaoObraRegistro(id) {
+  const { error } = await supabase.from('mao_obra_registros').delete().eq('id', id);
+  if (error) { logDbError('deleteMaoObraRegistro', error); return false; }
+  return true;
+}
+
+// ── Ciclos histórico (Supabase) ────────────────────────────────
+
+export async function saveCicloHistorico({ loteId, loteNome, culturaId, dataPlantio, dataConclusao, totalVendasKg, receitaTotal, custoInsumos, custoMaoObra, diasCicloReal }) {
+  const userId = await getUserId();
+  if (!userId) return null;
+  const { data: row, error } = await supabase
+    .from('ciclos_historico')
+    .upsert(
+      {
+        user_id:         userId,
+        lote_id:         loteId,
+        lote_nome:       loteNome,
+        cultura_id:      culturaId,
+        data_plantio:    dataPlantio,
+        data_conclusao:  dataConclusao,
+        total_vendas_kg: totalVendasKg,
+        receita_total:   receitaTotal,
+        custo_insumos:   custoInsumos,
+        custo_mao_obra:  custoMaoObra,
+        dias_ciclo_real: diasCicloReal,
+        archived_at:     new Date().toISOString(),
+      },
+      { onConflict: 'lote_id' },
+    )
+    .select()
+    .single();
+  if (error) { logDbError('saveCicloHistorico', error); return null; }
+  return row;
+}
+
+export async function loadCiclosHistorico() {
+  const userId = await getUserId();
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from('ciclos_historico')
+    .select('*')
+    .eq('user_id', userId)
+    .order('archived_at', { ascending: false });
+  if (error) { logDbError('loadCiclosHistorico', error); return []; }
+  return data || [];
 }

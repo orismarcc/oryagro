@@ -203,6 +203,21 @@ export async function updateLotePlantado(id, area_plantada_ha) {
 }
 
 /**
+ * Load all cronograma_atividades rows for a given plantio.
+ * Used on mount to rehydrate status from Supabase (source of truth).
+ */
+export async function loadCronogramaAtividades(plantioId) {
+  if (!plantioId) return [];
+  const { data, error } = await supabase
+    .from('cronograma_atividades')
+    .select('*')
+    .eq('plantio_id', plantioId)
+    .order('dia_previsto', { ascending: true });
+  if (error) { logDbError('loadCronogramaAtividades', error); return []; }
+  return data || [];
+}
+
+/**
  * Upsert a cronograma activity status.
  * Used when the user marks a step as done.
  */
@@ -319,6 +334,13 @@ export async function deletePropriedade(id) {
     // 2. Delete all child data for each plantio
     await supabase.from('cronograma_atividades').delete().in('plantio_id', plantioIds);
     await supabase.from('plantio_eventos').delete().in('plantio_id', plantioIds);
+    await supabase.from('mao_obra_registros').delete().in('plantio_id', plantioIds);
+    // Delete venda_parcelas via vendas (2-step: busca ids de vendas, depois deleta parcelas)
+    const { data: vendasRows } = await supabase.from('vendas').select('id').in('plantio_id', plantioIds);
+    const vendaIds = (vendasRows || []).map(r => r.id);
+    if (vendaIds.length > 0) {
+      await supabase.from('venda_parcelas').delete().in('venda_id', vendaIds);
+    }
     await supabase.from('vendas').delete().in('plantio_id', plantioIds);
     await supabase.from('diario_campo').delete().in('plantio_id', plantioIds);
     // 3. Delete lotes
@@ -337,6 +359,13 @@ export async function deletePropriedade(id) {
 export async function deleteLoteCompleto(id) {
   await supabase.from('cronograma_atividades').delete().eq('plantio_id', id);
   await supabase.from('plantio_eventos').delete().eq('plantio_id', id);
+  await supabase.from('mao_obra_registros').delete().eq('plantio_id', id);
+  // Delete venda_parcelas antes das vendas (FK cascade não cobre esse caso)
+  const { data: vendasRows } = await supabase.from('vendas').select('id').eq('plantio_id', id);
+  const vendaIds = (vendasRows || []).map(r => r.id);
+  if (vendaIds.length > 0) {
+    await supabase.from('venda_parcelas').delete().in('venda_id', vendaIds);
+  }
   await supabase.from('vendas').delete().eq('plantio_id', id);
   await supabase.from('diario_campo').delete().eq('plantio_id', id);
   const { error } = await supabase.from('plantios').delete().eq('id', id);

@@ -737,8 +737,35 @@ function ProjecaoReceitaCard({ lotes, eventosColheita }) {
     ...years.map(y => projByYear[y] || 0),
     ...years.map(y => actualByYear[y] || 0),
   );
-  const totalProj5yr = years.slice(0, 5).reduce((s, y) => s + (projByYear[y] || 0), 0);
+  const totalProjAll = years.reduce((s, y) => s + (projByYear[y] || 0), 0);
   const hasCulturas = Object.keys(culturaGroups).length > 0;
+
+  // --- Item 3: first harvest year indicator ---
+  let receitaPrimeiraProducaoYear = null;
+  lotes.forEach(l => {
+    const c = getCultura(l.cultura_id);
+    if (!c) return;
+    const lc = safeResolveLifecycle(l, c);
+    const plantYear = new Date(l.data_plantio + 'T12:00:00').getFullYear();
+    for (const yr of years) {
+      const factor = getRampFactor(c.id, yr - plantYear);
+      if (factor > 0) {
+        let candidateYear = yr;
+        if (lc?.dataPrimeiraProducao) {
+          candidateYear = lc.dataPrimeiraProducao.getFullYear();
+        }
+        if (receitaPrimeiraProducaoYear === null || candidateYear < receitaPrimeiraProducaoYear) {
+          receitaPrimeiraProducaoYear = candidateYear;
+        }
+        break;
+      }
+    }
+  });
+
+  // Column width + gap for positioning the dashed line
+  const receitaColWidth = 44;
+  const receitaColGap = 8;
+  const receitaColUnit = receitaColWidth + receitaColGap; // 52px per column
 
   if (!hasCulturas) return null;
 
@@ -769,14 +796,14 @@ function ProjecaoReceitaCard({ lotes, eventosColheita }) {
         ))}
       </div>
 
-      {/* 5-year total chip */}
-      {totalProj5yr > 0 && (
+      {/* Total projection chip */}
+      {totalProjAll > 0 && (
         <div className="px-4 pt-2">
           <div className="inline-flex items-center gap-1.5 bg-green-50 rounded-xl px-3 py-1.5">
             <div className="w-2.5 h-2.5 rounded-sm bg-green-400" />
             <div>
-              <p className="text-[9px] text-green-600/70 font-medium leading-none">Receita total projetada (5 anos)</p>
-              <p className="text-[14px] font-bold text-green-700 leading-tight">{fmtBRL(totalProj5yr)}</p>
+              <p className="text-[9px] text-green-600/70 font-medium leading-none">Receita total projetada ({years[0]}–{years[years.length - 1]})</p>
+              <p className="text-[14px] font-bold text-green-700 leading-tight">{fmtBRL(totalProjAll)}</p>
             </div>
           </div>
         </div>
@@ -784,7 +811,46 @@ function ProjecaoReceitaCard({ lotes, eventosColheita }) {
 
       {/* Bar chart */}
       <div className="px-3 pt-3 pb-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-        <div className="flex items-end gap-2" style={{ minWidth: years.length * 52 }}>
+        <div className="relative flex items-end gap-2" style={{ minWidth: years.length * receitaColUnit }}>
+          {/* Item 3: first harvest dashed line */}
+          {receitaPrimeiraProducaoYear !== null && years.includes(receitaPrimeiraProducaoYear) && (() => {
+            const idx = years.indexOf(receitaPrimeiraProducaoYear);
+            const lineLeft = idx * receitaColUnit + receitaColWidth / 2;
+            return (
+              <motion.div
+                style={{
+                  position: 'absolute',
+                  left: lineLeft,
+                  top: 0,
+                  bottom: 16,
+                  width: 1,
+                  borderLeft: '1px dashed #16a34a',
+                  pointerEvents: 'none',
+                  zIndex: 10,
+                }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4, delay: 0.3 }}
+              >
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 4,
+                  background: 'rgba(255,255,255,0.92)',
+                  borderRadius: 4,
+                  padding: '1px 4px',
+                  whiteSpace: 'nowrap',
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: '#16a34a',
+                  lineHeight: 1.4,
+                }}>
+                  🌾 Início
+                </div>
+              </motion.div>
+            );
+          })()}
+
           {years.map(yr => {
             const proj = projByYear[yr] || 0;
             const actual = actualByYear[yr] || 0;
@@ -794,7 +860,7 @@ function ProjecaoReceitaCard({ lotes, eventosColheita }) {
             const actualH = Math.round((actual / maxVal) * 90);
             const hasData = proj > 0 || actual > 0;
             return (
-              <div key={yr} className="flex flex-col items-center flex-shrink-0" style={{ width: 44 }}>
+              <div key={yr} className="flex flex-col items-center flex-shrink-0" style={{ width: receitaColWidth }}>
                 {/* Value on top */}
                 {hasData && (
                   <span className="text-[8px] text-gray-400 font-medium mb-0.5 text-center leading-none">
@@ -923,6 +989,76 @@ function ProjecaoKgCard({ lotes }) {
 
   const fmtTon = (kg) => kg >= 1000 ? `${(kg / 1000).toFixed(1)}t` : `${Math.round(kg)}kg`;
 
+  // --- Item 1: kg/planta/ano for per_plant cultures ---
+  // Collect per_plant lotes that have total_plantas > 0
+  const perPlantLotes = lotes.filter(l => {
+    const c = getCultura(l.cultura_id);
+    if (!c) return false;
+    const base = getProductionBase(l, c.id);
+    return base.method === 'plants' && (l.total_plantas || 0) > 0;
+  });
+
+  // Compute kg/planta for the current (or nearest future) year with production
+  let kgPorPlantaInfo = null;
+  if (perPlantLotes.length > 0) {
+    // Use the lote with the most plants as reference (or weighted average)
+    const totalPlantas = perPlantLotes.reduce((s, l) => s + (l.total_plantas || 0), 0);
+    // Weighted average kg/plant using current year's production
+    let weightedKgPlanta = 0;
+    perPlantLotes.forEach(l => {
+      const c = getCultura(l.cultura_id);
+      if (!c) return;
+      const plantYear = new Date(l.data_plantio + 'T12:00:00').getFullYear();
+      const factor = getRampFactor(c.id, currentYear - plantYear);
+      const { kg } = estimateKgAnual(l, c.id, factor);
+      const plantas = l.total_plantas || 0;
+      if (plantas > 0) {
+        weightedKgPlanta += (kg / plantas) * plantas;
+      }
+    });
+    const avgKgPlanta = totalPlantas > 0 ? weightedKgPlanta / totalPlantas : 0;
+    if (avgKgPlanta > 0) {
+      kgPorPlantaInfo = {
+        avg: avgKgPlanta,
+        totalPlantas,
+        lotesCount: perPlantLotes.length,
+      };
+    }
+  }
+
+  // --- Item 3: first harvest year indicator ---
+  // Find earliest year where getRampFactor > 0 across all lotes
+  let primeiraProducaoYear = null;
+  lotes.forEach(l => {
+    const c = getCultura(l.cultura_id);
+    if (!c) return;
+    const lc = safeResolveLifecycle(l, c);
+    const plantYear = new Date(l.data_plantio + 'T12:00:00').getFullYear();
+    // Find first year in the displayed range where factor > 0
+    for (const yr of years) {
+      const factor = getRampFactor(c.id, yr - plantYear);
+      if (factor > 0) {
+        if (primeiraProducaoYear === null || yr < primeiraProducaoYear) {
+          // Prefer lc.dataPrimeiraProducao year if available
+          if (lc?.dataPrimeiraProducao) {
+            const lcYear = lc.dataPrimeiraProducao.getFullYear();
+            if (primeiraProducaoYear === null || lcYear < primeiraProducaoYear) {
+              primeiraProducaoYear = lcYear;
+            }
+          } else {
+            primeiraProducaoYear = yr;
+          }
+        }
+        break;
+      }
+    }
+  });
+
+  // Column width + gap for positioning the dashed line
+  const colWidth = 44;
+  const colGap = 8;
+  const colUnit = colWidth + colGap; // 52px per column
+
   return (
     <Card>
       <div className="px-4 pt-4 pb-1 flex items-center gap-2 border-b border-gray-50">
@@ -951,6 +1087,18 @@ function ProjecaoKgCard({ lotes }) {
         })}
       </div>
 
+      {/* Item 1: kg/planta/ano info row */}
+      {kgPorPlantaInfo && (
+        <div className="px-4 pt-1 pb-0">
+          <span className="text-[11px] font-bold text-green-700/80">
+            🌱 ~{kgPorPlantaInfo.avg.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg/planta/ano
+          </span>
+          <span className="text-[10px] text-gray-400 ml-1">
+            ({currentYear}, média ponderada · {kgPorPlantaInfo.totalPlantas.toLocaleString('pt-BR')} plantas)
+          </span>
+        </div>
+      )}
+
       {/* Warning: lotes with no production basis */}
       {unavailableLotes.length > 0 && (
         <div className="mx-4 mt-2 mb-1 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-start gap-2">
@@ -966,14 +1114,53 @@ function ProjecaoKgCard({ lotes }) {
 
       {/* Bar chart */}
       <div className="px-3 pt-3 pb-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-        <div className="flex items-end gap-2" style={{ minWidth: years.length * 52 }}>
+        <div className="relative flex items-end gap-2" style={{ minWidth: years.length * colUnit }}>
+          {/* Item 3: first harvest dashed line */}
+          {primeiraProducaoYear !== null && years.includes(primeiraProducaoYear) && (() => {
+            const idx = years.indexOf(primeiraProducaoYear);
+            const lineLeft = idx * colUnit + colWidth / 2;
+            return (
+              <motion.div
+                style={{
+                  position: 'absolute',
+                  left: lineLeft,
+                  top: 0,
+                  bottom: 16,
+                  width: 1,
+                  borderLeft: '1px dashed #16a34a',
+                  pointerEvents: 'none',
+                  zIndex: 10,
+                }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4, delay: 0.3 }}
+              >
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 4,
+                  background: 'rgba(255,255,255,0.92)',
+                  borderRadius: 4,
+                  padding: '1px 4px',
+                  whiteSpace: 'nowrap',
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: '#16a34a',
+                  lineHeight: 1.4,
+                }}>
+                  🌾 Início
+                </div>
+              </motion.div>
+            );
+          })()}
+
           {years.map(yr => {
             const totalKg = kgByYear[yr] || 0;
             const isPast = yr < currentYear;
             const isCurrent = yr === currentYear;
             const barH = Math.round((totalKg / maxKg) * 90);
             return (
-              <div key={yr} className="flex flex-col items-center flex-shrink-0" style={{ width: 44 }}>
+              <div key={yr} className="flex flex-col items-center flex-shrink-0" style={{ width: colWidth }}>
                 {totalKg > 0 && (
                   <span className="text-[8px] text-gray-400 font-medium mb-0.5 text-center leading-none">
                     {fmtTon(totalKg)}

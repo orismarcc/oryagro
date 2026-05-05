@@ -15,6 +15,11 @@ import PropriedadePage from './components/PropriedadePage';
 import MigrationWizard from './components/MigrationWizard';
 import SettingsPage from './components/SettingsPage';
 import NetworkStatusBanner from './components/NetworkStatus';
+import CalculadoraPage from './components/CalculadoraPage';
+import FinanceiroPage from './components/FinanceiroPage';
+import CompradoresPage from './components/CompradoresPage';
+import HamburgerMenu from './components/HamburgerMenu';
+import NotificacoesBell from './components/NotificacoesBell';
 import { CULTURAS } from './data/culturas';
 import { useAuth } from './hooks/useAuth';
 import { loadPropriedades, loadTodosLotes } from './hooks/useSupabaseSync';
@@ -52,10 +57,10 @@ export default function App() {
 }
 
 function AppInner({ session, displayName, signOut }) {
-  const { getUserRole } = useFarm();
+  const { getUserRole, isGlobalAdmin } = useFarm();
 
   // Navigation state
-  // mainView: 'dashboard' | 'cultura-picker' | 'cultura' | 'lote' | 'simulador' | 'comparacao' | 'analise' | 'propriedades' | 'propriedade' | 'estoque'
+  // mainView: 'dashboard' | 'cultura-picker' | 'cultura' | 'lote' | 'simulador' | 'comparacao' | 'analise' | 'propriedades' | 'propriedade' | 'estoque' | 'financeiro' | 'compradores' | 'calculadora' | 'configuracoes'
   const [mainView, setMainView]             = useState('dashboard');
   const [culturaId, setCulturaId]           = useState(null);
   const [autoOpenLoteForm, setAutoOpenLoteForm] = useState(false);
@@ -63,6 +68,7 @@ function AppInner({ session, displayName, signOut }) {
   const [selectedPropriedade, setSelectedPropriedade] = useState(null);
   const [showMigrationWizard, setShowMigrationWizard] = useState(false);
   const [propriedades, setPropriedades] = useState([]);
+  const [allLotes, setAllLotes] = useState([]);
   // Track where lote/picker was opened from so back goes to the right place
   const [loteOpenedFrom, setLoteOpenedFrom] = useState('dashboard');
   const [pickerOpenedFrom, setPickerOpenedFrom] = useState('dashboard');
@@ -70,8 +76,9 @@ function AppInner({ session, displayName, signOut }) {
   // Check on mount if migration is needed; also load propriedades for AnalysePage
   useEffect(() => {
     if (!session) return;
-    Promise.all([loadPropriedades(), loadTodosLotes(1)]).then(([props, ls]) => {
+    Promise.all([loadPropriedades(), loadTodosLotes(100)]).then(([props, ls]) => {
       setPropriedades(props);
+      setAllLotes(ls);
       if (props.length === 0 && ls.length > 0) setShowMigrationWizard(true);
     });
   }, [session]);
@@ -176,6 +183,15 @@ function AppInner({ session, displayName, signOut }) {
   const handleGoSettings = () => setMainView('configuracoes');
   const handleBackFromSettings = () => setMainView('dashboard');
 
+  const handleGoCalculadora = () => setMainView('calculadora');
+  const handleBackFromCalculadora = () => setMainView('dashboard');
+
+  const handleGoFinanceiro = () => setMainView('financeiro');
+  const handleBackFromFinanceiro = () => setMainView('dashboard');
+
+  const handleGoCompradores = () => setMainView('compradores');
+  const handleBackFromCompradores = () => setMainView('dashboard');
+
   const handleAddLoteFromPropriedade = () => {
     setPickerOpenedFrom('propriedade');
     setMainView('cultura-picker');
@@ -193,14 +209,63 @@ function AppInner({ session, displayName, signOut }) {
 
   // Role for the currently selected farm
   const userRole = getUserRole(selectedPropriedade?.id);
-  // Bottom nav: hide items that require a permission the user doesn't have
-  const BOTTOM_NAV = ALL_BOTTOM_NAV.filter(item =>
-    !item.requiresAction || !selectedPropriedade || can(userRole, item.requiresAction)
-  );
+  // Bottom nav: hide items that require a permission the user doesn't have.
+  // VIEW_ANALYSIS also requires isGlobalAdmin (pure technicians never see it).
+  const BOTTOM_NAV = ALL_BOTTOM_NAV.filter(item => {
+    if (!item.requiresAction) return true;
+    if (item.requiresAction === FARM_ACTIONS.VIEW_ANALYSIS && !isGlobalAdmin) return false;
+    if (!selectedPropriedade) return true;
+    return can(userRole, item.requiresAction);
+  });
+
+  // Views where the hamburguer menu should not appear (internal detail screens)
+  const HIDE_HAMBURGER = ['lote', 'cultura', 'cultura-picker'];
+  const showHamburger = !HIDE_HAMBURGER.includes(mainView);
+
+  // Handler for hamburger navigation
+  // Guard admin-only pages: pure technicians cannot access analise, financeiro, compradores
+  const ADMIN_ONLY_VIEWS = ['analise', 'financeiro', 'compradores'];
+  const handleHamburgerNav = (view) => {
+    if (ADMIN_ONLY_VIEWS.includes(view) && !isGlobalAdmin) return;
+    setMainView(view);
+    setCulturaId(null);
+    setAutoOpenLoteForm(false);
+  };
 
   return (
     <div className="min-h-screen bg-background">
       <NetworkStatusBanner />
+
+      {/* ── Hamburger menu (fixed overlay, all main views) ── */}
+      {showHamburger && (
+        <HamburgerMenu
+          currentView={mainView}
+          onNavigate={handleHamburgerNav}
+          hasPropriedade={!!selectedPropriedade}
+          isGlobalAdmin={isGlobalAdmin}
+        />
+      )}
+
+      {/* ── Notification bell (fixed, all main views) ── */}
+      {showHamburger && (
+        <NotificacoesBell
+          lotes={allLotes.filter(l => l.status === 'ativo')}
+          propriedades={propriedades}
+          onNavigateToLote={(loteId, propriedadeId) => {
+            const lote = allLotes.find(l => l.id === loteId);
+            if (lote) {
+              setSelectedLote(lote);
+              setLoteOpenedFrom('dashboard');
+              if (propriedadeId) {
+                const prop = propriedades.find(p => p.id === propriedadeId) ?? null;
+                setSelectedPropriedade(prop);
+              }
+              setMainView('lote');
+            }
+          }}
+          onNavigateToCompradores={handleGoCompradores}
+        />
+      )}
       <main className="pb-36">
         <AnimatePresence mode="wait">
           <motion.div
@@ -255,6 +320,15 @@ function AppInner({ session, displayName, signOut }) {
             {mainView === 'calendario' && <CalendarioPage />}
             {mainView === 'configuracoes' && (
               <SettingsPage onBack={handleBackFromSettings} />
+            )}
+            {mainView === 'calculadora' && (
+              <CalculadoraPage onBack={handleBackFromCalculadora} />
+            )}
+            {mainView === 'financeiro' && (
+              <FinanceiroPage onBack={handleBackFromFinanceiro} propriedades={propriedades} />
+            )}
+            {mainView === 'compradores' && (
+              <CompradoresPage onBack={handleBackFromCompradores} />
             )}
             {mainView === 'estoque' && (
               <EstoquePage propriedadeId={selectedPropriedade?.id ?? null} onBack={handleBackFromEstoque} />

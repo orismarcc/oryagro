@@ -43,12 +43,19 @@ export function FarmProvider({ children, session }) {
     return m?.role ?? null;
   }, [memberships]);
 
+  /**
+   * True if the user is admin in at least one farm (owns at least one property).
+   * Pure technicians (member in others' farms only) get false.
+   */
+  const isGlobalAdmin = memberships.some(m => m.role === 'admin');
+
   return (
     <FarmContext.Provider value={{
       memberships,
       loadingMemberships,
       getUserRole,
       refreshMemberships,
+      isGlobalAdmin,
     }}>
       {children}
     </FarmContext.Provider>

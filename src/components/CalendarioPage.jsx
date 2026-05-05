@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, CalendarDays, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CalendarDays, X, DollarSign } from 'lucide-react';
 import { CULTURAS } from '../data/culturas';
 import { loadTodosLotes } from '../hooks/useSupabaseSync';
+import { supabase } from '../lib/supabase';
+import { updateParcela } from '../hooks/useCompradores';
 
 const DIAS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -35,13 +37,14 @@ function formatDatePtBR(iso) {
 }
 
 const TIPO_COLOR = {
-  plantio:   '#16a34a',
-  adubo:     '#d97706',
-  foliar:    '#0891b2',
-  colheita:  '#7c3aed',
-  manejo:    '#6b7280',
-  especial:  '#dc2626',
-  aplicacao: '#b45309',
+  plantio:    '#16a34a',
+  adubo:      '#d97706',
+  foliar:     '#0891b2',
+  colheita:   '#7c3aed',
+  manejo:     '#6b7280',
+  especial:   '#dc2626',
+  aplicacao:  '#b45309',
+  financeiro: '#2563eb',
 };
 
 const TIPO_LABEL = {
@@ -110,6 +113,8 @@ function getAtividadesLote(lote, cultura) {
       const dataAtividade = addDays(plantioDate, etapa.dia);
       const stepKey = makeStepId('viveiro', etapa.etapa);
       const stepStatus = resolveStepStatus(lote, stepKey);
+      // Skip removed steps
+      if (stepStatus?.status === 'removida') return;
       // If done with a different date, use the actual date
       const dataStr = (stepStatus?.status === 'feito' && stepStatus?.data)
         ? stepStatus.data
@@ -142,6 +147,8 @@ function getAtividadesLote(lote, cultura) {
       const dataAtividade = addDays(plantioDate, etapa.dia + shift);
       const stepKey = makeStepId('default', etapa.etapa);
       const stepStatus = resolveStepStatus(lote, stepKey);
+      // Skip removed steps
+      if (stepStatus?.status === 'removida') return;
       const dataStr = (stepStatus?.status === 'feito' && stepStatus?.data)
         ? stepStatus.data
         : isoDate(dataAtividade);
@@ -182,6 +189,10 @@ function getAtividadesLote(lote, cultura) {
   } catch { customDoneStatus = {}; }
 
   customRows.forEach((row, i) => {
+    // Skip removed custom steps
+    const stepKeyCustom = `custom_${i}`;
+    if (customDoneStatus[stepKeyCustom]?.status === 'removida') return;
+
     let dataStr;
     if (row.dataPrevista) {
       dataStr = row.dataPrevista;
@@ -549,12 +560,45 @@ export default function CalendarioPage() {
   const [monthStart, setMonthStart] = useState(() => startOfMonth(new Date()));
   const [selectedDay, setSelectedDay] = useState(null);
   const [popupAtiv, setPopupAtiv] = useState(null);
+  const [popupParcela, setPopupParcela] = useState(null);
   const [lotes, setLotes] = useState([]);
+  const [parcelas, setParcelas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pagandoParcela, setPagandoParcela] = useState(false);
 
   useEffect(() => {
-    loadTodosLotes(100).then(data => { setLotes(data); setLoading(false); }); // I-05: same limit as Dashboard
+    loadTodosLotes(100).then(data => { setLotes(data); setLoading(false); });
   }, []);
+
+  // Load parcelas pendentes do mês/semana visível
+  const loadParcelas = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    // Calcula intervalo do mês/semana visível (com folga de 1 mês para ambas as views)
+    const refDate = calView === 'month' ? monthStart : weekStart;
+    const inicio = new Date(refDate.getFullYear(), refDate.getMonth() - 1, 1);
+    const fim    = new Date(refDate.getFullYear(), refDate.getMonth() + 2, 0);
+    const { data } = await supabase
+      .from('venda_parcelas')
+      .select('*, venda:vendas(plantio_id, comprador:compradores(nome))')
+      .eq('user_id', user.id)
+      .eq('status', 'pendente')
+      .gte('data_vencimento', isoDate(inicio))
+      .lte('data_vencimento', isoDate(fim))
+      .order('data_vencimento', { ascending: true });
+    setParcelas(data || []);
+  }, [calView, monthStart, weekStart]);
+
+  useEffect(() => { loadParcelas(); }, [loadParcelas]);
+
+  const handleMarcarPago = async (parcela) => {
+    setPagandoParcela(true);
+    const hoje = isoDate(new Date());
+    await updateParcela(parcela.id, { status: 'pago', dataPagamento: hoje });
+    setParcelas(prev => prev.filter(p => p.id !== parcela.id));
+    setPopupParcela(null);
+    setPagandoParcela(false);
+  };
 
   const today = isoDate(new Date());
 
@@ -566,6 +610,24 @@ export default function CalendarioPage() {
     getAtividadesLote(lote, cultura).forEach(a => {
       if (!atividadesPorDia[a.data]) atividadesPorDia[a.data] = [];
       atividadesPorDia[a.data].push(a);
+    });
+  });
+  // Adicionar parcelas pendentes como eventos financeiros (tipo 'financeiro')
+  parcelas.forEach(p => {
+    const dia = p.data_vencimento;
+    if (!atividadesPorDia[dia]) atividadesPorDia[dia] = [];
+    const compradorNome = p.venda?.comprador?.nome || 'Comprador';
+    atividadesPorDia[dia].push({
+      id:         `parcela-${p.id}`,
+      tipo:       'financeiro',
+      etapa:      `Parcela ${p.numero_parcela} — ${compradorNome}`,
+      data:       dia,
+      dataPlanejada: dia,
+      done:       false,
+      isParcela:  true,
+      parcelaObj: p,
+      valor:      p.valor,
+      compradorNome,
     });
   });
 
@@ -684,7 +746,7 @@ export default function CalendarioPage() {
             today={today}
             selectedDay={selectedDay}
             setSelectedDay={setSelectedDay}
-            onAtivClick={setPopupAtiv}
+            onAtivClick={a => a.isParcela ? setPopupParcela(a.parcelaObj) : setPopupAtiv(a)}
           />
         ) : (
           weekDays.map(d => {
@@ -715,7 +777,10 @@ export default function CalendarioPage() {
                   <p className="text-[11px] text-muted-foreground px-2 py-1">Sem atividades previstas</p>
                 ) : (
                   ativs.map(a => (
-                    <AtividadeCard key={a.id} ativ={a} isHoje={isToday} onClick={() => setPopupAtiv(a)} />
+                    <AtividadeCard
+                      key={a.id} ativ={a} isHoje={isToday}
+                      onClick={() => a.isParcela ? setPopupParcela(a.parcelaObj) : setPopupAtiv(a)}
+                    />
                   ))
                 )}
               </div>
@@ -728,6 +793,62 @@ export default function CalendarioPage() {
       <AnimatePresence>
         {popupAtiv && (
           <AtividadePopup ativ={popupAtiv} onClose={() => setPopupAtiv(null)} />
+        )}
+      </AnimatePresence>
+
+      {/* Parcela payment popup */}
+      <AnimatePresence>
+        {popupParcela && (
+          <>
+            <motion.div
+              key="parcela-backdrop"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setPopupParcela(null)}
+              className="fixed inset-0 z-50 bg-black/40"
+            />
+            <motion.div
+              key="parcela-sheet"
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-2xl bg-white p-5"
+            >
+              <button
+                onClick={() => setPopupParcela(null)}
+                className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center"
+                style={{ background: 'hsl(210 16% 93%)' }}
+              ><X size={16} color="hsl(215 20% 35%)" /></button>
+
+              <div className="flex items-center gap-3 mb-4 pr-10">
+                <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
+                  style={{ background: '#dbeafe' }}>
+                  <DollarSign size={20} color="#2563eb" />
+                </div>
+                <div>
+                  <p className="text-[18px] font-extrabold text-foreground leading-tight">
+                    Parcela {popupParcela.numero_parcela}
+                  </p>
+                  <p className="text-[12px] text-muted-foreground">
+                    {popupParcela.venda?.comprador?.nome || 'Comprador não vinculado'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 mb-5">
+                <InfoRow label="Valor" value={popupParcela.valor?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} />
+                <InfoRow label="Vencimento" value={formatDatePtBR(popupParcela.data_vencimento)} />
+                <InfoRow label="Status" value={popupParcela.data_vencimento < isoDate(new Date()) ? '⚠️ Vencida' : '⏳ Pendente'} />
+              </div>
+
+              <button
+                onClick={() => handleMarcarPago(popupParcela)}
+                disabled={pagandoParcela}
+                className="w-full py-3 rounded-2xl text-white font-bold text-[14px] transition-opacity disabled:opacity-60"
+                style={{ background: 'hsl(160 84% 27%)' }}
+              >
+                {pagandoParcela ? 'Registrando...' : '✓ Marcar como pago (hoje)'}
+              </button>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>

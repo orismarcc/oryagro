@@ -142,6 +142,8 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade }) {
             <AnimatePresence>
               {propriedades.map((p, i) => {
                 const count = loteCounts[p.id] || 0;
+                const role = getUserRole(p.id);
+                const isMember = role === 'technician';
                 if (editingId === p.id) {
                   return (
                     <motion.div key={p.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -152,14 +154,22 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade }) {
                 return (
                   <motion.div key={p.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} transition={{ delay: i * 0.04, duration: 0.25 }}>
                     <button onClick={() => onSelectPropriedade(p)} className="card-interactive w-full text-left p-4 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'hsl(160 84% 27% / 0.1)' }}>
-                        <Building2 size={18} style={{ color: 'hsl(160 84% 27%)' }} />
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: isMember ? 'hsl(217 91% 60% / 0.1)' : 'hsl(160 84% 27% / 0.1)' }}>
+                        <Building2 size={18} style={{ color: isMember ? 'hsl(217 91% 60%)' : 'hsl(160 84% 27%)' }} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-bold text-foreground leading-tight truncate">{p.nome}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-[14px] font-bold text-foreground leading-tight truncate">{p.nome}</p>
+                          {isMember && (
+                            <span className="flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                              style={{ background: 'hsl(217 91% 60% / 0.12)', color: 'hsl(217 91% 45%)' }}>
+                              Técnico
+                            </span>
+                          )}
+                        </div>
                         {p.descricao && <p className="text-[11px] text-muted-foreground truncate mt-0.5">{p.descricao}</p>}
                         <div className="flex items-center gap-1 mt-1">
-                          <Layers size={10} style={{ color: 'hsl(160 84% 27%)' }} />
+                          <Layers size={10} style={{ color: isMember ? 'hsl(217 91% 60%)' : 'hsl(160 84% 27%)' }} />
                           <span className="text-[11px] text-muted-foreground">{count} lote{count !== 1 ? 's' : ''}</span>
                         </div>
                       </div>
