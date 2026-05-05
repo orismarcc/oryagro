@@ -678,6 +678,7 @@ function TabMaoObra({ lote, cor, canDelete }) {
     dataFim: '',
     valor: '',
     descricao: '',
+    prestador: '',
   });
 
   const fetchRegistros = useCallback(async () => {
@@ -706,9 +707,10 @@ function TabMaoObra({ lote, cor, canDelete }) {
         dataFim:    form.dataFim || null,
         valor:      parseFloat(form.valor),
         descricao:  form.descricao || null,
+        prestador:  form.prestador || null,
       });
       await fetchRegistros();
-      setForm({ dataInicio: today(), dataFim: '', valor: '', descricao: '' });
+      setForm({ dataInicio: today(), dataFim: '', valor: '', descricao: '', prestador: '' });
     } catch {
       // fail silently
     } finally {
@@ -795,6 +797,20 @@ function TabMaoObra({ lote, cor, canDelete }) {
           </div>
         </div>
 
+        <div className="mb-3">
+          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">
+            Prestador (opcional)
+          </label>
+          <input
+            type="text"
+            placeholder="Ex: João da Silva, Empresa Agro"
+            value={form.prestador}
+            onChange={e => setForm(f => ({ ...f, prestador: e.target.value }))}
+            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
+            style={{ '--tw-ring-color': cor }}
+          />
+        </div>
+
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={handleAdd}
@@ -841,6 +857,11 @@ function TabMaoObra({ lote, cor, canDelete }) {
                     <span className="text-[12px] text-muted-foreground">{r.descricao}</span>
                   )}
                 </div>
+                {r.prestador && (
+                  <p className="text-[11px] text-muted-foreground mb-1">
+                    👤 {r.prestador}
+                  </p>
+                )}
                 <p className="text-[14px] font-bold" style={{ color: cor }}>{fmtBRL(r.valor)}</p>
               </div>
               {canDelete && (

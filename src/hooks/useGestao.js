@@ -316,7 +316,7 @@ export async function loadMaoObraRegistros(plantioId) {
   return data || [];
 }
 
-export async function addMaoObraRegistro({ plantioId, dataInicio, dataFim, valor, descricao }) {
+export async function addMaoObraRegistro({ plantioId, dataInicio, dataFim, valor, descricao, prestador }) {
   const userId = await getUserId();
   if (!userId) return null;
   const { data: row, error } = await supabase
@@ -328,6 +328,7 @@ export async function addMaoObraRegistro({ plantioId, dataInicio, dataFim, valor
       data_fim:    dataFim || null,
       valor:       valor,
       descricao:   descricao || null,
+      prestador:   prestador || null,
     })
     .select()
     .single();

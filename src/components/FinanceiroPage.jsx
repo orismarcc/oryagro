@@ -289,6 +289,9 @@ function DreLine({ ano, entry, expanded, onToggle }) {
                           <p className="text-[11px] font-semibold text-gray-700">
                             {mo.descricao || 'Mão de obra'}
                           </p>
+                          {mo.prestador && (
+                            <p className="text-[10px] text-gray-500 font-medium">👤 {mo.prestador}</p>
+                          )}
                           <p className="text-[10px] text-gray-400">
                             {formatDateBR(mo.data_inicio)}
                             {mo.data_fim && ` → ${formatDateBR(mo.data_fim)}`}
@@ -432,6 +435,8 @@ function LoteCard({ lote, dreMap, anoFiltro, propriedades }) {
 
 function TabDRE({ rawData, loading, propriedades }) {
   const [anoFiltro, setAnoFiltro] = useState('');
+  const [propFiltro, setPropFiltro]       = useState('');
+  const [culturaFiltro, setCulturaFiltro] = useState('');
 
   const dreMap = useMemo(() => (rawData ? buildDreMap(rawData) : {}), [rawData]);
 
@@ -447,6 +452,12 @@ function TabDRE({ rawData, loading, propriedades }) {
   // Agrupar plantios por propriedade
   const plantios = rawData?.plantios ?? [];
 
+  const getPropNome = (pid) => {
+    if (pid === '__sem__') return 'Sem propriedade';
+    const prop = propriedades.find((p) => String(p.id) === pid);
+    return prop ? prop.nome : `Propriedade ${pid}`;
+  };
+
   const propriedadeGroups = useMemo(() => {
     const groups = {};
     plantios.forEach((p) => {
@@ -456,6 +467,34 @@ function TabDRE({ rawData, loading, propriedades }) {
     });
     return groups;
   }, [plantios]);
+
+  const propriedadesDisponiveis = useMemo(() => {
+    const seen = new Set();
+    return plantios
+      .filter(p => dreMap[String(p.id)] && (p.propriedade_id || true))
+      .reduce((acc, p) => {
+        const pid = p.propriedade_id ? String(p.propriedade_id) : '__sem__';
+        if (!seen.has(pid)) {
+          seen.add(pid);
+          acc.push({ id: pid, nome: getPropNome(pid) });
+        }
+        return acc;
+      }, []);
+  }, [plantios, dreMap]);
+
+  const culturasDisponiveis = useMemo(() => {
+    const seen = new Set();
+    return plantios
+      .filter(p => dreMap[String(p.id)] && p.cultura_id)
+      .reduce((acc, p) => {
+        if (!seen.has(p.cultura_id)) {
+          seen.add(p.cultura_id);
+          const c = getCultura(p.cultura_id);
+          acc.push({ id: p.cultura_id, nome: `${c?.emoji ?? ''} ${c?.nome ?? p.cultura_id}`.trim() });
+        }
+        return acc;
+      }, []);
+  }, [plantios, dreMap]);
 
   // Total consolidado do ano filtrado (ou todos)
   const totais = useMemo(() => {
@@ -473,36 +512,66 @@ function TabDRE({ rawData, loading, propriedades }) {
     return { receita, custo_insumos, custo_mo, lucro, margem };
   }, [dreMap, anoFiltro]);
 
-  const getPropNome = (pid) => {
-    if (pid === '__sem__') return 'Sem propriedade';
-    const prop = propriedades.find((p) => String(p.id) === pid);
-    return prop ? prop.nome : `Propriedade ${pid}`;
-  };
-
   if (loading) return <Spinner />;
   if (anosDisponiveis.length === 0) return <EmptyState />;
 
   return (
     <div className="px-4 pt-4 pb-8 flex flex-col gap-5">
-      {/* Filtro de ano */}
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] font-bold text-gray-500">Ano:</span>
-        <select
-          value={anoFiltro}
-          onChange={(e) => setAnoFiltro(e.target.value)}
-          className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-700 outline-none"
-        >
-          <option value="">Todos os anos</option>
-          {anosDisponiveis.map((ano) => (
-            <option key={ano} value={ano}>{ano}</option>
-          ))}
-        </select>
+      {/* Filtros */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold text-gray-500 w-16 flex-shrink-0">Ano:</span>
+          <select
+            value={anoFiltro}
+            onChange={(e) => setAnoFiltro(e.target.value)}
+            className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-700 outline-none"
+          >
+            <option value="">Todos os anos</option>
+            {anosDisponiveis.map((ano) => (
+              <option key={ano} value={ano}>{ano}</option>
+            ))}
+          </select>
+        </div>
+        {propriedadesDisponiveis.length > 1 && (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-gray-500 w-16 flex-shrink-0">Prop.:</span>
+            <select
+              value={propFiltro}
+              onChange={(e) => setPropFiltro(e.target.value)}
+              className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-700 outline-none"
+            >
+              <option value="">Todas as propriedades</option>
+              {propriedadesDisponiveis.map((p) => (
+                <option key={p.id} value={p.id}>{p.nome}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {culturasDisponiveis.length > 1 && (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-gray-500 w-16 flex-shrink-0">Cultura:</span>
+            <select
+              value={culturaFiltro}
+              onChange={(e) => setCulturaFiltro(e.target.value)}
+              className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-700 outline-none"
+            >
+              <option value="">Todas as culturas</option>
+              {culturasDisponiveis.map((c) => (
+                <option key={c.id} value={c.id}>{c.nome}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Cards por propriedade */}
       {Object.entries(propriedadeGroups).map(([pid, lotesDoGrupo]) => {
+        // skip this property group if a property filter is active and doesn't match
+        if (propFiltro && pid !== propFiltro) return null;
+
         // Filtrar lotes que têm dados no dreMap
         const lotesComDados = lotesDoGrupo.filter((lote) => {
+          if (culturaFiltro && lote.cultura_id !== culturaFiltro) return false;
           const byAno = dreMap[String(lote.id)] || {};
           return Object.keys(byAno).some(
             (ano) => !anoFiltro || Number(ano) === Number(anoFiltro)
@@ -589,7 +658,7 @@ function TabDRE({ rawData, loading, propriedades }) {
 
 /* ─── Aba 2: Comparativo de Safras ───────────────────────────── */
 
-function TabComparativo({ rawData, loading }) {
+function TabComparativo({ rawData, loading, propriedades = [] }) {
   const dreMap = useMemo(() => (rawData ? buildDreMap(rawData) : {}), [rawData]);
   const plantios = rawData?.plantios ?? [];
 
@@ -606,6 +675,8 @@ function TabComparativo({ rawData, loading }) {
   }, [dreMap, plantios]);
 
   const [culturaSel, setCulturaSel] = useState('');
+  const [anoFiltroComp, setAnoFiltroComp]   = useState('');
+  const [propFiltroComp, setPropFiltroComp] = useState('');
 
   useEffect(() => {
     if (culturasComVendas.length > 0 && !culturaSel) {
@@ -613,12 +684,41 @@ function TabComparativo({ rawData, loading }) {
     }
   }, [culturasComVendas, culturaSel]);
 
+  const anosDisponiveisComp = useMemo(() => {
+    const anos = new Set();
+    Object.values(dreMap).forEach(byAno => Object.keys(byAno).forEach(a => anos.add(Number(a))));
+    return [...anos].sort((a, b) => b - a);
+  }, [dreMap]);
+
+  const propsDisponiveisComp = useMemo(() => {
+    const seen = new Set();
+    const acc = [];
+    plantios
+      .filter(p => p.cultura_id === culturaSel)
+      .forEach(p => {
+        const pid = p.propriedade_id ? String(p.propriedade_id) : '__sem__';
+        if (!seen.has(pid)) {
+          seen.add(pid);
+          const prop = propriedades?.find(pr => String(pr.id) === pid);
+          acc.push({ id: pid, nome: prop ? prop.nome : (pid === '__sem__' ? 'Sem propriedade' : `Prop. ${pid.slice(0,6)}`) });
+        }
+      });
+    return acc;
+  }, [plantios, culturaSel, propriedades]);
+
   if (loading) return <Spinner />;
   if (culturasComVendas.length === 0)
     return <EmptyState message="Nenhuma cultura com dados de vendas." />;
 
-  // Lotes da cultura selecionada
-  const lotesFiltered = plantios.filter((p) => p.cultura_id === culturaSel);
+  // Lotes da cultura selecionada (com filtro de propriedade)
+  const lotesFiltered = plantios.filter((p) => {
+    if (p.cultura_id !== culturaSel) return false;
+    if (propFiltroComp) {
+      const pid = p.propriedade_id ? String(p.propriedade_id) : '__sem__';
+      if (pid !== propFiltroComp) return false;
+    }
+    return true;
+  });
 
   // Anos disponíveis para essa cultura
   const anosSet = new Set();
@@ -632,7 +732,7 @@ function TabComparativo({ rawData, loading }) {
   const safras = lotesFiltered.flatMap((lote) => {
     const byAno = dreMap[String(lote.id)] || {};
     return anos
-      .filter((ano) => byAno[ano])
+      .filter((ano) => byAno[ano] && (!anoFiltroComp || ano === Number(anoFiltroComp)))
       .map((ano) => {
         const e = byAno[ano];
         const lucro = e.receita - e.custo_insumos - e.custo_mo;
@@ -651,23 +751,55 @@ function TabComparativo({ rawData, loading }) {
 
   return (
     <div className="px-4 pt-4 pb-8 flex flex-col gap-5">
-      {/* Seletor de cultura */}
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] font-bold text-gray-500">Cultura:</span>
-        <select
-          value={culturaSel}
-          onChange={(e) => setCulturaSel(e.target.value)}
-          className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-700 outline-none"
-        >
-          {culturasComVendas.map((cid) => {
-            const c = getCultura(cid);
-            return (
-              <option key={cid} value={cid}>
-                {c?.emoji ?? ''} {c?.nome ?? cid}
-              </option>
-            );
-          })}
-        </select>
+      {/* Filtros */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold text-gray-500 w-16 flex-shrink-0">Cultura:</span>
+          <select
+            value={culturaSel}
+            onChange={(e) => { setCulturaSel(e.target.value); setPropFiltroComp(''); }}
+            className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-700 outline-none"
+          >
+            {culturasComVendas.map((cid) => {
+              const c = getCultura(cid);
+              return (
+                <option key={cid} value={cid}>
+                  {c?.emoji ?? ''} {c?.nome ?? cid}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+        {anosDisponiveisComp.length > 1 && (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-gray-500 w-16 flex-shrink-0">Ano:</span>
+            <select
+              value={anoFiltroComp}
+              onChange={(e) => setAnoFiltroComp(e.target.value)}
+              className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-700 outline-none"
+            >
+              <option value="">Todos os anos</option>
+              {anosDisponiveisComp.map((ano) => (
+                <option key={ano} value={ano}>{ano}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {propsDisponiveisComp.length > 1 && (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-gray-500 w-16 flex-shrink-0">Prop.:</span>
+            <select
+              value={propFiltroComp}
+              onChange={(e) => setPropFiltroComp(e.target.value)}
+              className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-700 outline-none"
+            >
+              <option value="">Todas as propriedades</option>
+              {propsDisponiveisComp.map((p) => (
+                <option key={p.id} value={p.id}>{p.nome}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {safras.length === 0 ? (
@@ -1064,7 +1196,7 @@ export default function FinanceiroPage({ onBack, propriedades = [] }) {
               <TabDRE rawData={rawData} loading={loading} propriedades={propriedades} />
             )}
             {tab === 'comparativo' && (
-              <TabComparativo rawData={rawData} loading={loading} />
+              <TabComparativo rawData={rawData} loading={loading} propriedades={propriedades} />
             )}
             {tab === 'ranking' && (
               <TabRanking rawData={rawData} loading={loading} />
