@@ -7,15 +7,7 @@ import { useCronogramaStatusBatch, makeStableId } from '../hooks/useCronogramaSy
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
 import { Plus, CalendarDays, Sprout, CheckCircle2, LogOut, Layers, AlertCircle, Clock, ArrowRight, Leaf, Building2, ChevronRight, AlertTriangle, Settings } from 'lucide-react';
 
-// I-01: stable step ID matching CronogramaTimeline.makeStableId
-function makeStableId(prefix, etapa) {
-  const slug = etapa
-    .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_|_$/g, '');
-  return `${prefix}_${slug}`;
-}
+
 
 /** doneStatus is passed in — never read from localStorage directly */
 function getStatusEtapas(cultura, lote, doneStatus = {}) {

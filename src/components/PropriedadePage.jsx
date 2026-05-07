@@ -11,15 +11,7 @@ import { supabase } from '../lib/supabase';
 import { can, FARM_ACTIONS } from '../lib/permissions';
 import BackupModal from './BackupModal';
 
-// I-01: stable step ID matching CronogramaTimeline.makeStableId
-function makeStableId(prefix, etapa) {
-  const slug = etapa
-    .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_|_$/g, '');
-  return `${prefix}_${slug}`;
-}
+
 
 /** doneStatus is passed in — never read from localStorage directly */
 function getStatusEtapas(cultura, lote, doneStatus = {}) {
