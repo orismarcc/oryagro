@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -187,7 +188,8 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
   const [confirming, setConfirming] = useState(null);
   const [confirmDate, setConfirmDate] = useState(todayISO());
   const [removingId, setRemovingId] = useState(null); // Feature 1: inline remove confirm
-  const [descricaoStep, setDescricaoStep] = useState(null); // Feature 2: bottom sheet
+  const [descricaoStep, setDescricaoStep] = useState(null); // Feature 2: bottom sheet (portal)
+  const confirmFormRef = useRef(null); // for scrollIntoView when confirm form opens
   const [addDialog, setAddDialog]   = useState(false);
   const [newRow, setNewRow]         = useState({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo', insumo_id: '', dataPrevista: '' });
   const [insumos, setInsumos]   = useState([]);
@@ -288,6 +290,15 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
 
   useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(status)); }, [storageKey, status]);
   useEffect(() => { localStorage.setItem(customKey, JSON.stringify(customRows)); }, [customKey, customRows]);
+
+  // Scroll the inline confirm form into view whenever it opens
+  useEffect(() => {
+    if (confirming && confirmFormRef.current) {
+      setTimeout(() => {
+        confirmFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 220); // wait for the AnimatePresence height animation to expand
+    }
+  }, [confirming]);
 
   // ── Realtime: merge remote changes from other devices/users ─────────────────
   const vivStepsForRealtime = (metodoObj?.etapasViveiro ?? []);
@@ -795,7 +806,8 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
               {/* ── Right: card ── */}
               <div className={`flex-1 ${!isLast ? 'mb-3' : ''}`}>
                 <div
-                  className="rounded-2xl overflow-hidden border"
+                  className="rounded-2xl overflow-hidden border cursor-pointer transition-shadow hover:shadow-md"
+                  onClick={() => setDescricaoStep(ev)}
                   style={{
                     borderColor: isDone
                       ? `${meta.color}35`
@@ -891,13 +903,15 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                       </div>
                     </div>
 
-                    {/* Feature 2: clicking name opens description bottom sheet */}
-                    <p
-                      className={`text-[14px] font-bold leading-snug cursor-pointer ${isDone ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                      onClick={() => setDescricaoStep(ev)}
-                    >
-                      {ev.etapa}
-                    </p>
+                    {/* Feature 2: clicking card opens description bottom sheet */}
+                    <div className="flex items-start justify-between gap-1">
+                      <p
+                        className={`text-[14px] font-bold leading-snug flex-1 ${isDone ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                      >
+                        {ev.etapa}
+                      </p>
+                      <ChevronRight size={14} className="flex-shrink-0 mt-0.5 opacity-30" style={{ color: meta.color }} />
+                    </div>
 
                     {ev.produto && ev.produto !== '—' && (
                       <p className="text-[12px] text-muted-foreground mt-1.5 flex items-center gap-1 flex-wrap">
@@ -933,7 +947,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                         <span className="text-[10px] font-semibold text-muted-foreground ml-1">concluído</span>
                       </div>
                       <button
-                        onClick={() => undoStep(ev._id)}
+                        onClick={e => { e.stopPropagation(); undoStep(ev._id); }}
                         className="text-[10px] font-semibold flex items-center gap-0.5 text-muted-foreground hover:text-red-500 transition-colors"
                       >
                         <X size={10} /> desfazer
@@ -950,8 +964,10 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                         exit={{ opacity: 0, height: 0 }}
                         transition={{ duration: 0.2 }}
                         style={{ overflow: 'hidden' }}
+                        onClick={e => e.stopPropagation()}
                       >
                         <div
+                          ref={confirmFormRef}
                           className="px-4 py-3 flex flex-col gap-3"
                           style={{ background: `${meta.color}08`, borderTop: `1px solid ${meta.color}25` }}
                         >
@@ -1137,7 +1153,8 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                   {!isDone && !isConfirming && (
                     <motion.button
                       whileTap={{ scale: 0.985 }}
-                      onClick={() => {
+                      onClick={e => {
+                        e.stopPropagation();
                         setConfirmDate(getDefaultConfirmDate(ev.dia));
                         setConfirming({ id: ev._id, etapa: ev.etapa, tipo: ev.tipo });
                         setStockDebit({ enabled: false, insumoId: '', quantidade: '' });
@@ -1436,64 +1453,70 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
         </DialogContent>
       </Dialog>
 
-      {/* ── Feature 2: Bottom sheet — step description ── */}
-      <AnimatePresence>
-        {descricaoStep && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex flex-col justify-end"
-            style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}
-            onClick={() => setDescricaoStep(null)}
-          >
+      {/* ── Feature 2: Bottom sheet — step description ──
+           Rendered via createPortal to escape any CSS transform ancestor
+           (Framer Motion tab wrapper uses willChange: transform which would
+            break position:fixed without portaling to document.body)         */}
+      {createPortal(
+        <AnimatePresence>
+          {descricaoStep && (
             <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-              className="relative rounded-t-3xl p-6 pb-10"
-              style={{ background: 'white', maxHeight: '60vh', overflowY: 'auto' }}
-              onClick={e => e.stopPropagation()}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[200] flex flex-col justify-end"
+              style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}
+              onClick={() => setDescricaoStep(null)}
             >
-              {/* Drag handle */}
-              <div className="w-10 h-1 rounded-full bg-gray-200 mx-auto mb-4" />
-
-              {/* Tipo badge */}
-              {(() => {
-                const m = TIPO_META[descricaoStep.tipo] || TIPO_META.manejo;
-                return (
-                  <span
-                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full mb-3"
-                    style={{ background: m.bg, color: m.color }}
-                  >
-                    {m.emoji} {m.label}
-                  </span>
-                );
-              })()}
-
-              {/* Nome */}
-              <h3 className="font-display text-[17px] font-bold text-foreground mb-3">
-                {descricaoStep.etapa}
-              </h3>
-
-              {/* Descrição */}
-              <p className="text-[14px] text-muted-foreground leading-relaxed">
-                {descricaoStep.descricao || 'Sem descrição disponível para esta etapa.'}
-              </p>
-
-              {/* Fechar */}
-              <button
-                onClick={() => setDescricaoStep(null)}
-                className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full"
-                style={{ background: 'hsl(210 16% 93%)' }}
+              <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+                className="relative rounded-t-3xl p-6 pb-10"
+                style={{ background: 'white', maxHeight: '60vh', overflowY: 'auto' }}
+                onClick={e => e.stopPropagation()}
               >
-                <X size={14} />
-              </button>
+                {/* Drag handle */}
+                <div className="w-10 h-1 rounded-full bg-gray-200 mx-auto mb-4" />
+
+                {/* Tipo badge */}
+                {(() => {
+                  const m = TIPO_META[descricaoStep.tipo] || TIPO_META.manejo;
+                  return (
+                    <span
+                      className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full mb-3"
+                      style={{ background: m.bg, color: m.color }}
+                    >
+                      {m.emoji} {m.label}
+                    </span>
+                  );
+                })()}
+
+                {/* Nome */}
+                <h3 className="font-display text-[17px] font-bold text-foreground mb-3">
+                  {descricaoStep.etapa}
+                </h3>
+
+                {/* Descrição */}
+                <p className="text-[14px] text-muted-foreground leading-relaxed">
+                  {descricaoStep.descricao || 'Sem descrição disponível para esta etapa.'}
+                </p>
+
+                {/* Fechar */}
+                <button
+                  onClick={() => setDescricaoStep(null)}
+                  className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full"
+                  style={{ background: 'hsl(210 16% 93%)' }}
+                >
+                  <X size={14} />
+                </button>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 }

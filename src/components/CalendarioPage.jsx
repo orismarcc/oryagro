@@ -454,7 +454,7 @@ function MonthView({ monthStart, atividadesPorDia, today, selectedDay, setSelect
                 {cell.getDate()}
               </span>
 
-              {/* Activity pills with label */}
+              {/* Activity pills with label — each pill is clickable to open popup */}
               <div className="flex flex-col gap-[2px] w-full">
                 {dots.map((a, idx) => {
                   const bg = a.done ? '#dcfce7' : (TIPO_COLOR[a.tipo] || '#6b7280');
@@ -462,7 +462,9 @@ function MonthView({ monthStart, atividadesPorDia, today, selectedDay, setSelect
                   return (
                     <span
                       key={idx}
-                      className="block w-full rounded truncate"
+                      role="button"
+                      onClick={e => { e.stopPropagation(); onAtivClick(a); }}
+                      className="block w-full rounded truncate cursor-pointer"
                       style={{
                         background: bg,
                         color: fg,

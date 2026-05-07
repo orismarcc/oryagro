@@ -6,7 +6,7 @@ import { logDbError } from '../lib/logger';
 export const CATEGORIAS_DESPESA = [
   {
     label: 'Insumos Agrícolas',
-    subcategorias: ['Fertilizantes', 'Defensivos', 'Sementes/Mudas', 'Corretivos', 'Outros insumos'],
+    subcategorias: ['Fertilizantes', 'Defensivos', 'Sementes/Mudas', 'Corretivos', 'Calcário', 'Adubo', 'Outros insumos'],
   },
   {
     label: 'Irrigação',
@@ -61,6 +61,114 @@ export const CATEGORIAS_RECEITA = [
   { label: 'Outras receitas' },
 ];
 
+// ── Unit-of-measure mapping ───────────────────────────────────────────────────
+// Returns the appropriate unit string for a given category + subcategory pair.
+
+const UNIDADE_MAP = {
+  'Insumos Agrícolas': {
+    default:          'kg',
+    'Fertilizantes':  'kg',
+    'Defensivos':     'L',
+    'Sementes/Mudas': 'un',
+    'Corretivos':     'kg',
+    'Calcário':       'ton',
+    'Adubo':          'kg',
+    'Outros insumos': 'un',
+  },
+  'Irrigação': {
+    default:                 'h',
+    'Energia elétrica':      'kWh',
+    'Água':                  'm³',
+    'Manutenção do sistema': 'un',
+    'Peças e reposição':     'un',
+  },
+  'Mão de Obra': {
+    default:                   'dia',
+    'Diarista':                'dia',
+    'Mensalista':              'mês',
+    'Empreitada':              'ha',
+    'Serviços especializados': 'h',
+  },
+  'Máquinas e Equipamentos': {
+    default:           'h',
+    'Combustível':     'L',
+    'Aluguel de máquina': 'h',
+    'Aquisição':       'un',
+    'Manutenção':      'un',
+    'Depreciação':     'un',
+  },
+  'Infraestrutura': {
+    default:    'm²',
+    'Estufa':   'm²',
+    'Cercamento': 'm',
+    'Construção': 'm²',
+    'Reforma':  'm²',
+    'Outros':   'un',
+  },
+  'Logística e Transporte': {
+    default:                'km',
+    'Combustível (veículo)':'L',
+    'Embalagem transporte': 'un',
+    'Pedágio':              'un',
+  },
+  'Embalagem e Comercialização': {
+    default:                    'un',
+    'Caixas':                   'un',
+    'Sacolas':                  'un',
+    'Etiquetas':                'un',
+    'Taxas de comercialização': '%',
+    'Outros':                   'un',
+  },
+  'Despesas Operacionais': {
+    default:        'un',
+    'Energia elétrica': 'kWh',
+    'Água':         'm³',
+    'Luz':          'kWh',
+    'Internet':     'mês',
+    'Aluguel área': 'mês',
+    'Seguros':      'mês',
+    'Outros':       'un',
+  },
+  'Análises e Consultorias': {
+    default:                    'un',
+    'Análise de solo':          'un',
+    'Análise de água':          'un',
+    'Consultoria agronômica':   'h',
+    'Laudos':                   'un',
+  },
+  'Financeiro': {
+    default:                      '%',
+    'Juros':                      '%',
+    'IOF':                        '%',
+    'Tarifas bancárias':          'un',
+    'Amortização de empréstimo':  'un',
+  },
+  'Compras Gerais': {
+    default:                  'un',
+    'Ferramentas':            'un',
+    'EPI':                    'un',
+    'Material de escritório': 'un',
+    'Outros':                 'un',
+  },
+  'Pós-Colheita': {
+    default:          'kg',
+    'Armazenagem':    'm³',
+    'Classificação':  'kg',
+    'Beneficiamento': 'kg',
+    'Refrigeração':   'kg',
+  },
+};
+
+/**
+ * Returns the auto unit string for a given categoria + optional subcategoria.
+ */
+export function getUnidade(categoria, subcategoria) {
+  const catMap = UNIDADE_MAP[categoria];
+  if (!catMap) return 'un';
+  if (subcategoria && catMap[subcategoria]) return catMap[subcategoria];
+  return catMap.default ?? 'un';
+}
+
 // ── Auth helper ──────────────────────────────────────────────────────────────
 
 async function getUserId() {
@@ -68,7 +176,7 @@ async function getUserId() {
   return user?.id ?? null;
 }
 
-// ── CRUD functions ───────────────────────────────────────────────────────────
+// ── Despesas CRUD ────────────────────────────────────────────────────────────
 
 /**
  * Load all despesas for a specific lote (plantio_id).
@@ -111,19 +219,8 @@ export async function loadTodasDespesas(propriedadeId = null) {
 
 /**
  * Add a new despesa record.
- * @param {Object} params
- * @param {string} params.plantioId
- * @param {string|null} params.propriedadeId
- * @param {string} params.categoria
- * @param {string|null} params.subcategoria
- * @param {string|null} params.descricao
- * @param {string|null} params.prestador
- * @param {number} params.valor
- * @param {string} params.data  — ISO date string e.g. "2026-05-07"
- * @param {string|null} params.observacao
- * @returns {Object|null} The created row or null on error
  */
-export async function addDespesa({ plantioId, propriedadeId, categoria, subcategoria, descricao, prestador, valor, data, observacao }) {
+export async function addDespesa({ plantioId, propriedadeId, categoria, subcategoria, descricao, prestador, quantidade, unidade, valor, data, observacao }) {
   const userId = await getUserId();
   if (!userId) return null;
 
@@ -137,6 +234,8 @@ export async function addDespesa({ plantioId, propriedadeId, categoria, subcateg
       subcategoria:   subcategoria  || null,
       descricao:      descricao     || null,
       prestador:      prestador     || null,
+      quantidade:     quantidade != null && quantidade !== '' ? parseFloat(quantidade) : null,
+      unidade:        unidade       || null,
       valor:          parseFloat(valor) || 0,
       data,
       observacao:     observacao    || null,
@@ -155,13 +254,15 @@ export async function updateDespesa(id, updates) {
   const { data, error } = await supabase
     .from('despesas')
     .update({
-      categoria:      updates.categoria     ?? undefined,
-      subcategoria:   updates.subcategoria  ?? null,
-      descricao:      updates.descricao     ?? null,
-      prestador:      updates.prestador     ?? null,
-      valor:          updates.valor !== undefined ? parseFloat(updates.valor) || 0 : undefined,
-      data:           updates.data          ?? undefined,
-      observacao:     updates.observacao    ?? null,
+      categoria:    updates.categoria    ?? undefined,
+      subcategoria: updates.subcategoria ?? null,
+      descricao:    updates.descricao    ?? null,
+      prestador:    updates.prestador    ?? null,
+      quantidade:   updates.quantidade != null ? parseFloat(updates.quantidade) : null,
+      unidade:      updates.unidade      ?? null,
+      valor:        updates.valor !== undefined ? parseFloat(updates.valor) || 0 : undefined,
+      data:         updates.data         ?? undefined,
+      observacao:   updates.observacao   ?? null,
     })
     .eq('id', id)
     .select()
@@ -181,5 +282,87 @@ export async function deleteDespesa(id) {
     .eq('id', id);
 
   if (error) { logDbError('deleteDespesa', error); return false; }
+  return true;
+}
+
+// ── Receitas CRUD ────────────────────────────────────────────────────────────
+
+/**
+ * Load all receitas for a specific lote (plantio_id).
+ */
+export async function loadReceitasByLote(plantioId) {
+  const userId = await getUserId();
+  if (!userId || !plantioId) return [];
+
+  const { data, error } = await supabase
+    .from('receitas')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('plantio_id', plantioId)
+    .order('data', { ascending: false });
+
+  if (error) { logDbError('loadReceitasByLote', error); return []; }
+  return data || [];
+}
+
+/**
+ * Load all receitas for the current user.
+ */
+export async function loadTodasReceitas(propriedadeId = null) {
+  const userId = await getUserId();
+  if (!userId) return [];
+
+  let q = supabase
+    .from('receitas')
+    .select('*')
+    .eq('user_id', userId)
+    .order('data', { ascending: false });
+
+  if (propriedadeId) q = q.eq('propriedade_id', propriedadeId);
+
+  const { data, error } = await q;
+  if (error) { logDbError('loadTodasReceitas', error); return []; }
+  return data || [];
+}
+
+/**
+ * Add a new receita record.
+ */
+export async function addReceita({ plantioId, propriedadeId, categoria, descricao, comprador, quantidade, unidade, valor, data, observacao }) {
+  const userId = await getUserId();
+  if (!userId) return null;
+
+  const { data: row, error } = await supabase
+    .from('receitas')
+    .insert({
+      user_id:        userId,
+      plantio_id:     plantioId     || null,
+      propriedade_id: propriedadeId || null,
+      categoria,
+      descricao:      descricao     || null,
+      comprador:      comprador     || null,
+      quantidade:     quantidade != null && quantidade !== '' ? parseFloat(quantidade) : null,
+      unidade:        unidade       || null,
+      valor:          parseFloat(valor) || 0,
+      data,
+      observacao:     observacao    || null,
+    })
+    .select()
+    .single();
+
+  if (error) { logDbError('addReceita', error); return null; }
+  return row;
+}
+
+/**
+ * Delete a receita record by id.
+ */
+export async function deleteReceita(id) {
+  const { error } = await supabase
+    .from('receitas')
+    .delete()
+    .eq('id', id);
+
+  if (error) { logDbError('deleteReceita', error); return false; }
   return true;
 }
