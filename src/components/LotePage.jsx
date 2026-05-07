@@ -383,6 +383,12 @@ function TabColheita({ cultura, lote }) {
   function isoLocal(d) {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
+  function makeStableIdLocal(prefix, etapa) {
+    const slug = etapa.toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    return `${prefix}_${slug}`;
+  }
 
   // Resolve viveiro shift
   const shift = (() => {
@@ -390,13 +396,44 @@ function TabColheita({ cultura, lote }) {
       const m = cultura.metodosPropagacao.find(x => x.key === lote.metodo_propagacao);
       if (m?.diasViveiro) return m.diasViveiro;
     }
-    return safeLS(`lote_mudas_${lote.id}`, null) === '1' ? 15 : 0;
+    return 0;
   })();
 
   const plantioDate = new Date(lote.data_plantio + 'T12:00:00');
-  const doneStatus  = safeLS(`cronograma_status_lote_${lote.id}`, {});
-  const customRows  = safeLS(`cronograma_custom_lote_${lote.id}`, []);
   const todayStr    = today();
+
+  // Load from Supabase on mount — then merge with localStorage fallback
+  const [doneStatus, setDoneStatus]   = useState(() => safeLS(`cronograma_status_lote_${lote.id}`, {}));
+  const [customRows, setCustomRows]   = useState(() => safeLS(`cronograma_custom_lote_${lote.id}`, []));
+
+  useEffect(() => {
+    import('../hooks/useSupabaseSync').then(({ loadCronogramaAtividades }) => {
+      loadCronogramaAtividades(lote.id).then(dbRows => {
+        if (!dbRows.length) return;
+        const statusMap  = {};
+        const custom     = [];
+        const customDb   = dbRows.filter(r => r.is_custom);
+        dbRows.filter(r => !r.is_custom).forEach(row => {
+          const isViveiro = (cultura.metodosPropagacao || [])
+            .flatMap(m => m.etapasViveiro || [])
+            .some(e => e.etapa === row.etapa);
+          statusMap[makeStableIdLocal(isViveiro ? 'viveiro' : 'default', row.etapa)] =
+            { status: row.status, data: row.data_execucao };
+        });
+        customDb.forEach((row, i) => {
+          statusMap[`custom_${i}`] = { status: row.status, data: row.data_execucao };
+          custom.push({ dia: row.dia_previsto, etapa: row.etapa, produto: row.produto || '',
+            dose: row.dose || '', forma: row.forma_aplicacao || '', tipo: row.tipo || 'manejo' });
+        });
+        setDoneStatus(statusMap);
+        if (custom.length) setCustomRows(custom);
+        // Update cache
+        localStorage.setItem(`cronograma_status_lote_${lote.id}`, JSON.stringify(statusMap));
+        if (custom.length) localStorage.setItem(`cronograma_custom_lote_${lote.id}`, JSON.stringify(custom));
+      });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lote.id]);
 
   // Build list of colheita events
   const colheitas = [];
@@ -406,7 +443,7 @@ function TabColheita({ cultura, lote }) {
     if (etapa.tipo !== 'colheita') return;
     const dia          = etapa.dia + shift;
     const dataPlanned  = isoLocal(addDaysLocal(plantioDate, dia));
-    const st           = doneStatus[`default_${i}`];
+    const st           = doneStatus[makeStableIdLocal('default', etapa.etapa)]; // fixed: was default_${i}
     const dataReal     = (st?.status === 'feito' && st?.data) ? st.data : null;
     colheitas.push({
       id: `static_${i}`,

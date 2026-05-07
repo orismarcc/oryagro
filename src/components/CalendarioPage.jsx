@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, CalendarDays, X, DollarSign } from 'lucide-react';
 import { CULTURAS } from '../data/culturas';
 import { loadTodosLotes } from '../hooks/useSupabaseSync';
 import { supabase } from '../lib/supabase';
 import { updateParcela } from '../hooks/useCompradores';
+import { useCronogramaStatusBatch } from '../hooks/useCronogramaSync';
 
 const DIAS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -75,13 +76,12 @@ function resolveShift(lote, cultura) {
   return usaMudas ? 15 : 0;
 }
 
-/** Resolve the status (done/date) for a specific step key from localStorage */
-function resolveStepStatus(lote, stepKey) {
-  try {
-    const raw = localStorage.getItem(`cronograma_status_lote_${lote.id}`);
-    const stored = raw ? JSON.parse(raw) : {};
-    return stored[stepKey] || null;
-  } catch { return null; }
+/**
+ * Resolve the status (done/date) for a specific step key.
+ * Uses the Supabase-loaded statusMap passed in — no localStorage read here.
+ */
+function resolveStepStatus(statusMap, stepKey) {
+  return statusMap?.[stepKey] || null;
 }
 
 /** Make a stable step ID matching CronogramaTimeline's logic */
@@ -94,8 +94,14 @@ function makeStepId(prefix, etapa) {
   return `${prefix}_${slug}`;
 }
 
-/** Gera atividades de um lote para todos os dias do cronograma (viveiro + estático + customizados) */
-function getAtividadesLote(lote, cultura) {
+/**
+ * Gera atividades de um lote para todos os dias do cronograma.
+ * @param {object} lote
+ * @param {object} cultura
+ * @param {object} statusMap    — { [stepId]: { status, data } } from Supabase
+ * @param {Array}  customRowsForLote — custom rows from Supabase (may be empty)
+ */
+function getAtividadesLote(lote, cultura, statusMap = {}, customRowsForLote = []) {
   if (!cultura) return [];
   const plantioDate = new Date(lote.data_plantio + 'T12:00:00');
   const shift = resolveShift(lote, cultura);
@@ -112,10 +118,8 @@ function getAtividadesLote(lote, cultura) {
     metodoObj.etapasViveiro.forEach((etapa, i) => {
       const dataAtividade = addDays(plantioDate, etapa.dia);
       const stepKey = makeStepId('viveiro', etapa.etapa);
-      const stepStatus = resolveStepStatus(lote, stepKey);
-      // Skip removed steps
+      const stepStatus = resolveStepStatus(statusMap, stepKey);
       if (stepStatus?.status === 'removida') return;
-      // If done with a different date, use the actual date
       const dataStr = (stepStatus?.status === 'feito' && stepStatus?.data)
         ? stepStatus.data
         : isoDate(dataAtividade);
@@ -146,8 +150,7 @@ function getAtividadesLote(lote, cultura) {
     cultura.cronograma.forEach((etapa, i) => {
       const dataAtividade = addDays(plantioDate, etapa.dia + shift);
       const stepKey = makeStepId('default', etapa.etapa);
-      const stepStatus = resolveStepStatus(lote, stepKey);
-      // Skip removed steps
+      const stepStatus = resolveStepStatus(statusMap, stepKey);
       if (stepStatus?.status === 'removida') return;
       const dataStr = (stepStatus?.status === 'feito' && stepStatus?.data)
         ? stepStatus.data
@@ -174,24 +177,12 @@ function getAtividadesLote(lote, cultura) {
     });
   }
 
-  // 3. Custom rows added by user via CronogramaTimeline (stored in localStorage)
-  let customRows = [];
-  try {
-    const raw = localStorage.getItem(`cronograma_custom_lote_${lote.id}`);
-    customRows = raw ? JSON.parse(raw) : [];
-  } catch { customRows = []; }
-
-  // I-03 fix: resolve real done status for custom rows from localStorage
-  let customDoneStatus = {};
-  try {
-    const raw = localStorage.getItem(`cronograma_status_lote_${lote.id}`);
-    customDoneStatus = raw ? JSON.parse(raw) : {};
-  } catch { customDoneStatus = {}; }
-
+  // 3. Custom rows — from Supabase (passed in), NOT from localStorage
+  const customRows = customRowsForLote || [];
   customRows.forEach((row, i) => {
-    // Skip removed custom steps
     const stepKeyCustom = `custom_${i}`;
-    if (customDoneStatus[stepKeyCustom]?.status === 'removida') return;
+    const stepStatus = resolveStepStatus(statusMap, stepKeyCustom);
+    if (stepStatus?.status === 'removida') return;
 
     let dataStr;
     if (row.dataPrevista) {
@@ -203,8 +194,6 @@ function getAtividadesLote(lote, cultura) {
       }
     }
     if (!dataStr) return;
-    // I-03: use actual status stored by CronogramaTimeline (key: custom_${originalIndex})
-    const stepStatus = customDoneStatus[`custom_${i}`] || null;
     const doneData = (stepStatus?.status === 'feito' && stepStatus?.data) ? stepStatus.data : null;
     activities.push({
       id: `${lote.id}_custom_${i}`,
@@ -223,7 +212,7 @@ function getAtividadesLote(lote, cultura) {
       tipo: row.tipo || 'manejo',
       isCustom: true,
       isViveiro: false,
-      done: stepStatus?.status === 'feito',  // I-03: real status, not hardcoded false
+      done: stepStatus?.status === 'feito',
     });
   });
 
@@ -570,6 +559,10 @@ export default function CalendarioPage() {
     loadTodosLotes(100).then(data => { setLotes(data); setLoading(false); });
   }, []);
 
+  // ── Cronograma status from Supabase (source of truth) ───────────────────────
+  const loteIds = useMemo(() => lotes.map(l => l.id), [lotes]);
+  const { statusByLote, customByLote } = useCronogramaStatusBatch(loteIds);
+
   // Load parcelas pendentes do mês/semana visível
   const loadParcelas = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -607,7 +600,8 @@ export default function CalendarioPage() {
   lotes.forEach(lote => {
     const cultura = CULTURAS[lote.cultura_id];
     if (!cultura) return;
-    getAtividadesLote(lote, cultura).forEach(a => {
+    // Pass Supabase-loaded status maps — never read from localStorage here
+    getAtividadesLote(lote, cultura, statusByLote[lote.id], customByLote[lote.id]).forEach(a => {
       if (!atividadesPorDia[a.data]) atividadesPorDia[a.data] = [];
       atividadesPorDia[a.data].push(a);
     });

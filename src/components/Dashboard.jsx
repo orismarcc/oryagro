@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CULTURAS } from '../data/culturas';
 import { loadTodosLotes, loadPropriedades } from '../hooks/useSupabaseSync';
 import { loadEstoque } from '../hooks/useGestao';
+import { useCronogramaStatusBatch, makeStableId } from '../hooks/useCronogramaSync';
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
 import { Plus, CalendarDays, Sprout, CheckCircle2, LogOut, Layers, AlertCircle, Clock, ArrowRight, Leaf, Building2, ChevronRight, AlertTriangle, Settings } from 'lucide-react';
 
@@ -16,18 +17,17 @@ function makeStableId(prefix, etapa) {
   return `${prefix}_${slug}`;
 }
 
-function getStatusEtapas(cultura, lote) {
+/** doneStatus is passed in — never read from localStorage directly */
+function getStatusEtapas(cultura, lote, doneStatus = {}) {
   if (!cultura?.cronograma) return { atrasadas: 0, hoje: null, amanha: null, proxima: null };
   try {
     const diasDecorridos = Math.max(
       0, Math.floor((Date.now() - new Date(lote.data_plantio + 'T12:00:00')) / 86_400_000)
     );
-    const doneStatus = JSON.parse(localStorage.getItem(`cronograma_status_lote_${lote.id}`)) || {};
     const metodoObj = lote.metodo_propagacao && cultura.metodosPropagacao
       ? cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao) ?? null
       : null;
-    const shift = metodoObj?.diasViveiro
-      ?? (localStorage.getItem(`lote_mudas_${lote.id}`) === '1' ? 15 : 0);
+    const shift = metodoObj?.diasViveiro ?? 0;
 
     const steps = [
       // I-01: use slug-based stable IDs (matches CronogramaTimeline post-migration)
@@ -54,7 +54,7 @@ function getStatusEtapas(cultura, lote) {
 
 // ── Lot card ─────────────────────────────────────────────────────────────────
 
-function LoteCard({ lote, onSelect, index }) {
+function LoteCard({ lote, onSelect, index, doneStatus = {} }) {
   const cultura = CULTURAS[lote.cultura_id];
   if (!cultura) return null;
 
@@ -148,7 +148,7 @@ function LoteCard({ lote, onSelect, index }) {
 
       {/* ── Próxima etapa / alertas ── */}
       {!prontoParaColheita && (() => {
-        const { atrasadas, hoje, amanha, proxima } = getStatusEtapas(cultura, lote);
+        const { atrasadas, hoje, amanha, proxima } = getStatusEtapas(cultura, lote, doneStatus);
         if (!atrasadas && !hoje && !amanha && !proxima) return null;
         return (
           <div className="mt-2.5 pt-2.5 flex flex-wrap gap-1.5"
@@ -322,7 +322,7 @@ function EmptyLotes({ onAdd }) {
 
 // ── EstaSemanaSection ─────────────────────────────────────────────────────────
 
-function EstaSemanaSection({ lotes }) {
+function EstaSemanaSection({ lotes, statusByLote = {} }) {
   const [collapsed, setCollapsed] = useState(false);
 
   const hoje = new Date();
@@ -335,16 +335,16 @@ function EstaSemanaSection({ lotes }) {
     if (!cultura?.cronograma) return;
     try {
       const dataPlantio = new Date(lote.data_plantio + 'T12:00:00');
-      const doneStatus = JSON.parse(localStorage.getItem(`cronograma_status_lote_${lote.id}`)) || {};
+      // Use Supabase-loaded status (already includes localStorage fallback from hook)
+      const doneStatus = statusByLote[lote.id] || {};
       const metodoObj = lote.metodo_propagacao && cultura.metodosPropagacao
         ? cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao) ?? null
         : null;
-      const shift = metodoObj?.diasViveiro
-        ?? (localStorage.getItem(`lote_mudas_${lote.id}`) === '1' ? 15 : 0);
+      const shift = metodoObj?.diasViveiro ?? 0;
 
       const steps = [
-        ...(metodoObj?.etapasViveiro?.map(e => ({ ...e, _id: `viveiro_${e.etapa.toLowerCase().replace(/\s+/g, '_')}` })) ?? []),
-        ...cultura.cronograma.map(e => ({ ...e, dia: e.dia + shift, _id: `default_${e.etapa.toLowerCase().replace(/\s+/g, '_')}` })),
+        ...(metodoObj?.etapasViveiro?.map(e => ({ ...e, _id: makeStableId('viveiro', e.etapa) })) ?? []),
+        ...cultura.cronograma.map(e => ({ ...e, dia: e.dia + shift, _id: makeStableId('default', e.etapa) })),
       ];
 
       steps.forEach(step => {
@@ -446,6 +446,10 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
     });
   }, [refreshKey]);
 
+  // ── Cronograma status — Supabase as source of truth ──────────────────────────
+  const loteIds = useMemo(() => lotes.map(l => l.id), [lotes]);
+  const { statusByLote } = useCronogramaStatusBatch(loteIds);
+
   const lotesOrfaos = lotes.filter(l => !l.propriedade_id);
 
   return (
@@ -534,7 +538,7 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
           <EmptyLotes onAdd={onManagePropriedades} />
         ) : (
           <>
-            <EstaSemanaSection lotes={lotes} />
+            <EstaSemanaSection lotes={lotes} statusByLote={statusByLote} />
 
             {propriedades.length > 0 && (
               <div className="mb-5">
@@ -552,7 +556,7 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
                 <p className="section-label mb-3 px-1 text-muted-foreground">Sem propriedade ({lotesOrfaos.length})</p>
                 <div className="space-y-3">
                   {lotesOrfaos.map((l, i) => (
-                    <LoteCard key={l.id} lote={l} onSelect={onSelectLote} index={i} />
+                    <LoteCard key={l.id} lote={l} onSelect={onSelectLote} index={i} doneStatus={statusByLote[l.id]} />
                   ))}
                 </div>
               </div>

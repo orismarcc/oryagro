@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database } from 'lucide-react';
 import { loadLotesByPropriedade, deleteLoteCompleto } from '../hooks/useSupabaseSync';
+import { useCronogramaStatusBatch } from '../hooks/useCronogramaSync';
 import { loadEstoque } from '../hooks/useGestao';
 import { CULTURAS } from '../data/culturas';
 import { resolveLifecycle, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
@@ -20,18 +21,17 @@ function makeStableId(prefix, etapa) {
   return `${prefix}_${slug}`;
 }
 
-function getStatusEtapas(cultura, lote) {
+/** doneStatus is passed in — never read from localStorage directly */
+function getStatusEtapas(cultura, lote, doneStatus = {}) {
   if (!cultura?.cronograma) return { atrasadas: 0, hoje: null, amanha: null, proxima: null };
   try {
     const diasDecorridos = Math.max(
       0, Math.floor((Date.now() - new Date(lote.data_plantio + 'T12:00:00')) / 86_400_000)
     );
-    const doneStatus = JSON.parse(localStorage.getItem(`cronograma_status_lote_${lote.id}`)) || {};
     const metodoObj = lote.metodo_propagacao && cultura.metodosPropagacao
       ? cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao) ?? null
       : null;
-    const shift = metodoObj?.diasViveiro
-      ?? (localStorage.getItem(`lote_mudas_${lote.id}`) === '1' ? 15 : 0);
+    const shift = metodoObj?.diasViveiro ?? 0;
 
     const steps = [
       // I-01: use slug-based stable IDs (matches CronogramaTimeline post-migration)
@@ -56,7 +56,7 @@ function getStatusEtapas(cultura, lote) {
   } catch { return { atrasadas: 0, hoje: null, amanha: null, proxima: null }; }
 }
 
-function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete }) {
+function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete, doneStatus = {} }) {
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
 
@@ -89,7 +89,7 @@ function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete }) {
   // Schedule status badge
   const scheduleStatus = (() => {
     if (diasDecorridos <= 0) return { label: 'Futuro', bg: '#dbeafe', color: '#2563eb' };
-    const { atrasadas } = getStatusEtapas(cultura, lote);
+    const { atrasadas } = getStatusEtapas(cultura, lote, doneStatus);
     if (atrasadas > 0) return { label: `${atrasadas} pendente${atrasadas > 1 ? 's' : ''}`, bg: '#fee2e2', color: '#dc2626' };
     return { label: 'Em dia', bg: '#dcfce7', color: '#16a34a' };
   })();
@@ -181,7 +181,7 @@ function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete }) {
 
       {/* Next step / alerts */}
       {!prontoParaColheita && (() => {
-        const { atrasadas, hoje, amanha, proxima } = getStatusEtapas(cultura, lote);
+        const { atrasadas, hoje, amanha, proxima } = getStatusEtapas(cultura, lote, doneStatus);
         if (!atrasadas && !hoje && !amanha && !proxima) return null;
         return (
           <div className="mt-2.5 pt-2.5 flex flex-wrap gap-1.5"
@@ -457,6 +457,10 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
     if (ok) setLotes(prev => prev.filter(l => l.id !== id));
   };
 
+  // Cronograma status from Supabase — source of truth for step alerts
+  const loteIds = useMemo(() => lotes.map(l => l.id), [lotes]);
+  const { statusByLote } = useCronogramaStatusBatch(loteIds);
+
   const canDeleteLote = can(userRole, FARM_ACTIONS.DELETE_ANY);
 
   return (
@@ -528,6 +532,7 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
                 index={i}
                 onDeleteLote={handleDeleteLote}
                 canDelete={canDeleteLote}
+                doneStatus={statusByLote[lote.id]}
               />
             ))}
           </div>

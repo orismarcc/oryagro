@@ -9,6 +9,7 @@ import { Plus, Printer, Trash2, CheckCircle2, Circle, ChevronRight, CalendarDays
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
 import { loadEstoque, addMovimento } from '../hooks/useGestao';
 import { addEvento, syncCronogramaStatus, loadCronogramaAtividades } from '../hooks/useSupabaseSync';
+import { buildStatusFromDbRows, useCronogramaRealtime } from '../hooks/useCronogramaSync';
 import { logDbError } from '../lib/logger';
 
 const TIPO_META = {
@@ -287,6 +288,22 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
 
   useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(status)); }, [storageKey, status]);
   useEffect(() => { localStorage.setItem(customKey, JSON.stringify(customRows)); }, [customKey, customRows]);
+
+  // ── Realtime: merge remote changes from other devices/users ─────────────────
+  const vivStepsForRealtime = (metodoObj?.etapasViveiro ?? []);
+  useCronogramaRealtime(selectedLote?.id, (dbRows) => {
+    const { statusMap: dbStatus, customRows: dbCustomRows } = buildStatusFromDbRows(dbRows, vivStepsForRealtime);
+    // Merge: DB wins. Preserves local-only keys (e.g. _migrated flag).
+    setStatus(prev => {
+      const merged = { ...prev, ...dbStatus };
+      localStorage.setItem(storageKey, JSON.stringify(merged));
+      return merged;
+    });
+    if (dbCustomRows.length) {
+      setCustomRows(dbCustomRows);
+      localStorage.setItem(customKey, JSON.stringify(dbCustomRows));
+    }
+  });
 
   useEffect(() => {
     if (!propriedadeId) { setInsumos([]); return; }
