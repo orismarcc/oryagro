@@ -77,8 +77,9 @@ const VALIDATORS = [
 
       return tables
         .filter(t => {
+          // PG syntax: ALTER TABLE [IF EXISTS] [public.]tablename ENABLE ROW LEVEL SECURITY
           const re = new RegExp(
-            `ENABLE\\s+ROW\\s+LEVEL\\s+SECURITY\\s+ON\\s+(?:public\\.)?${t}\\b`, 'i'
+            `ALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?(?:public\\.)?${t}\\s+ENABLE\\s+ROW\\s+LEVEL\\s+SECURITY`, 'i'
           );
           return !re.test(sql);
         })
@@ -113,11 +114,16 @@ const VALIDATORS = [
     severity: 'warning',
     description: 'Funções SECURITY DEFINER devem fixar search_path',
     check(sql) {
+      // Capture from CREATE FUNCTION up to the opening $$ so that SET search_path
+      // (which appears between SECURITY DEFINER and AS $$) is included in the block.
       const funcs = [...sql.matchAll(
-        /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([\w.]+)[^$]*SECURITY\s+DEFINER/gis
+        /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([\w.]+)[\s\S]*?AS\s*\$\$/gi
       )];
       return funcs
-        .filter(([block]) => !/SET\s+search_path\s*=\s*public/i.test(block))
+        .filter(([block]) =>
+          /SECURITY\s+DEFINER/i.test(block) &&
+          !/SET\s+search_path\s*=\s*public/i.test(block)
+        )
         .map(([, name]) => `Função '${name}' usa SECURITY DEFINER sem 'SET search_path = public'`);
     },
   },

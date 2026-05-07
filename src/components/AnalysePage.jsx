@@ -4,6 +4,7 @@ import { CULTURAS } from '../data/culturas';
 import { exportarRelatorioPDF } from '../lib/pdfExport';
 import { loadTodosLotes, loadAllColheitaEventos } from '../hooks/useSupabaseSync';
 import { loadMovimentosByLote, loadTodasVendas } from '../hooks/useGestao';
+import { loadTodasDespesas } from '../hooks/useDespesas';
 import { resolveLifecycle, fmtDateBR } from '../lib/lifecycle';
 import { logDbError } from '../lib/logger';
 import { estimateKgAnual, getProductionBase } from '../constants/cropYields';
@@ -1455,6 +1456,61 @@ function CustoProducaoCard({ lotes, todasVendas }) {
   );
 }
 
+/* ─── Despesas por Categoria ──────────────────────────────── */
+
+function DespesasPorCategoriaCard({ despesas }) {
+  if (!despesas || despesas.length === 0) return null;
+
+  const fmtBRL = (v) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v ?? 0);
+
+  // Group by category
+  const porCategoria = despesas.reduce((acc, d) => {
+    acc[d.categoria] = (acc[d.categoria] || 0) + (d.valor ?? 0);
+    return acc;
+  }, {});
+
+  const sorted = Object.entries(porCategoria).sort(([, a], [, b]) => b - a);
+  const total = sorted.reduce((s, [, v]) => s + v, 0);
+  const maxVal = sorted[0]?.[1] || 1;
+
+  return (
+    <Card>
+      <div className="px-4 pt-4 pb-1 flex items-center gap-2 border-b border-gray-50">
+        <DollarSign size={14} className="text-orange-500" />
+        <span className="text-[13px] font-bold text-gray-700">Despesas por Categoria</span>
+        <span className="ml-auto text-[11px] font-bold text-orange-600">{fmtBRL(total)}</span>
+      </div>
+      <div className="px-4 py-3 flex flex-col gap-3">
+        {sorted.slice(0, 6).map(([categoria, valor]) => {
+          const pct = Math.round((valor / maxVal) * 100);
+          return (
+            <div key={categoria} className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-semibold text-gray-700 truncate flex-1 mr-2">{categoria}</span>
+                <span className="text-[11px] font-bold text-orange-600 flex-shrink-0">{fmtBRL(valor)}</span>
+              </div>
+              <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full bg-orange-400"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${pct}%` }}
+                  transition={{ duration: 0.7, ease: 'easeOut' }}
+                />
+              </div>
+            </div>
+          );
+        })}
+        {sorted.length > 6 && (
+          <p className="text-[10px] text-gray-400 text-center">
+            + {sorted.length - 6} categoria{sorted.length - 6 !== 1 ? 's' : ''} adicional{sorted.length - 6 !== 1 ? 'is' : ''}
+          </p>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 /* ─── Empty state ─────────────────────────────────────────── */
 
 function EmptyState() {
@@ -1488,6 +1544,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
   const [lotes, setLotes] = useState([]);
   const [eventosColheita, setEventosColheita] = useState([]);
   const [todasVendas, setTodasVendas] = useState([]);
+  const [despesas, setDespesas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exportingPDF, setExportingPDF] = useState(false);
   const [selectedLoteId, setSelectedLoteId] = useState(null); // null = all
@@ -1495,12 +1552,13 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([loadTodosLotes(500), loadAllColheitaEventos(), loadTodasVendas()])
-      .then(([data, eventos, vendas]) => {
+    Promise.all([loadTodosLotes(500), loadAllColheitaEventos(), loadTodasVendas(), loadTodasDespesas()])
+      .then(([data, eventos, vendas, desp]) => {
         if (!cancelled) {
           setLotes(Array.isArray(data) ? data : []);
           setEventosColheita(Array.isArray(eventos) ? eventos : []);
           setTodasVendas(Array.isArray(vendas) ? vendas : []);
+          setDespesas(Array.isArray(desp) ? desp : []);
           setLoading(false);
         }
       })
@@ -1743,6 +1801,16 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
             >
               <SectionLabel>Indicadores de Campo</SectionLabel>
               <IndicadoresCampoCard lotes={lotesFiltrados} allLotes={lotes} />
+            </motion.div>
+
+            {/* Despesas por Categoria */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.22 }}
+            >
+              <SectionLabel>Despesas por Categoria</SectionLabel>
+              <DespesasPorCategoriaCard despesas={despesas} />
             </motion.div>
 
             {/* Resumo por Propriedade */}

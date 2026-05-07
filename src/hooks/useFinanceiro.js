@@ -10,14 +10,14 @@ async function getUserId() {
  * Carrega todos os dados brutos para a DRE:
  * - vendas de todos os lotes do usuário (com data)
  * - movimentos de saída com preço (join estoque_insumos para preco_unitario)
- * - mao_obra_registros de todos os lotes
+ * - despesas de todos os lotes
  * - plantios com data_plantio, status, cultura_id, nome, propriedade_id, mao_obra_total (legado)
  */
 export async function loadDreRawData() {
   const userId = await getUserId();
-  if (!userId) return { vendas: [], movimentos: [], maoObra: [], plantios: [] };
+  if (!userId) return { vendas: [], movimentos: [], despesas: [], plantios: [] };
 
-  const [vendasRes, movimentosRes, maoObraRes, plantiosRes] = await Promise.all([
+  const [vendasRes, movimentosRes, despesasRes, plantiosRes] = await Promise.all([
     supabase
       .from('vendas')
       .select('id, plantio_id, comprador_id, data, quantidade, unidade, preco_unitario, destino')
@@ -32,10 +32,10 @@ export async function loadDreRawData() {
       .order('data', { ascending: false }),
 
     supabase
-      .from('mao_obra_registros')
-      .select('id, plantio_id, data_inicio, data_fim, valor, descricao')
+      .from('despesas')
+      .select('id, plantio_id, categoria, subcategoria, descricao, prestador, valor, data')
       .eq('user_id', userId)
-      .order('data_inicio', { ascending: false }),
+      .order('data', { ascending: false }),
 
     supabase
       .from('plantios')
@@ -46,14 +46,14 @@ export async function loadDreRawData() {
 
   if (vendasRes.error)     logDbError('loadDreRawData.vendas', vendasRes.error);
   if (movimentosRes.error) logDbError('loadDreRawData.movimentos', movimentosRes.error);
-  if (maoObraRes.error)    logDbError('loadDreRawData.maoObra', maoObraRes.error);
+  if (despesasRes.error)   logDbError('loadDreRawData.despesas', despesasRes.error);
   if (plantiosRes.error)   logDbError('loadDreRawData.plantios', plantiosRes.error);
 
   return {
-    vendas:    vendasRes.data    || [],
+    vendas:     vendasRes.data     || [],
     movimentos: movimentosRes.data || [],
-    maoObra:   maoObraRes.data   || [],
-    plantios:  plantiosRes.data  || [],
+    despesas:   despesasRes.data   || [],
+    plantios:   plantiosRes.data   || [],
   };
 }
 

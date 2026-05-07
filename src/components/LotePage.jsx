@@ -4,7 +4,7 @@ import {
   ArrowLeft, CalendarDays, Sprout, Package, TrendingUp,
   Cloud, CheckCircle2, Plus, Trash2, AlertTriangle,
   Thermometer, Droplets, ShoppingCart, BookOpen, Loader2, PenLine,
-  HardHat,
+  HardHat, Receipt,
 } from 'lucide-react';
 import CronogramaTimeline from './CronogramaTimeline';
 import { useWeather } from '../hooks/useWeather';
@@ -25,6 +25,7 @@ import {
   deleteMaoObraRegistro,
 } from '../hooks/useGestao';
 import { loadCompradores, addParcelas } from '../hooks/useCompradores';
+import { CATEGORIAS_DESPESA, addDespesa, loadDespesasByLote, deleteDespesa } from '../hooks/useDespesas';
 import { can, FARM_ACTIONS } from '../lib/permissions';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -1639,14 +1640,303 @@ function TabDiario({ lote, canDelete }) {
   );
 }
 
+// ─── Tab: Despesas ──────────────────────────────────────────────────────────
+
+function TabDespesas({ lote, cor, canDelete }) {
+  const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
+
+  const [registros, setRegistros] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+  const [form, setForm] = useState({
+    data: today(),
+    categoria: CATEGORIAS_DESPESA[0].label,
+    subcategoria: '',
+    descricao: '',
+    prestador: '',
+    valor: '',
+    observacao: '',
+  });
+
+  const subcats = CATEGORIAS_DESPESA.find(c => c.label === form.categoria)?.subcategorias || [];
+
+  const fetchRegistros = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await loadDespesasByLote(lote.id);
+      setRegistros(data ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }, [lote.id]);
+
+  useEffect(() => { fetchRegistros(); }, [fetchRegistros]);
+
+  const handleAdd = async () => {
+    if (!form.data || !form.valor || parseFloat(form.valor) <= 0) return;
+    setSaving(true);
+    try {
+      await addDespesa({
+        plantioId:     lote.id,
+        propriedadeId: lote.propriedade_id || null,
+        categoria:     form.categoria,
+        subcategoria:  form.subcategoria || null,
+        descricao:     form.descricao    || null,
+        prestador:     form.prestador    || null,
+        valor:         parseFloat(form.valor),
+        data:          form.data,
+        observacao:    form.observacao   || null,
+      });
+      await fetchRegistros();
+      setForm({
+        data: today(),
+        categoria: CATEGORIAS_DESPESA[0].label,
+        subcategoria: '',
+        descricao: '',
+        prestador: '',
+        valor: '',
+        observacao: '',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await deleteDespesa(id);
+      setRegistros(prev => prev.filter(r => r.id !== id));
+    } catch {}
+    setConfirmDeleteId(null);
+  };
+
+  const totalDespesas = registros.reduce((s, r) => s + (r.valor ?? 0), 0);
+
+  // Group by category for summary display
+  const porCategoria = registros.reduce((acc, r) => {
+    acc[r.categoria] = (acc[r.categoria] || 0) + (r.valor ?? 0);
+    return acc;
+  }, {});
+
+  return (
+    <div
+      className="px-4 pt-5 max-w-2xl mx-auto overflow-y-auto"
+      style={{ paddingBottom: SAFE_BOTTOM, scrollbarWidth: 'none' }}
+    >
+      {/* Total summary */}
+      {registros.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="card p-4 mb-5"
+          style={{ borderColor: `${cor}30` }}
+        >
+          <p className="section-label mb-1">Total Despesas</p>
+          <p className="text-[22px] font-black" style={{ color: cor }}>{fmtBRL(totalDespesas)}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">{registros.length} registro{registros.length !== 1 ? 's' : ''}</p>
+
+          {/* Category breakdown */}
+          {Object.entries(porCategoria).length > 1 && (
+            <div className="mt-3 space-y-1 border-t pt-3" style={{ borderColor: `${cor}20` }}>
+              {Object.entries(porCategoria).map(([cat, val]) => (
+                <div key={cat} className="flex justify-between items-center">
+                  <span className="text-[11px] text-muted-foreground truncate flex-1 mr-2">{cat}</span>
+                  <span className="text-[11px] font-bold flex-shrink-0" style={{ color: cor }}>{fmtBRL(val)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* Form */}
+      <p className="section-label mb-3">Registrar Despesa</p>
+      <div className="card p-4 mb-5">
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Data</label>
+            <input
+              type="date"
+              value={form.data}
+              onChange={e => setForm(f => ({ ...f, data: e.target.value }))}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': cor }}
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Valor (R$)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0,00"
+              value={form.valor}
+              onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': cor }}
+            />
+          </div>
+        </div>
+
+        <div className="mb-3">
+          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Categoria</label>
+          <select
+            value={form.categoria}
+            onChange={e => setForm(f => ({ ...f, categoria: e.target.value, subcategoria: '' }))}
+            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+            style={{ '--tw-ring-color': cor }}
+          >
+            {CATEGORIAS_DESPESA.map(c => (
+              <option key={c.label} value={c.label}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {subcats.length > 0 && (
+          <div className="mb-3">
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Subcategoria (opcional)</label>
+            <select
+              value={form.subcategoria}
+              onChange={e => setForm(f => ({ ...f, subcategoria: e.target.value }))}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': cor }}
+            >
+              <option value="">Selecionar…</option>
+              {subcats.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Descrição (opcional)</label>
+            <input
+              type="text"
+              placeholder="Ex: Capina geral"
+              value={form.descricao}
+              onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': cor }}
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Prestador (opcional)</label>
+            <input
+              type="text"
+              placeholder="Ex: João Silva"
+              value={form.prestador}
+              onChange={e => setForm(f => ({ ...f, prestador: e.target.value }))}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': cor }}
+            />
+          </div>
+        </div>
+
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          onClick={handleAdd}
+          disabled={saving || !form.data || !form.valor || parseFloat(form.valor) <= 0}
+          className="w-full py-3 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
+          style={{ background: cor }}
+        >
+          {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+          Registrar Despesa
+        </motion.button>
+      </div>
+
+      {/* List */}
+      <p className="section-label mb-3">Registros</p>
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 size={24} className="animate-spin text-muted-foreground" />
+        </div>
+      ) : registros.length === 0 ? (
+        <div className="text-center py-12">
+          <Receipt size={32} className="mx-auto mb-3 text-muted-foreground opacity-30" />
+          <p className="text-[13px] text-muted-foreground">Nenhuma despesa registrada ainda</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {registros.map(r => (
+            <motion.div
+              key={r.id}
+              layout
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="card p-4 flex items-start gap-3"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <span
+                    className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                    style={{ background: `${cor}18`, color: cor }}
+                  >
+                    {formatDatePtBR(r.data)}
+                  </span>
+                  <span
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                    style={{ background: 'hsl(210 16% 94%)', color: 'hsl(215 16% 40%)' }}
+                  >
+                    {r.categoria}
+                  </span>
+                  {r.subcategoria && (
+                    <span className="text-[10px] text-muted-foreground">{r.subcategoria}</span>
+                  )}
+                </div>
+                {r.descricao && (
+                  <p className="text-[12px] text-foreground mb-0.5">{r.descricao}</p>
+                )}
+                {r.prestador && (
+                  <p className="text-[11px] text-muted-foreground mb-0.5">👤 {r.prestador}</p>
+                )}
+                <p className="text-[14px] font-bold" style={{ color: cor }}>{fmtBRL(r.valor)}</p>
+              </div>
+              {canDelete && (
+                confirmDeleteId === r.id ? (
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => handleDelete(r.id)}
+                      className="text-[11px] font-bold px-2 py-1 rounded-lg bg-red-100 text-red-600"
+                    >
+                      Confirmar
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="text-[11px] font-bold px-2 py-1 rounded-lg bg-gray-100 text-gray-500"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <motion.button
+                    whileTap={{ scale: 0.85 }}
+                    onClick={() => setConfirmDeleteId(r.id)}
+                    className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5"
+                  >
+                    <Trash2 size={14} />
+                  </motion.button>
+                )
+              )}
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main LotePage ──────────────────────────────────────────────────────────
 
 const TABS = [
   { value: 'cronograma', label: 'Cronograma', Icon: CalendarDays },
-  { value: 'insumos',    label: 'Insumos',    Icon: Package },
   { value: 'colheita',   label: 'Colheita',   Icon: TrendingUp },
   { value: 'vendas',     label: 'Vendas',     Icon: ShoppingCart },
-  { value: 'mao_obra',   label: 'M. de Obra', Icon: HardHat },
+  { value: 'despesas',   label: 'Despesas',   Icon: Receipt },
   { value: 'diario',     label: 'Diário',     Icon: BookOpen },
 ];
 
@@ -1874,17 +2164,14 @@ export default function LotePage({ lote, cultura, onBack, userRole = null }) {
           {tab === 'cronograma' && (
             <CronogramaTimeline cultura={cultura} lotes={[lote]} />
           )}
-          {tab === 'insumos' && (
-            <TabInsumos cultura={cultura} lote={lote} />
-          )}
           {tab === 'colheita' && (
             <TabColheita cultura={cultura} lote={lote} />
           )}
           {tab === 'vendas' && (
             <TabVendas cultura={cultura} lote={lote} canDelete={canDelete} />
           )}
-          {tab === 'mao_obra' && (
-            <TabMaoObra lote={lote} cor={cor} canDelete={canDelete} />
+          {tab === 'despesas' && (
+            <TabDespesas lote={lote} cor={cor} canDelete={canDelete} />
           )}
           {tab === 'diario' && (
             <TabDiario lote={lote} canDelete={canDelete} />

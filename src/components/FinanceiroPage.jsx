@@ -43,14 +43,9 @@ function anoFromDate(dateStr) {
   return new Date(dateStr + 'T12:00:00').getFullYear();
 }
 
-/**
- * Agrupa os dados brutos em uma estrutura indexada por plantio_id → ano → métricas.
- * Retorna: { [plantioId]: { [ano]: { receita, custo_insumos, custo_mo, vendas[], movimentos[], maoObra[], isLegacyMO } } }
- */
 function buildDreMap(rawData) {
-  const { vendas, movimentos, maoObra, plantios } = rawData;
+  const { vendas, movimentos, despesas, plantios } = rawData;
 
-  // Mapa plantioId → { ano → { receita, custo_insumos, custo_mo, vendas[], movimentos[], maoObra[], isLegacyMO } }
   const map = {};
 
   const ensureEntry = (plantioId, ano) => {
@@ -59,10 +54,10 @@ function buildDreMap(rawData) {
       map[plantioId][ano] = {
         receita: 0,
         custo_insumos: 0,
-        custo_mo: 0,
+        custo_despesas: 0,
         vendas: [],
         movimentos: [],
-        maoObra: [],
+        despesas: [],
         isLegacyMO: false,
       };
     }
@@ -80,7 +75,7 @@ function buildDreMap(rawData) {
     entry.vendas.push({ ...v, valor });
   });
 
-  // Processar movimentos de saída
+  // Processar movimentos de saída de estoque
   movimentos.forEach((m) => {
     if (!m.plantio_id || !m.data) return;
     const ano = anoFromDate(m.data);
@@ -93,31 +88,29 @@ function buildDreMap(rawData) {
     entry.movimentos.push({ ...m, custo });
   });
 
-  // Processar mão de obra
-  maoObra.forEach((mo) => {
-    if (!mo.plantio_id || !mo.data_inicio) return;
-    const ano = anoFromDate(mo.data_inicio);
+  // Processar despesas (nova tabela centralizada)
+  despesas.forEach((d) => {
+    if (!d.plantio_id || !d.data) return;
+    const ano = anoFromDate(d.data);
     if (!ano) return;
-    const entry = ensureEntry(String(mo.plantio_id), ano);
-    entry.custo_mo += mo.valor ?? 0;
-    entry.maoObra.push(mo);
+    const entry = ensureEntry(String(d.plantio_id), ano);
+    entry.custo_despesas += d.valor ?? 0;
+    entry.despesas.push(d);
   });
 
-  // Para lotes SEM mao_obra_registros mas com mao_obra_total legado
+  // Legado: lotes sem despesas mas com mao_obra_total no plantio
   plantios.forEach((p) => {
     const pid = String(p.id);
     const maoObraTotal = parseFloat(p.mao_obra_total) || 0;
     if (maoObraTotal <= 0) return;
 
-    // Verificar se já há registros de mão de obra para este plantio
-    const temRegistros = maoObra.some((mo) => String(mo.plantio_id) === pid);
-    if (temRegistros) return;
+    const temDespesas = despesas.some((d) => String(d.plantio_id) === pid);
+    if (temDespesas) return;
 
-    // Usar ano de data_plantio
     const ano = anoFromDate(p.data_plantio);
     if (!ano) return;
     const entry = ensureEntry(pid, ano);
-    entry.custo_mo += maoObraTotal;
+    entry.custo_despesas += maoObraTotal;
     entry.isLegacyMO = true;
   });
 
@@ -168,7 +161,7 @@ function EmptyState({ message = 'Nenhum dado financeiro encontrado.' }) {
 /* ─── Aba 1: DRE ──────────────────────────────────────────────── */
 
 function DreLine({ ano, entry, expanded, onToggle }) {
-  const { receita, custo_insumos, custo_mo, lucro, margem, isLegacyMO, vendas, movimentos, maoObra } = entry;
+  const { receita, custo_insumos, custo_despesas, lucro, margem, isLegacyMO, vendas, movimentos, despesas } = entry;
   const isPositive = lucro >= 0;
 
   return (
@@ -193,7 +186,7 @@ function DreLine({ ano, entry, expanded, onToggle }) {
           </span>
           <div className="text-right flex items-center justify-end gap-1">
             <span className="text-[11px] text-orange-600">
-              {fmtBRL(custo_mo)}
+              {fmtBRL(custo_despesas)}
             </span>
             {isLegacyMO && (
               <span className="text-[8px] font-bold bg-amber-100 text-amber-600 rounded px-1 py-0.5 flex-shrink-0">
@@ -276,29 +269,29 @@ function DreLine({ ano, entry, expanded, onToggle }) {
                 </div>
               )}
 
-              {/* Mão de obra */}
-              {maoObra.length > 0 ? (
+              {/* Despesas */}
+              {despesas.length > 0 ? (
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-orange-600/60 mb-1.5">
-                    Mão de obra ({maoObra.length})
+                    Despesas ({despesas.length})
                   </p>
                   <div className="flex flex-col gap-1">
-                    {maoObra.map((mo) => (
-                      <div key={mo.id} className="flex items-center gap-2 bg-white rounded-xl px-3 py-2">
+                    {despesas.map((d) => (
+                      <div key={d.id} className="flex items-center gap-2 bg-white rounded-xl px-3 py-2">
                         <div className="flex-1 min-w-0">
                           <p className="text-[11px] font-semibold text-gray-700">
-                            {mo.descricao || 'Mão de obra'}
+                            {d.categoria}{d.subcategoria ? ` · ${d.subcategoria}` : ''}
                           </p>
-                          {mo.prestador && (
-                            <p className="text-[10px] text-gray-500 font-medium">👤 {mo.prestador}</p>
+                          {d.descricao && (
+                            <p className="text-[10px] text-gray-500">{d.descricao}</p>
                           )}
-                          <p className="text-[10px] text-gray-400">
-                            {formatDateBR(mo.data_inicio)}
-                            {mo.data_fim && ` → ${formatDateBR(mo.data_fim)}`}
-                          </p>
+                          {d.prestador && (
+                            <p className="text-[10px] text-gray-500 font-medium">👤 {d.prestador}</p>
+                          )}
+                          <p className="text-[10px] text-gray-400">{formatDateBR(d.data)}</p>
                         </div>
                         <span className="text-[12px] font-bold text-orange-600 flex-shrink-0">
-                          {fmtBRL(mo.valor)}
+                          {fmtBRL(d.valor)}
                         </span>
                       </div>
                     ))}
@@ -307,20 +300,20 @@ function DreLine({ ano, entry, expanded, onToggle }) {
               ) : isLegacyMO && (
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-orange-600/60 mb-1.5">
-                    Mão de obra
+                    Despesas (legado)
                   </p>
                   <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
                     <span className="text-[10px] text-amber-700 flex-1">
-                      Valor legado registrado no lote (sem detalhamento por registro)
+                      Valor legado registrado no lote (sem detalhamento)
                     </span>
                     <span className="text-[12px] font-bold text-orange-600 flex-shrink-0">
-                      {fmtBRL(custo_mo)}
+                      {fmtBRL(custo_despesas)}
                     </span>
                   </div>
                 </div>
               )}
 
-              {vendas.length === 0 && movimentos.length === 0 && maoObra.length === 0 && !isLegacyMO && (
+              {vendas.length === 0 && movimentos.length === 0 && despesas.length === 0 && !isLegacyMO && (
                 <p className="text-[11px] text-gray-400 text-center py-2">Sem detalhes disponíveis.</p>
               )}
             </div>
@@ -342,7 +335,7 @@ function LoteCard({ lote, dreMap, anoFiltro, propriedades }) {
   const anosComDados = Object.entries(anoEntries)
     .filter(([ano]) => !anoFiltro || Number(ano) === Number(anoFiltro))
     .map(([ano, entry]) => {
-      const lucro = entry.receita - entry.custo_insumos - entry.custo_mo;
+      const lucro = entry.receita - entry.custo_insumos - entry.custo_despesas;
       const margem = entry.receita > 0 ? (lucro / entry.receita) * 100 : null;
       return [Number(ano), { ...entry, lucro, margem }];
     })
@@ -408,7 +401,7 @@ function LoteCard({ lote, dreMap, anoFiltro, propriedades }) {
           >
             {/* Cabeçalho da tabela */}
             <div className="grid grid-cols-6 gap-1 px-3 py-1.5 bg-gray-50 border-t border-gray-100">
-              {['Ano', 'Receita', 'Insumos', 'M.O.', 'Lucro', 'Margem'].map((h) => (
+              {['Ano', 'Receita', 'Insumos', 'Despesas', 'Lucro', 'Margem'].map((h) => (
                 <span key={h} className="text-[9px] font-bold uppercase tracking-wider text-gray-400 text-right first:text-left">
                   {h}
                 </span>
@@ -498,18 +491,18 @@ function TabDRE({ rawData, loading, propriedades }) {
 
   // Total consolidado do ano filtrado (ou todos)
   const totais = useMemo(() => {
-    let receita = 0, custo_insumos = 0, custo_mo = 0;
+    let receita = 0, custo_insumos = 0, custo_despesas = 0;
     Object.entries(dreMap).forEach(([, byAno]) => {
       Object.entries(byAno).forEach(([ano, entry]) => {
         if (anoFiltro && Number(ano) !== Number(anoFiltro)) return;
         receita += entry.receita;
         custo_insumos += entry.custo_insumos;
-        custo_mo += entry.custo_mo;
+        custo_despesas += entry.custo_despesas;
       });
     });
-    const lucro = receita - custo_insumos - custo_mo;
+    const lucro = receita - custo_insumos - custo_despesas;
     const margem = receita > 0 ? (lucro / receita) * 100 : null;
-    return { receita, custo_insumos, custo_mo, lucro, margem };
+    return { receita, custo_insumos, custo_despesas, lucro, margem };
   }, [dreMap, anoFiltro]);
 
   if (loading) return <Spinner />;
@@ -620,8 +613,8 @@ function TabDRE({ rawData, loading, propriedades }) {
               <p className="text-[15px] font-bold text-red-600">{fmtBRL(totais.custo_insumos)}</p>
             </div>
             <div className="bg-orange-50 rounded-xl px-3 py-2">
-              <p className="text-[10px] text-orange-600/60 font-medium">Mão de obra</p>
-              <p className="text-[15px] font-bold text-orange-600">{fmtBRL(totais.custo_mo)}</p>
+              <p className="text-[10px] text-orange-600/60 font-medium">Despesas</p>
+              <p className="text-[15px] font-bold text-orange-600">{fmtBRL(totais.custo_despesas)}</p>
             </div>
             <div className={`rounded-xl px-3 py-2 ${totais.lucro >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
               <p className={`text-[10px] font-medium ${totais.lucro >= 0 ? 'text-emerald-700/60' : 'text-red-600/60'}`}>
@@ -735,8 +728,8 @@ function TabComparativo({ rawData, loading, propriedades = [] }) {
       .filter((ano) => byAno[ano] && (!anoFiltroComp || ano === Number(anoFiltroComp)))
       .map((ano) => {
         const e = byAno[ano];
-        const lucro = e.receita - e.custo_insumos - e.custo_mo;
-        const custo = e.custo_insumos + e.custo_mo;
+        const lucro = e.receita - e.custo_insumos - e.custo_despesas;
+        const custo = e.custo_insumos + e.custo_despesas;
         const kgColhido = e.vendas.reduce((s, v) => s + (v.quantidade ?? 0), 0);
         const custoKg = kgColhido > 0 ? custo / kgColhido : null;
         const margem = e.receita > 0 ? (lucro / e.receita) * 100 : null;
@@ -952,7 +945,7 @@ function TabRanking({ rawData, loading }) {
 
       Object.values(byAno).forEach((e) => {
         if (e.receita === 0) return; // ignorar anos sem venda
-        const custo = e.custo_insumos + e.custo_mo;
+        const custo = e.custo_insumos + e.custo_despesas;
         const lucro = e.receita - custo;
         entry.receita += e.receita;
         entry.custo += custo;
