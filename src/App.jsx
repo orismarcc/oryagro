@@ -25,13 +25,14 @@ import { useAuth } from './hooks/useAuth';
 import { loadPropriedades, loadTodosLotes } from './hooks/useSupabaseSync';
 import { FarmProvider, useFarm } from './context/FarmContext';
 import { can, FARM_ACTIONS } from './lib/permissions';
-import { Home, CalendarDays, Building2, BarChart2, Activity, Loader2 } from 'lucide-react';
+import { Home, CalendarDays, Building2, Wallet, Activity, Loader2 } from 'lucide-react';
 
 const ALL_BOTTOM_NAV = [
-  { value: 'dashboard',  label: 'Início',     Icon: Home },
-  { value: 'calendario', label: 'Calendário', Icon: CalendarDays },
-  { value: 'analise',    label: 'Análise',    Icon: Activity,  requiresAction: FARM_ACTIONS.VIEW_ANALYSIS },
-  { value: 'comparacao', label: 'Comparar',   Icon: BarChart2 },
+  { value: 'dashboard',    label: 'Início',       Icon: Home },
+  { value: 'calendario',   label: 'Calendário',   Icon: CalendarDays },
+  { value: 'propriedades', label: 'Propriedades', Icon: Building2 },
+  { value: 'financeiro',   label: 'Financeiro',   Icon: Wallet },
+  { value: 'analise',      label: 'Análise',      Icon: Activity, requiresAction: FARM_ACTIONS.VIEW_ANALYSIS },
 ];
 
 export default function App() {
@@ -145,6 +146,8 @@ function AppInner({ session, displayName, signOut }) {
     setMainView(view);
     setCulturaId(null);
     setAutoOpenLoteForm(false);
+    // Tapping Propriedades on the nav always goes to the list, not a stale detail
+    if (view === 'propriedades') setSelectedPropriedade(null);
   };
 
   const handleSelectPropriedade = (propriedade) => {
@@ -377,7 +380,9 @@ function AppInner({ session, displayName, signOut }) {
             {BOTTOM_NAV.map(({ value, label, Icon }) => {
               const dashboardActive = value === 'dashboard' &&
                 (mainView === 'dashboard' || mainView === 'cultura' || mainView === 'cultura-picker' || mainView === 'lote');
-              const isActive = mainView === value || dashboardActive;
+              const propriedadesActive = value === 'propriedades' &&
+                (mainView === 'propriedades' || mainView === 'propriedade' || mainView === 'estoque');
+              const isActive = mainView === value || dashboardActive || propriedadesActive;
               const activeCor = isInCultura && value === 'dashboard' && activeCultura ? activeCultura.cor : 'hsl(160 84% 27%)';
 
               return (
