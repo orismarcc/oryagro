@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronLeft,
@@ -12,6 +12,7 @@ import {
 import { CULTURAS } from '../data/culturas';
 import { loadDreRawData } from '../hooks/useFinanceiro';
 import { logDbError } from '../lib/logger';
+import { useRealtimeSync } from '../hooks/useRealtimeSync';
 
 /* ─── Formatadores ────────────────────────────────────────────── */
 
@@ -1114,22 +1115,18 @@ export default function FinanceiroPage({ onBack, propriedades = [] }) {
   const [rawData, setRawData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
+  const fetchData = useCallback(() => {
     setLoading(true);
     loadDreRawData()
-      .then((data) => {
-        if (!cancelled) {
-          setRawData(data);
-          setLoading(false);
-        }
-      })
-      .catch((err) => {
-        logDbError('FinanceiroPage.load', err);
-        if (!cancelled) setLoading(false);
-      });
-    return () => { cancelled = true; };
+      .then(data  => { setRawData(data);  setLoading(false); })
+      .catch(err  => { logDbError('FinanceiroPage.load', err); setLoading(false); });
   }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Realtime: re-fetch DRE whenever vendas or despesas change (any device/user)
+  useRealtimeSync('vendas',   fetchData);
+  useRealtimeSync('despesas', fetchData);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">

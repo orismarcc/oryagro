@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Package2, Plus, TrendingUp, TrendingDown, X, Trash2, AlertTriangle, Pencil, ChevronLeft } from 'lucide-react';
 import { loadEstoque, upsertInsumo, deleteInsumo, addMovimento, loadMovimentos } from '../hooks/useGestao';
 import { logDbError } from '../lib/logger';
 import { useFarm } from '../context/FarmContext';
 import { can, FARM_ACTIONS } from '../lib/permissions';
+import { useRealtimeSync } from '../hooks/useRealtimeSync';
 
 // ── Constante de segurança para padding acima da navbar ──────────────────────
 // Todos os bottom-sheets devem usar isso no último elemento scrollável.
@@ -382,12 +383,18 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
   const [editModal,  setEditModal]  = useState(null);   // insumo object | null
   const [diasPorInsumo, setDiasPorInsumo] = useState({}); // { [insumoId]: dias | null }
 
-  const reload = () => loadEstoque(propriedadeId).then(setInsumos);
+  const reload = useCallback(
+    () => loadEstoque(propriedadeId).then(setInsumos),
+    [propriedadeId]
+  );
 
   useEffect(() => {
     reload().then(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propriedadeId]);
+  }, [reload]);
+
+  // Realtime: reflect changes from other farm members / devices instantly
+  useRealtimeSync('estoque_insumos',   reload, { column: 'propriedade_id', value: propriedadeId });
+  useRealtimeSync('estoque_movimentos', reload);
 
   // Load movimentos for all insumos to compute dias restantes
   useEffect(() => {

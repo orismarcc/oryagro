@@ -30,6 +30,7 @@ import {
   addDespesa, loadDespesasByLote, deleteDespesa,
   getUnidade,
 } from '../hooks/useDespesas';
+import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import { can, FARM_ACTIONS } from '../lib/permissions';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -1223,6 +1224,9 @@ function TabDespesas({ lote, cor, canDelete }) {
 
   useEffect(() => { fetchRegistros(); }, [fetchRegistros]);
 
+  // Realtime: any INSERT/UPDATE/DELETE in despesas for this lote refreshes the list
+  useRealtimeSync('despesas', fetchRegistros, { column: 'plantio_id', value: lote.id });
+
   const handleAdd = async () => {
     if (!form.data || !form.valor || parseFloat(form.valor) <= 0) return;
     setSaving(true);
@@ -1574,6 +1578,9 @@ function TabReceitas({ cultura, lote, canDelete }) {
   useEffect(() => {
     fetchVendas();
   }, [fetchVendas]);
+
+  // Realtime: any INSERT/UPDATE/DELETE in vendas for this lote refreshes the list
+  useRealtimeSync('vendas', fetchVendas, { column: 'plantio_id', value: lote.id });
 
   useEffect(() => {
     loadCompradores().then(data => setCompradores(data ?? []));
