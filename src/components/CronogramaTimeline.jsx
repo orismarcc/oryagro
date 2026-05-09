@@ -189,7 +189,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
   const [confirmDate, setConfirmDate] = useState(todayISO());
   const [removingId, setRemovingId] = useState(null); // Feature 1: inline remove confirm
   const [descricaoStep, setDescricaoStep] = useState(null); // Feature 2: bottom sheet (portal)
-  const confirmFormRef = useRef(null); // for scrollIntoView when confirm form opens
+  const confirmFormRefs = useRef({}); // { [cardId]: DOMElement }
   const [addDialog, setAddDialog]   = useState(false);
   const [newRow, setNewRow]         = useState({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo', insumo_id: '', dataPrevista: '' });
   const [insumos, setInsumos]   = useState([]);
@@ -293,9 +293,9 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
 
   // Scroll the inline confirm form into view whenever it opens
   useEffect(() => {
-    if (confirming && confirmFormRef.current) {
+    if (confirming && confirmFormRefs.current[confirming.id]) {
       setTimeout(() => {
-        confirmFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        confirmFormRefs.current[confirming.id]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }, 220); // wait for the AnimatePresence height animation to expand
     }
   }, [confirming]);
@@ -967,7 +967,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                         onClick={e => e.stopPropagation()}
                       >
                         <div
-                          ref={confirmFormRef}
+                          ref={el => { if (el) confirmFormRefs.current[ev._id] = el; }}
                           className="px-4 py-3 flex flex-col gap-3"
                           style={{ background: `${meta.color}08`, borderTop: `1px solid ${meta.color}25` }}
                         >

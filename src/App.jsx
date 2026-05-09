@@ -29,10 +29,10 @@ import { Home, CalendarDays, Building2, Wallet, Activity, Loader2 } from 'lucide
 
 const ALL_BOTTOM_NAV = [
   { value: 'dashboard',    label: 'Início',       Icon: Home },
-  { value: 'calendario',   label: 'Calendário',   Icon: CalendarDays },
   { value: 'propriedades', label: 'Propriedades', Icon: Building2 },
   { value: 'financeiro',   label: 'Financeiro',   Icon: Wallet },
   { value: 'analise',      label: 'Análise',      Icon: Activity, requiresAction: FARM_ACTIONS.VIEW_ANALYSIS },
+  { value: 'calendario',   label: 'Calendário',   Icon: CalendarDays },
 ];
 
 export default function App() {

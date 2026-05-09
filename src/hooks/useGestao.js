@@ -202,7 +202,7 @@ export async function loadTodasVendas() {
 /**
  * Create a venda record. Returns the new row or null.
  */
-export async function addVenda({ plantioId, data, quantidade, unidade, precoUnitario, destino, observacao, compradorId }) {
+export async function addVenda({ plantioId, data, quantidade, unidade, precoUnitario, destino, observacao, compradorId, categoria }) {
   const userId = await getUserId();
   if (!userId) return null;
   const { data: row, error } = await supabase
@@ -216,6 +216,7 @@ export async function addVenda({ plantioId, data, quantidade, unidade, precoUnit
       preco_unitario: precoUnitario || 0,
       destino: destino || 'outros',
       observacao: observacao || null,
+      categoria: categoria || 'Venda de produção in-natura',
       ...(compradorId ? { comprador_id: compradorId } : {}),
     })
     .select()

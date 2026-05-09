@@ -28,7 +28,6 @@ import { loadCompradores, addParcelas } from '../hooks/useCompradores';
 import {
   CATEGORIAS_DESPESA, CATEGORIAS_RECEITA,
   addDespesa, loadDespesasByLote, deleteDespesa,
-  addReceita, loadReceitasByLote, deleteReceita,
   getUnidade,
 } from '../hooks/useDespesas';
 import { can, FARM_ACTIONS } from '../lib/permissions';
@@ -984,7 +983,543 @@ function gerarParcelas(totalValor, numParcelas, primeiroVencimento) {
   });
 }
 
-function TabVendas({ cultura, lote, canDelete }) {
+// ─── Tab: Diário ─────────────────────────────────────────────────────────────
+
+const TIPO_OPTIONS = [
+  { value: 'anotacao',  label: '📝 Anotação' },
+  { value: 'clima',     label: '🌦 Clima' },
+  { value: 'praga',     label: '🐛 Praga/Doença' },
+  { value: 'visita',    label: '👤 Visita técnica' },
+  { value: 'irrigacao', label: '💧 Irrigação' },
+  { value: 'outros',    label: '📌 Outros' },
+];
+
+const TIPO_BADGE_STYLE = {
+  anotacao:  { background: '#dbeafe', color: '#1e40af' },
+  clima:     { background: '#e0f2fe', color: '#0369a1' },
+  praga:     { background: '#fee2e2', color: '#991b1b' },
+  visita:    { background: '#f3e8ff', color: '#6b21a8' },
+  irrigacao: { background: '#cffafe', color: '#155e75' },
+  outros:    { background: '#f3f4f6', color: '#374151' },
+};
+
+function TipoBadge({ tipo }) {
+  const style = TIPO_BADGE_STYLE[tipo] ?? TIPO_BADGE_STYLE.outros;
+  const opt = TIPO_OPTIONS.find(t => t.value === tipo);
+  const label = opt ? opt.label : tipo;
+  return (
+    <span
+      className="text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
+      style={style}
+    >
+      {label}
+    </span>
+  );
+}
+
+function TabDiario({ lote, canDelete }) {
+  const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
+
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const [form, setForm] = useState({
+    data: today(),
+    tipo: 'anotacao',
+    texto: '',
+  });
+
+  const fetchDiario = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await loadDiario(lote.id);
+      setEntries(data ?? []);
+    } catch {
+      setEntries([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [lote.id]);
+
+  useEffect(() => {
+    fetchDiario();
+  }, [fetchDiario]);
+
+  const handleAdd = async () => {
+    if (!form.texto.trim()) return;
+    setSaving(true);
+    try {
+      await addDiarioEntry({
+        plantioId: lote.id,
+        data: form.data,
+        tipo: form.tipo,
+        texto: form.texto.trim(),
+      });
+      await fetchDiario();
+      setForm({ data: today(), tipo: 'anotacao', texto: '' });
+    } catch {
+      // fail silently
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await deleteDiarioEntry(id);
+      setEntries(prev => prev.filter(e => e.id !== id));
+    } catch {}
+  };
+
+  // Already returned sorted by API, but ensure desc anyway
+  const sorted = [...entries].sort((a, b) => (b.data ?? '').localeCompare(a.data ?? ''));
+
+  return (
+    <div
+      className="px-4 pt-5 max-w-2xl mx-auto overflow-y-auto"
+      style={{ paddingBottom: SAFE_BOTTOM, scrollbarWidth: 'none' }}
+    >
+      {/* Nova Entrada form */}
+      <p className="section-label mb-3">Nova Entrada</p>
+      <div className="card p-4 mb-5">
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Data</label>
+            <input
+              type="date"
+              value={form.data}
+              onChange={e => setForm(f => ({ ...f, data: e.target.value }))}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Tipo</label>
+            <select
+              value={form.tipo}
+              onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+            >
+              {TIPO_OPTIONS.map(t => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="mb-3">
+          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Observação</label>
+          <textarea
+            rows={3}
+            placeholder="Descreva a observação..."
+            value={form.texto}
+            onChange={e => setForm(f => ({ ...f, texto: e.target.value }))}
+            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2 resize-none"
+          />
+        </div>
+
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          onClick={handleAdd}
+          disabled={saving || !form.texto.trim()}
+          className="w-full py-3 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
+          style={{ background: '#334155' }}
+        >
+          {saving ? <Loader2 size={15} className="animate-spin" /> : <PenLine size={15} />}
+          Salvar
+        </motion.button>
+      </div>
+
+      {/* Registros list */}
+      <p className="section-label mb-3">Registros</p>
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 size={24} className="animate-spin text-muted-foreground" />
+        </div>
+      ) : sorted.length === 0 ? (
+        <div className="text-center py-12">
+          <BookOpen size={32} className="mx-auto mb-3 text-muted-foreground opacity-30" />
+          <p className="text-[13px] text-muted-foreground">Nenhum registro ainda</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {sorted.map(entry => (
+            <motion.div
+              key={entry.id}
+              layout
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="card p-4 flex items-start gap-3"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{ background: '#f1f5f9', color: '#475569' }}
+                  >
+                    {formatDatePtBR(entry.data)}
+                  </span>
+                  <TipoBadge tipo={entry.tipo} />
+                </div>
+                <p className="text-[13px] text-foreground leading-snug">{entry.texto}</p>
+              </div>
+              {canDelete && (
+                <motion.button
+                  whileTap={{ scale: 0.85 }}
+                  onClick={() => handleDelete(entry.id)}
+                  className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5"
+                >
+                  <Trash2 size={14} />
+                </motion.button>
+              )}
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Tab: Despesas ──────────────────────────────────────────────────────────
+
+function TabDespesas({ lote, cor, canDelete }) {
+  const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
+
+  const [registros, setRegistros] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+  const [form, setForm] = useState({
+    data: today(),
+    categoria: CATEGORIAS_DESPESA[0].label,
+    subcategoria: '',
+    quantidade: '',
+    unidade: getUnidade(CATEGORIAS_DESPESA[0].label, ''),
+    descricao: '',
+    prestador: '',
+    valor: '',
+    observacao: '',
+  });
+
+  const subcats = CATEGORIAS_DESPESA.find(c => c.label === form.categoria)?.subcategorias || [];
+  const autoUnidade = getUnidade(form.categoria, form.subcategoria);
+
+  // Auto-update unidade when categoria or subcategoria changes
+  useEffect(() => {
+    setForm(f => ({ ...f, unidade: getUnidade(f.categoria, f.subcategoria) }));
+  }, [form.categoria, form.subcategoria]);
+
+  const fetchRegistros = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await loadDespesasByLote(lote.id);
+      setRegistros(data ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }, [lote.id]);
+
+  useEffect(() => { fetchRegistros(); }, [fetchRegistros]);
+
+  const handleAdd = async () => {
+    if (!form.data || !form.valor || parseFloat(form.valor) <= 0) return;
+    setSaving(true);
+    try {
+      await addDespesa({
+        plantioId:     lote.id,
+        propriedadeId: lote.propriedade_id || null,
+        categoria:     form.categoria,
+        subcategoria:  form.subcategoria || null,
+        quantidade:    form.quantidade   || null,
+        unidade:       form.quantidade ? form.unidade : null,
+        descricao:     form.descricao    || null,
+        prestador:     form.prestador    || null,
+        valor:         parseFloat(form.valor),
+        data:          form.data,
+        observacao:    form.observacao   || null,
+      });
+      await fetchRegistros();
+      setForm({
+        data: today(),
+        categoria: CATEGORIAS_DESPESA[0].label,
+        subcategoria: '',
+        quantidade: '',
+        unidade: getUnidade(CATEGORIAS_DESPESA[0].label, ''),
+        descricao: '',
+        prestador: '',
+        valor: '',
+        observacao: '',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await deleteDespesa(id);
+      setRegistros(prev => prev.filter(r => r.id !== id));
+    } catch {}
+    setConfirmDeleteId(null);
+  };
+
+  const totalDespesas = registros.reduce((s, r) => s + (r.valor ?? 0), 0);
+
+  // Group by category for summary display
+  const porCategoria = registros.reduce((acc, r) => {
+    acc[r.categoria] = (acc[r.categoria] || 0) + (r.valor ?? 0);
+    return acc;
+  }, {});
+
+  return (
+    <div
+      className="px-4 pt-5 max-w-2xl mx-auto overflow-y-auto"
+      style={{ paddingBottom: SAFE_BOTTOM, scrollbarWidth: 'none' }}
+    >
+      {/* Total summary */}
+      {registros.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="card p-4 mb-5"
+          style={{ borderColor: `${cor}30` }}
+        >
+          <p className="section-label mb-1">Total Despesas</p>
+          <p className="text-[22px] font-black" style={{ color: cor }}>{fmtBRL(totalDespesas)}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">{registros.length} registro{registros.length !== 1 ? 's' : ''}</p>
+
+          {/* Category breakdown */}
+          {Object.entries(porCategoria).length > 1 && (
+            <div className="mt-3 space-y-1 border-t pt-3" style={{ borderColor: `${cor}20` }}>
+              {Object.entries(porCategoria).map(([cat, val]) => (
+                <div key={cat} className="flex justify-between items-center">
+                  <span className="text-[11px] text-muted-foreground truncate flex-1 mr-2">{cat}</span>
+                  <span className="text-[11px] font-bold flex-shrink-0" style={{ color: cor }}>{fmtBRL(val)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* Form */}
+      <p className="section-label mb-3">Registrar Despesa</p>
+      <div className="card p-4 mb-5">
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Data</label>
+            <input
+              type="date"
+              value={form.data}
+              onChange={e => setForm(f => ({ ...f, data: e.target.value }))}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': cor }}
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Valor (R$)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0,00"
+              value={form.valor}
+              onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': cor }}
+            />
+          </div>
+        </div>
+
+        <div className="mb-3">
+          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Categoria</label>
+          <select
+            value={form.categoria}
+            onChange={e => setForm(f => ({ ...f, categoria: e.target.value, subcategoria: '' }))}
+            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+            style={{ '--tw-ring-color': cor }}
+          >
+            {CATEGORIAS_DESPESA.map(c => (
+              <option key={c.label} value={c.label}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {subcats.length > 0 && (
+          <div className="mb-3">
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Subcategoria (opcional)</label>
+            <select
+              value={form.subcategoria}
+              onChange={e => setForm(f => ({ ...f, subcategoria: e.target.value }))}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': cor }}
+            >
+              <option value="">Selecionar…</option>
+              {subcats.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Quantidade + unidade auto */}
+        <div className="mb-3">
+          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">
+            Quantidade (opcional)
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              min="0"
+              step="any"
+              placeholder="0"
+              value={form.quantidade}
+              onChange={e => setForm(f => ({ ...f, quantidade: e.target.value }))}
+              className="flex-1 rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': cor }}
+            />
+            <input
+              type="text"
+              value={form.unidade}
+              onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))}
+              className="w-[64px] rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-bold text-center focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': cor, color: cor }}
+              placeholder="un"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Descrição (opcional)</label>
+            <input
+              type="text"
+              placeholder="Ex: Capina geral"
+              value={form.descricao}
+              onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': cor }}
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Prestador (opcional)</label>
+            <input
+              type="text"
+              placeholder="Ex: João Silva"
+              value={form.prestador}
+              onChange={e => setForm(f => ({ ...f, prestador: e.target.value }))}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': cor }}
+            />
+          </div>
+        </div>
+
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          onClick={handleAdd}
+          disabled={saving || !form.data || !form.valor || parseFloat(form.valor) <= 0}
+          className="w-full py-3 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
+          style={{ background: cor }}
+        >
+          {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+          Registrar Despesa
+        </motion.button>
+      </div>
+
+      {/* List */}
+      <p className="section-label mb-3">Registros</p>
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 size={24} className="animate-spin text-muted-foreground" />
+        </div>
+      ) : registros.length === 0 ? (
+        <div className="text-center py-12">
+          <Receipt size={32} className="mx-auto mb-3 text-muted-foreground opacity-30" />
+          <p className="text-[13px] text-muted-foreground">Nenhuma despesa registrada ainda</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {registros.map(r => (
+            <motion.div
+              key={r.id}
+              layout
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="card p-4 flex items-start gap-3"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <span
+                    className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                    style={{ background: `${cor}18`, color: cor }}
+                  >
+                    {formatDatePtBR(r.data)}
+                  </span>
+                  <span
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                    style={{ background: 'hsl(210 16% 94%)', color: 'hsl(215 16% 40%)' }}
+                  >
+                    {r.categoria}
+                  </span>
+                  {r.subcategoria && (
+                    <span className="text-[10px] text-muted-foreground">{r.subcategoria}</span>
+                  )}
+                </div>
+                {r.descricao && (
+                  <p className="text-[12px] text-foreground mb-0.5">{r.descricao}</p>
+                )}
+                {r.prestador && (
+                  <p className="text-[11px] text-muted-foreground mb-0.5">👤 {r.prestador}</p>
+                )}
+                <div className="flex items-baseline gap-3">
+                  <p className="text-[14px] font-bold" style={{ color: cor }}>{fmtBRL(r.valor)}</p>
+                  {r.quantidade != null && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {fmtNumber(r.quantidade)} {r.unidade}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {canDelete && (
+                confirmDeleteId === r.id ? (
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => handleDelete(r.id)}
+                      className="text-[11px] font-bold px-2 py-1 rounded-lg bg-red-100 text-red-600"
+                    >
+                      Confirmar
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="text-[11px] font-bold px-2 py-1 rounded-lg bg-gray-100 text-gray-500"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <motion.button
+                    whileTap={{ scale: 0.85 }}
+                    onClick={() => setConfirmDeleteId(r.id)}
+                    className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5"
+                  >
+                    <Trash2 size={14} />
+                  </motion.button>
+                )
+              )}
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Tab: Receitas ───────────────────────────────────────────────────────────
+
+function TabReceitas({ cultura, lote, canDelete }) {
   const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
   const cor = cultura.cor;
   const unidadeDefault = cultura.venda?.unidade ?? 'un';
@@ -999,6 +1534,7 @@ function TabVendas({ cultura, lote, canDelete }) {
   // Form state
   const [form, setForm] = useState({
     data: today(),
+    categoria: CATEGORIAS_RECEITA[0].label,
     quantidade: '',
     unidade: unidadeDefault,
     precoUnitario: cultura.venda?.precoUnitario ?? 0,
@@ -1043,7 +1579,7 @@ function TabVendas({ cultura, lote, canDelete }) {
     loadCompradores().then(data => setCompradores(data ?? []));
   }, []);
 
-  const handleAddVenda = async () => {
+  const handleAdd = async () => {
     if (!form.quantidade || parseFloat(form.quantidade) <= 0) return;
     setSaving(true);
     try {
@@ -1056,6 +1592,7 @@ function TabVendas({ cultura, lote, canDelete }) {
         destino:       form.destino,
         observacao:    form.observacao,
         compradorId:   form.compradorId || null,
+        categoria:     form.categoria,
       });
 
       if (novaVenda) {
@@ -1088,7 +1625,7 @@ function TabVendas({ cultura, lote, canDelete }) {
       }
 
       await fetchVendas();
-      // Reset form but keep destino and unidade
+      // Reset form but keep destino, unidade, and categoria
       setForm(f => ({
         ...f,
         data: today(),
@@ -1140,7 +1677,7 @@ function TabVendas({ cultura, lote, canDelete }) {
           className="card p-4 mb-5"
           style={{ borderColor: `${cor}30` }}
         >
-          <p className="section-label mb-3">Resumo de Vendas</p>
+          <p className="section-label mb-3">Resumo de Receitas</p>
           <div className="grid grid-cols-3 gap-3">
             <div>
               <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">Total vendido</p>
@@ -1161,8 +1698,23 @@ function TabVendas({ cultura, lote, canDelete }) {
       )}
 
       {/* Register form */}
-      <p className="section-label mb-3">Registrar Venda</p>
+      <p className="section-label mb-3">Registrar Receita</p>
       <div className="card p-4 mb-5">
+        {/* Categoria */}
+        <div className="mb-3">
+          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Categoria</label>
+          <select
+            value={form.categoria}
+            onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}
+            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+            style={{ '--tw-ring-color': cor }}
+          >
+            {CATEGORIAS_RECEITA.map(c => (
+              <option key={c.label} value={c.label}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
             <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Data</label>
@@ -1381,26 +1933,26 @@ function TabVendas({ cultura, lote, canDelete }) {
 
         <motion.button
           whileTap={{ scale: 0.97 }}
-          onClick={handleAddVenda}
+          onClick={handleAdd}
           disabled={saving || !form.quantidade || parseFloat(form.quantidade) <= 0}
           className="w-full py-3 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
           style={{ background: cor }}
         >
           {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-          Registrar Venda
+          Registrar Receita
         </motion.button>
       </div>
 
       {/* History */}
-      <p className="section-label mb-3">Histórico de Vendas</p>
+      <p className="section-label mb-3">Histórico de Receitas</p>
       {loadingVendas ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 size={24} className="animate-spin text-muted-foreground" />
         </div>
       ) : sorted.length === 0 ? (
         <div className="text-center py-12">
-          <ShoppingCart size={32} className="mx-auto mb-3 text-muted-foreground opacity-30" />
-          <p className="text-[13px] text-muted-foreground">Nenhuma venda registrada ainda</p>
+          <DollarSign size={32} className="mx-auto mb-3 text-muted-foreground opacity-30" />
+          <p className="text-[13px] text-muted-foreground">Nenhuma receita registrada ainda</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -1418,6 +1970,14 @@ function TabVendas({ cultura, lote, canDelete }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <span className="text-[12px] font-semibold text-foreground">{formatDatePtBR(entry.data)}</span>
+                    {entry.categoria && (
+                      <span
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{ background: `${cor}18`, color: cor }}
+                      >
+                        {entry.categoria}
+                      </span>
+                    )}
                     <span className="text-[12px] text-muted-foreground">
                       {entry.quantidade} {entry.unidade}
                     </span>
@@ -1447,840 +2007,11 @@ function TabVendas({ cultura, lote, canDelete }) {
   );
 }
 
-// ─── Tab: Diário ─────────────────────────────────────────────────────────────
-
-const TIPO_OPTIONS = [
-  { value: 'anotacao',  label: '📝 Anotação' },
-  { value: 'clima',     label: '🌦 Clima' },
-  { value: 'praga',     label: '🐛 Praga/Doença' },
-  { value: 'visita',    label: '👤 Visita técnica' },
-  { value: 'irrigacao', label: '💧 Irrigação' },
-  { value: 'outros',    label: '📌 Outros' },
-];
-
-const TIPO_BADGE_STYLE = {
-  anotacao:  { background: '#dbeafe', color: '#1e40af' },
-  clima:     { background: '#e0f2fe', color: '#0369a1' },
-  praga:     { background: '#fee2e2', color: '#991b1b' },
-  visita:    { background: '#f3e8ff', color: '#6b21a8' },
-  irrigacao: { background: '#cffafe', color: '#155e75' },
-  outros:    { background: '#f3f4f6', color: '#374151' },
-};
-
-function TipoBadge({ tipo }) {
-  const style = TIPO_BADGE_STYLE[tipo] ?? TIPO_BADGE_STYLE.outros;
-  const opt = TIPO_OPTIONS.find(t => t.value === tipo);
-  const label = opt ? opt.label : tipo;
-  return (
-    <span
-      className="text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
-      style={style}
-    >
-      {label}
-    </span>
-  );
-}
-
-function TabDiario({ lote, canDelete }) {
-  const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
-
-  const [entries, setEntries] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  const [form, setForm] = useState({
-    data: today(),
-    tipo: 'anotacao',
-    texto: '',
-  });
-
-  const fetchDiario = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await loadDiario(lote.id);
-      setEntries(data ?? []);
-    } catch {
-      setEntries([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [lote.id]);
-
-  useEffect(() => {
-    fetchDiario();
-  }, [fetchDiario]);
-
-  const handleAdd = async () => {
-    if (!form.texto.trim()) return;
-    setSaving(true);
-    try {
-      await addDiarioEntry({
-        plantioId: lote.id,
-        data: form.data,
-        tipo: form.tipo,
-        texto: form.texto.trim(),
-      });
-      await fetchDiario();
-      setForm({ data: today(), tipo: 'anotacao', texto: '' });
-    } catch {
-      // fail silently
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    try {
-      await deleteDiarioEntry(id);
-      setEntries(prev => prev.filter(e => e.id !== id));
-    } catch {}
-  };
-
-  // Already returned sorted by API, but ensure desc anyway
-  const sorted = [...entries].sort((a, b) => (b.data ?? '').localeCompare(a.data ?? ''));
-
-  return (
-    <div
-      className="px-4 pt-5 max-w-2xl mx-auto overflow-y-auto"
-      style={{ paddingBottom: SAFE_BOTTOM, scrollbarWidth: 'none' }}
-    >
-      {/* Nova Entrada form */}
-      <p className="section-label mb-3">Nova Entrada</p>
-      <div className="card p-4 mb-5">
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Data</label>
-            <input
-              type="date"
-              value={form.data}
-              onChange={e => setForm(f => ({ ...f, data: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Tipo</label>
-            <select
-              value={form.tipo}
-              onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-            >
-              {TIPO_OPTIONS.map(t => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="mb-3">
-          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Observação</label>
-          <textarea
-            rows={3}
-            placeholder="Descreva a observação..."
-            value={form.texto}
-            onChange={e => setForm(f => ({ ...f, texto: e.target.value }))}
-            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2 resize-none"
-          />
-        </div>
-
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={handleAdd}
-          disabled={saving || !form.texto.trim()}
-          className="w-full py-3 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
-          style={{ background: '#334155' }}
-        >
-          {saving ? <Loader2 size={15} className="animate-spin" /> : <PenLine size={15} />}
-          Salvar
-        </motion.button>
-      </div>
-
-      {/* Registros list */}
-      <p className="section-label mb-3">Registros</p>
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 size={24} className="animate-spin text-muted-foreground" />
-        </div>
-      ) : sorted.length === 0 ? (
-        <div className="text-center py-12">
-          <BookOpen size={32} className="mx-auto mb-3 text-muted-foreground opacity-30" />
-          <p className="text-[13px] text-muted-foreground">Nenhum registro ainda</p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {sorted.map(entry => (
-            <motion.div
-              key={entry.id}
-              layout
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              className="card p-4 flex items-start gap-3"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                  <span
-                    className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                    style={{ background: '#f1f5f9', color: '#475569' }}
-                  >
-                    {formatDatePtBR(entry.data)}
-                  </span>
-                  <TipoBadge tipo={entry.tipo} />
-                </div>
-                <p className="text-[13px] text-foreground leading-snug">{entry.texto}</p>
-              </div>
-              {canDelete && (
-                <motion.button
-                  whileTap={{ scale: 0.85 }}
-                  onClick={() => handleDelete(entry.id)}
-                  className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5"
-                >
-                  <Trash2 size={14} />
-                </motion.button>
-              )}
-            </motion.div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Tab: Despesas ──────────────────────────────────────────────────────────
-
-function TabDespesas({ lote, cor, canDelete }) {
-  const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
-
-  const [registros, setRegistros] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-
-  const [form, setForm] = useState({
-    data: today(),
-    categoria: CATEGORIAS_DESPESA[0].label,
-    subcategoria: '',
-    quantidade: '',
-    descricao: '',
-    prestador: '',
-    valor: '',
-    observacao: '',
-  });
-
-  const subcats = CATEGORIAS_DESPESA.find(c => c.label === form.categoria)?.subcategorias || [];
-  const autoUnidade = getUnidade(form.categoria, form.subcategoria);
-
-  const fetchRegistros = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await loadDespesasByLote(lote.id);
-      setRegistros(data ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [lote.id]);
-
-  useEffect(() => { fetchRegistros(); }, [fetchRegistros]);
-
-  const handleAdd = async () => {
-    if (!form.data || !form.valor || parseFloat(form.valor) <= 0) return;
-    setSaving(true);
-    try {
-      await addDespesa({
-        plantioId:     lote.id,
-        propriedadeId: lote.propriedade_id || null,
-        categoria:     form.categoria,
-        subcategoria:  form.subcategoria || null,
-        quantidade:    form.quantidade   || null,
-        unidade:       form.quantidade ? autoUnidade : null,
-        descricao:     form.descricao    || null,
-        prestador:     form.prestador    || null,
-        valor:         parseFloat(form.valor),
-        data:          form.data,
-        observacao:    form.observacao   || null,
-      });
-      await fetchRegistros();
-      setForm({
-        data: today(),
-        categoria: CATEGORIAS_DESPESA[0].label,
-        subcategoria: '',
-        quantidade: '',
-        descricao: '',
-        prestador: '',
-        valor: '',
-        observacao: '',
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    try {
-      await deleteDespesa(id);
-      setRegistros(prev => prev.filter(r => r.id !== id));
-    } catch {}
-    setConfirmDeleteId(null);
-  };
-
-  const totalDespesas = registros.reduce((s, r) => s + (r.valor ?? 0), 0);
-
-  // Group by category for summary display
-  const porCategoria = registros.reduce((acc, r) => {
-    acc[r.categoria] = (acc[r.categoria] || 0) + (r.valor ?? 0);
-    return acc;
-  }, {});
-
-  return (
-    <div
-      className="px-4 pt-5 max-w-2xl mx-auto overflow-y-auto"
-      style={{ paddingBottom: SAFE_BOTTOM, scrollbarWidth: 'none' }}
-    >
-      {/* Total summary */}
-      {registros.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="card p-4 mb-5"
-          style={{ borderColor: `${cor}30` }}
-        >
-          <p className="section-label mb-1">Total Despesas</p>
-          <p className="text-[22px] font-black" style={{ color: cor }}>{fmtBRL(totalDespesas)}</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">{registros.length} registro{registros.length !== 1 ? 's' : ''}</p>
-
-          {/* Category breakdown */}
-          {Object.entries(porCategoria).length > 1 && (
-            <div className="mt-3 space-y-1 border-t pt-3" style={{ borderColor: `${cor}20` }}>
-              {Object.entries(porCategoria).map(([cat, val]) => (
-                <div key={cat} className="flex justify-between items-center">
-                  <span className="text-[11px] text-muted-foreground truncate flex-1 mr-2">{cat}</span>
-                  <span className="text-[11px] font-bold flex-shrink-0" style={{ color: cor }}>{fmtBRL(val)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </motion.div>
-      )}
-
-      {/* Form */}
-      <p className="section-label mb-3">Registrar Despesa</p>
-      <div className="card p-4 mb-5">
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Data</label>
-            <input
-              type="date"
-              value={form.data}
-              onChange={e => setForm(f => ({ ...f, data: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Valor (R$)</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0,00"
-              value={form.valor}
-              onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
-            />
-          </div>
-        </div>
-
-        <div className="mb-3">
-          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Categoria</label>
-          <select
-            value={form.categoria}
-            onChange={e => setForm(f => ({ ...f, categoria: e.target.value, subcategoria: '' }))}
-            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-            style={{ '--tw-ring-color': cor }}
-          >
-            {CATEGORIAS_DESPESA.map(c => (
-              <option key={c.label} value={c.label}>{c.label}</option>
-            ))}
-          </select>
-        </div>
-
-        {subcats.length > 0 && (
-          <div className="mb-3">
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Subcategoria (opcional)</label>
-            <select
-              value={form.subcategoria}
-              onChange={e => setForm(f => ({ ...f, subcategoria: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
-            >
-              <option value="">Selecionar…</option>
-              {subcats.map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Quantidade + unidade auto */}
-        <div className="mb-3">
-          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">
-            Quantidade (opcional)
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="number"
-              min="0"
-              step="any"
-              placeholder="0"
-              value={form.quantidade}
-              onChange={e => setForm(f => ({ ...f, quantidade: e.target.value }))}
-              className="flex-1 rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
-            />
-            <div
-              className="flex items-center justify-center rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-bold min-w-[48px]"
-              style={{ color: cor }}
-            >
-              {autoUnidade}
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Descrição (opcional)</label>
-            <input
-              type="text"
-              placeholder="Ex: Capina geral"
-              value={form.descricao}
-              onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Prestador (opcional)</label>
-            <input
-              type="text"
-              placeholder="Ex: João Silva"
-              value={form.prestador}
-              onChange={e => setForm(f => ({ ...f, prestador: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
-            />
-          </div>
-        </div>
-
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={handleAdd}
-          disabled={saving || !form.data || !form.valor || parseFloat(form.valor) <= 0}
-          className="w-full py-3 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
-          style={{ background: cor }}
-        >
-          {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-          Registrar Despesa
-        </motion.button>
-      </div>
-
-      {/* List */}
-      <p className="section-label mb-3">Registros</p>
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 size={24} className="animate-spin text-muted-foreground" />
-        </div>
-      ) : registros.length === 0 ? (
-        <div className="text-center py-12">
-          <Receipt size={32} className="mx-auto mb-3 text-muted-foreground opacity-30" />
-          <p className="text-[13px] text-muted-foreground">Nenhuma despesa registrada ainda</p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {registros.map(r => (
-            <motion.div
-              key={r.id}
-              layout
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              className="card p-4 flex items-start gap-3"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <span
-                    className="text-[11px] font-bold px-2 py-0.5 rounded-full"
-                    style={{ background: `${cor}18`, color: cor }}
-                  >
-                    {formatDatePtBR(r.data)}
-                  </span>
-                  <span
-                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                    style={{ background: 'hsl(210 16% 94%)', color: 'hsl(215 16% 40%)' }}
-                  >
-                    {r.categoria}
-                  </span>
-                  {r.subcategoria && (
-                    <span className="text-[10px] text-muted-foreground">{r.subcategoria}</span>
-                  )}
-                </div>
-                {r.descricao && (
-                  <p className="text-[12px] text-foreground mb-0.5">{r.descricao}</p>
-                )}
-                {r.prestador && (
-                  <p className="text-[11px] text-muted-foreground mb-0.5">👤 {r.prestador}</p>
-                )}
-                <div className="flex items-baseline gap-3">
-                  <p className="text-[14px] font-bold" style={{ color: cor }}>{fmtBRL(r.valor)}</p>
-                  {r.quantidade != null && (
-                    <p className="text-[11px] text-muted-foreground">
-                      {fmtNumber(r.quantidade)} {r.unidade}
-                    </p>
-                  )}
-                </div>
-              </div>
-              {canDelete && (
-                confirmDeleteId === r.id ? (
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button
-                      onClick={() => handleDelete(r.id)}
-                      className="text-[11px] font-bold px-2 py-1 rounded-lg bg-red-100 text-red-600"
-                    >
-                      Confirmar
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteId(null)}
-                      className="text-[11px] font-bold px-2 py-1 rounded-lg bg-gray-100 text-gray-500"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                ) : (
-                  <motion.button
-                    whileTap={{ scale: 0.85 }}
-                    onClick={() => setConfirmDeleteId(r.id)}
-                    className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5"
-                  >
-                    <Trash2 size={14} />
-                  </motion.button>
-                )
-              )}
-            </motion.div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Tab: Receitas ───────────────────────────────────────────────────────────
-
-function TabReceitas({ lote, cor, canDelete }) {
-  const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
-
-  const [registros, setRegistros] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-
-  const [form, setForm] = useState({
-    data: today(),
-    categoria: CATEGORIAS_RECEITA[0].label,
-    descricao: '',
-    comprador: '',
-    quantidade: '',
-    valor: '',
-    observacao: '',
-  });
-
-  const fetchRegistros = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await loadReceitasByLote(lote.id);
-      setRegistros(data ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [lote.id]);
-
-  useEffect(() => { fetchRegistros(); }, [fetchRegistros]);
-
-  // Auto-infer unit for receitas (always kg for production sales)
-  const autoUnidade = form.categoria === 'Venda de mudas e propagação' ? 'un' : 'kg';
-
-  const handleAdd = async () => {
-    if (!form.data || !form.valor || parseFloat(form.valor) <= 0) return;
-    setSaving(true);
-    try {
-      await addReceita({
-        plantioId:     lote.id,
-        propriedadeId: lote.propriedade_id || null,
-        categoria:     form.categoria,
-        descricao:     form.descricao  || null,
-        comprador:     form.comprador  || null,
-        quantidade:    form.quantidade || null,
-        unidade:       form.quantidade ? autoUnidade : null,
-        valor:         parseFloat(form.valor),
-        data:          form.data,
-        observacao:    form.observacao || null,
-      });
-      await fetchRegistros();
-      setForm({
-        data: today(),
-        categoria: CATEGORIAS_RECEITA[0].label,
-        descricao: '',
-        comprador: '',
-        quantidade: '',
-        valor: '',
-        observacao: '',
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    try {
-      await deleteReceita(id);
-      setRegistros(prev => prev.filter(r => r.id !== id));
-    } catch {}
-    setConfirmDeleteId(null);
-  };
-
-  const totalReceitas = registros.reduce((s, r) => s + (r.valor ?? 0), 0);
-
-  // Group by category for summary display
-  const porCategoria = registros.reduce((acc, r) => {
-    acc[r.categoria] = (acc[r.categoria] || 0) + (r.valor ?? 0);
-    return acc;
-  }, {});
-
-  return (
-    <div
-      className="px-4 pt-5 max-w-2xl mx-auto overflow-y-auto"
-      style={{ paddingBottom: SAFE_BOTTOM, scrollbarWidth: 'none' }}
-    >
-      {/* Total summary */}
-      {registros.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="card p-4 mb-5"
-          style={{ borderColor: `${cor}30` }}
-        >
-          <p className="section-label mb-1">Total Receitas</p>
-          <p className="text-[22px] font-black" style={{ color: cor }}>{fmtBRL(totalReceitas)}</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">{registros.length} registro{registros.length !== 1 ? 's' : ''}</p>
-
-          {Object.entries(porCategoria).length > 1 && (
-            <div className="mt-3 space-y-1 border-t pt-3" style={{ borderColor: `${cor}20` }}>
-              {Object.entries(porCategoria).map(([cat, val]) => (
-                <div key={cat} className="flex justify-between items-center">
-                  <span className="text-[11px] text-muted-foreground truncate flex-1 mr-2">{cat}</span>
-                  <span className="text-[11px] font-bold flex-shrink-0" style={{ color: cor }}>{fmtBRL(val)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </motion.div>
-      )}
-
-      {/* Form */}
-      <p className="section-label mb-3">Registrar Receita</p>
-      <div className="card p-4 mb-5">
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Data</label>
-            <input
-              type="date"
-              value={form.data}
-              onChange={e => setForm(f => ({ ...f, data: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Valor (R$)</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0,00"
-              value={form.valor}
-              onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
-            />
-          </div>
-        </div>
-
-        <div className="mb-3">
-          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Categoria</label>
-          <select
-            value={form.categoria}
-            onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}
-            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-            style={{ '--tw-ring-color': cor }}
-          >
-            {CATEGORIAS_RECEITA.map(c => (
-              <option key={c.label} value={c.label}>{c.label}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Quantidade + unidade auto */}
-        <div className="mb-3">
-          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">
-            Quantidade (opcional)
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="number"
-              min="0"
-              step="any"
-              placeholder="0"
-              value={form.quantidade}
-              onChange={e => setForm(f => ({ ...f, quantidade: e.target.value }))}
-              className="flex-1 rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
-            />
-            <div
-              className="flex items-center justify-center rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-bold min-w-[48px]"
-              style={{ color: cor }}
-            >
-              {autoUnidade}
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Descrição (opcional)</label>
-            <input
-              type="text"
-              placeholder="Ex: Alface crespa"
-              value={form.descricao}
-              onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Comprador (opcional)</label>
-            <input
-              type="text"
-              placeholder="Ex: Mercado Central"
-              value={form.comprador}
-              onChange={e => setForm(f => ({ ...f, comprador: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
-            />
-          </div>
-        </div>
-
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={handleAdd}
-          disabled={saving || !form.data || !form.valor || parseFloat(form.valor) <= 0}
-          className="w-full py-3 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
-          style={{ background: cor }}
-        >
-          {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-          Registrar Receita
-        </motion.button>
-      </div>
-
-      {/* List */}
-      <p className="section-label mb-3">Registros</p>
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 size={24} className="animate-spin text-muted-foreground" />
-        </div>
-      ) : registros.length === 0 ? (
-        <div className="text-center py-12">
-          <DollarSign size={32} className="mx-auto mb-3 text-muted-foreground opacity-30" />
-          <p className="text-[13px] text-muted-foreground">Nenhuma receita registrada ainda</p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {registros.map(r => (
-            <motion.div
-              key={r.id}
-              layout
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              className="card p-4 flex items-start gap-3"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <span
-                    className="text-[11px] font-bold px-2 py-0.5 rounded-full"
-                    style={{ background: `${cor}18`, color: cor }}
-                  >
-                    {formatDatePtBR(r.data)}
-                  </span>
-                  <span
-                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                    style={{ background: 'hsl(210 16% 94%)', color: 'hsl(215 16% 40%)' }}
-                  >
-                    {r.categoria}
-                  </span>
-                </div>
-                {r.descricao && (
-                  <p className="text-[12px] text-foreground mb-0.5">{r.descricao}</p>
-                )}
-                {r.comprador && (
-                  <p className="text-[11px] text-muted-foreground mb-0.5">🏪 {r.comprador}</p>
-                )}
-                <div className="flex items-baseline gap-3">
-                  <p className="text-[14px] font-bold" style={{ color: cor }}>{fmtBRL(r.valor)}</p>
-                  {r.quantidade != null && (
-                    <p className="text-[11px] text-muted-foreground">
-                      {fmtNumber(r.quantidade)} {r.unidade}
-                    </p>
-                  )}
-                </div>
-              </div>
-              {canDelete && (
-                confirmDeleteId === r.id ? (
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button
-                      onClick={() => handleDelete(r.id)}
-                      className="text-[11px] font-bold px-2 py-1 rounded-lg bg-red-100 text-red-600"
-                    >
-                      Confirmar
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteId(null)}
-                      className="text-[11px] font-bold px-2 py-1 rounded-lg bg-gray-100 text-gray-500"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                ) : (
-                  <motion.button
-                    whileTap={{ scale: 0.85 }}
-                    onClick={() => setConfirmDeleteId(r.id)}
-                    className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5"
-                  >
-                    <Trash2 size={14} />
-                  </motion.button>
-                )
-              )}
-            </motion.div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Main LotePage ──────────────────────────────────────────────────────────
 
 const TABS = [
   { value: 'cronograma', label: 'Cronograma', Icon: CalendarDays },
   { value: 'colheita',   label: 'Colheita',   Icon: TrendingUp },
-  { value: 'vendas',     label: 'Vendas',     Icon: ShoppingCart },
   { value: 'receitas',   label: 'Receitas',   Icon: DollarSign },
   { value: 'despesas',   label: 'Despesas',   Icon: Receipt },
   { value: 'diario',     label: 'Diário',     Icon: BookOpen },
@@ -2513,11 +2244,8 @@ export default function LotePage({ lote, cultura, onBack, userRole = null }) {
           {tab === 'colheita' && (
             <TabColheita cultura={cultura} lote={lote} />
           )}
-          {tab === 'vendas' && (
-            <TabVendas cultura={cultura} lote={lote} canDelete={canDelete} />
-          )}
           {tab === 'receitas' && (
-            <TabReceitas lote={lote} cor={cor} canDelete={canDelete} />
+            <TabReceitas cultura={cultura} lote={lote} canDelete={canDelete} />
           )}
           {tab === 'despesas' && (
             <TabDespesas lote={lote} cor={cor} canDelete={canDelete} />
