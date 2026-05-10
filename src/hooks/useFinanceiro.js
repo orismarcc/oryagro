@@ -9,18 +9,25 @@ async function getUserId() {
 /**
  * Carrega todos os dados brutos para a DRE:
  * - vendas de todos os lotes do usuário (com data)
+ * - receitas diretas (tabela receitas, ex: serviços, outras entradas)
  * - movimentos de saída com preço (join estoque_insumos para preco_unitario)
  * - despesas de todos os lotes
  * - plantios com data_plantio, status, cultura_id, nome, propriedade_id, mao_obra_total (legado)
  */
 export async function loadDreRawData() {
   const userId = await getUserId();
-  if (!userId) return { vendas: [], movimentos: [], despesas: [], plantios: [] };
+  if (!userId) return { vendas: [], receitas: [], movimentos: [], despesas: [], plantios: [] };
 
-  const [vendasRes, movimentosRes, despesasRes, plantiosRes] = await Promise.all([
+  const [vendasRes, receitasRes, movimentosRes, despesasRes, plantiosRes] = await Promise.all([
     supabase
       .from('vendas')
       .select('id, plantio_id, comprador_id, data, quantidade, unidade, preco_unitario, destino')
+      .eq('user_id', userId)
+      .order('data', { ascending: false }),
+
+    supabase
+      .from('receitas')
+      .select('id, plantio_id, propriedade_id, categoria, descricao, valor, data')
       .eq('user_id', userId)
       .order('data', { ascending: false }),
 
@@ -45,12 +52,14 @@ export async function loadDreRawData() {
   ]);
 
   if (vendasRes.error)     logDbError('loadDreRawData.vendas', vendasRes.error);
+  if (receitasRes.error)   logDbError('loadDreRawData.receitas', receitasRes.error);
   if (movimentosRes.error) logDbError('loadDreRawData.movimentos', movimentosRes.error);
   if (despesasRes.error)   logDbError('loadDreRawData.despesas', despesasRes.error);
   if (plantiosRes.error)   logDbError('loadDreRawData.plantios', plantiosRes.error);
 
   return {
     vendas:     vendasRes.data     || [],
+    receitas:   receitasRes.data   || [],
     movimentos: movimentosRes.data || [],
     despesas:   despesasRes.data   || [],
     plantios:   plantiosRes.data   || [],

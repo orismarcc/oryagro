@@ -30,15 +30,18 @@ export function useRealtimeSync(table, onRefresh, filter = null) {
   const refreshRef = useRef(onRefresh);
   useEffect(() => { refreshRef.current = onRefresh; }, [onRefresh]);
 
+  // Stable per-instance ID so unfiltered channels never collide across components
+  const instanceId = useRef(`${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`);
+
   const filterValue = filter?.value ?? null;
 
   useEffect(() => {
     if (!table) return;
 
-    // Unique channel name: scoped to table + optional filter value
+    // Unique channel name: scoped to table + filter value + per-instance suffix
     const channelName = filter?.value
       ? `rt_${table}_${filter.column}_${filter.value}`
-      : `rt_${table}`;
+      : `rt_${table}_${instanceId.current}`;
 
     const pgConfig = {
       event:  '*',

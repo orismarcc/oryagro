@@ -230,7 +230,8 @@ export async function addVenda({ plantioId, data, quantidade, unidade, precoUnit
  */
 export async function deleteVenda(id) {
   const { error } = await supabase.from('vendas').delete().eq('id', id);
-  return !error;
+  if (error) { logDbError('deleteVenda', error); return false; }
+  return true;
 }
 
 /**

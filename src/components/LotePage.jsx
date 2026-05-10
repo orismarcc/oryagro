@@ -4,7 +4,7 @@ import {
   ArrowLeft, CalendarDays, Sprout, Package, TrendingUp,
   Cloud, CheckCircle2, Plus, Trash2, AlertTriangle,
   Thermometer, Droplets, ShoppingCart, BookOpen, Loader2, PenLine,
-  HardHat, Receipt, DollarSign,
+  Receipt, DollarSign,
 } from 'lucide-react';
 import CronogramaTimeline from './CronogramaTimeline';
 import { useWeather } from '../hooks/useWeather';
@@ -21,8 +21,7 @@ import {
   updateLoteStatus,
   arquivarCicloLote,
   loadMaoObraRegistros,
-  addMaoObraRegistro,
-  deleteMaoObraRegistro,
+  loadMovimentosByLote,
 } from '../hooks/useGestao';
 import { loadCompradores, addParcelas } from '../hooks/useCompradores';
 import {
@@ -694,254 +693,7 @@ function TabColheita({ cultura, lote }) {
   );
 }
 
-// ─── Tab: Mão de Obra ────────────────────────────────────────────────────────
-
-function formatPeriodo(dataInicio, dataFim) {
-  if (!dataInicio) return '';
-  const fmtShort = (iso) => {
-    const [, m, d] = iso.split('-');
-    return `${d}/${m}`;
-  };
-  if (dataFim) {
-    return `${fmtShort(dataInicio)} – ${formatDatePtBR(dataFim)}`;
-  }
-  return formatDatePtBR(dataInicio);
-}
-
-function TabMaoObra({ lote, cor, canDelete }) {
-  const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
-
-  const [registros, setRegistros] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-
-  const [form, setForm] = useState({
-    dataInicio: today(),
-    dataFim: '',
-    valor: '',
-    descricao: '',
-    prestador: '',
-  });
-
-  const fetchRegistros = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await loadMaoObraRegistros(lote.id);
-      setRegistros(data ?? []);
-    } catch {
-      setRegistros([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [lote.id]);
-
-  useEffect(() => {
-    fetchRegistros();
-  }, [fetchRegistros]);
-
-  const handleAdd = async () => {
-    if (!form.dataInicio || !form.valor || parseFloat(form.valor) <= 0) return;
-    setSaving(true);
-    try {
-      await addMaoObraRegistro({
-        plantioId:  lote.id,
-        dataInicio: form.dataInicio,
-        dataFim:    form.dataFim || null,
-        valor:      parseFloat(form.valor),
-        descricao:  form.descricao || null,
-        prestador:  form.prestador || null,
-      });
-      await fetchRegistros();
-      setForm({ dataInicio: today(), dataFim: '', valor: '', descricao: '', prestador: '' });
-    } catch {
-      // fail silently
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    try {
-      await deleteMaoObraRegistro(id);
-      setRegistros(prev => prev.filter(r => r.id !== id));
-    } catch {}
-    setConfirmDeleteId(null);
-  };
-
-  const totalMaoObra = registros.reduce((s, r) => s + (r.valor ?? 0), 0);
-
-  return (
-    <div
-      className="px-4 pt-5 max-w-2xl mx-auto overflow-y-auto"
-      style={{ paddingBottom: SAFE_BOTTOM, scrollbarWidth: 'none' }}
-    >
-      {/* Total */}
-      {registros.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="card p-4 mb-5"
-          style={{ borderColor: `${cor}30` }}
-        >
-          <p className="section-label mb-1">Total Mão de Obra</p>
-          <p className="text-[22px] font-black" style={{ color: cor }}>{fmtBRL(totalMaoObra)}</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">{registros.length} registro{registros.length !== 1 ? 's' : ''}</p>
-        </motion.div>
-      )}
-
-      {/* Formulário */}
-      <p className="section-label mb-3">Registrar Mão de Obra</p>
-      <div className="card p-4 mb-5">
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Data início</label>
-            <input
-              type="date"
-              value={form.dataInicio}
-              onChange={e => setForm(f => ({ ...f, dataInicio: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Até (opcional)</label>
-            <input
-              type="date"
-              value={form.dataFim}
-              onChange={e => setForm(f => ({ ...f, dataFim: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Valor (R$)</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0,00"
-              value={form.valor}
-              onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Descrição (opcional)</label>
-            <input
-              type="text"
-              placeholder="Ex: Capina, Colheita"
-              value={form.descricao}
-              onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
-            />
-          </div>
-        </div>
-
-        <div className="mb-3">
-          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">
-            Prestador (opcional)
-          </label>
-          <input
-            type="text"
-            placeholder="Ex: João da Silva, Empresa Agro"
-            value={form.prestador}
-            onChange={e => setForm(f => ({ ...f, prestador: e.target.value }))}
-            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
-            style={{ '--tw-ring-color': cor }}
-          />
-        </div>
-
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={handleAdd}
-          disabled={saving || !form.dataInicio || !form.valor || parseFloat(form.valor) <= 0}
-          className="w-full py-3 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
-          style={{ background: cor }}
-        >
-          {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-          Registrar
-        </motion.button>
-      </div>
-
-      {/* Lista */}
-      <p className="section-label mb-3">Registros</p>
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 size={24} className="animate-spin text-muted-foreground" />
-        </div>
-      ) : registros.length === 0 ? (
-        <div className="text-center py-12">
-          <HardHat size={32} className="mx-auto mb-3 text-muted-foreground opacity-30" />
-          <p className="text-[13px] text-muted-foreground">Nenhum registro de mão de obra ainda</p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {registros.map(r => (
-            <motion.div
-              key={r.id}
-              layout
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              className="card p-4 flex items-start gap-3"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <span
-                    className="text-[11px] font-bold px-2 py-0.5 rounded-full"
-                    style={{ background: `${cor}18`, color: cor }}
-                  >
-                    {formatPeriodo(r.data_inicio, r.data_fim)}
-                  </span>
-                  {r.descricao && (
-                    <span className="text-[12px] text-muted-foreground">{r.descricao}</span>
-                  )}
-                </div>
-                {r.prestador && (
-                  <p className="text-[11px] text-muted-foreground mb-1">
-                    👤 {r.prestador}
-                  </p>
-                )}
-                <p className="text-[14px] font-bold" style={{ color: cor }}>{fmtBRL(r.valor)}</p>
-              </div>
-              {canDelete && (
-                confirmDeleteId === r.id ? (
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button
-                      onClick={() => handleDelete(r.id)}
-                      className="text-[11px] font-bold px-2 py-1 rounded-lg bg-red-100 text-red-600"
-                    >
-                      Confirmar
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteId(null)}
-                      className="text-[11px] font-bold px-2 py-1 rounded-lg bg-gray-100 text-gray-500"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                ) : (
-                  <motion.button
-                    whileTap={{ scale: 0.85 }}
-                    onClick={() => setConfirmDeleteId(r.id)}
-                    className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5"
-                  >
-                    <Trash2 size={14} />
-                  </motion.button>
-                )
-              )}
-            </motion.div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Tab: Vendas ─────────────────────────────────────────────────────────────
+// ─── Tab: Vendas / Receitas ──────────────────────────────────────────────────
 
 const DESTINO_OPTIONS = [
   { value: 'feira',          label: 'Feira livre' },
@@ -2039,13 +1791,17 @@ export default function LotePage({ lote, cultura, onBack, userRole = null }) {
     if (!window.confirm('Marcar este lote como concluído? Isso arquivará o ciclo no histórico.')) return;
     setConcluindo(true);
     try {
-      // Load vendas to compute summary
-      const vendas = await loadVendas(lote.id);
-      arquivarCicloLote(lote, vendas, []);
+      // Load all data needed for the archive summary in parallel
+      const [vendas, movimentos, maoObraRegistros] = await Promise.all([
+        loadVendas(lote.id),
+        loadMovimentosByLote(lote.id),
+        loadMaoObraRegistros(lote.id),
+      ]);
+      await arquivarCicloLote(lote, vendas, [], movimentos, maoObraRegistros);
       await updateLoteStatus(lote.id, 'concluido');
       setConcluido(true);
     } catch {
-      // silently fail
+      // silently fail — UI state stays consistent even if archiving errors
     } finally {
       setConcluindo(false);
     }

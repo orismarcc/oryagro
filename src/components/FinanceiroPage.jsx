@@ -45,7 +45,7 @@ function anoFromDate(dateStr) {
 }
 
 function buildDreMap(rawData) {
-  const { vendas, movimentos, despesas, plantios } = rawData;
+  const { vendas, receitas = [], movimentos, despesas, plantios } = rawData;
 
   const map = {};
 
@@ -65,7 +65,7 @@ function buildDreMap(rawData) {
     return map[plantioId][ano];
   };
 
-  // Processar vendas
+  // Processar vendas (tabela vendas — produção in-natura, etc.)
   vendas.forEach((v) => {
     if (!v.plantio_id || !v.data) return;
     const ano = anoFromDate(v.data);
@@ -74,6 +74,18 @@ function buildDreMap(rawData) {
     const valor = (v.quantidade ?? 0) * (v.preco_unitario ?? 0);
     entry.receita += valor;
     entry.vendas.push({ ...v, valor });
+  });
+
+  // Processar receitas diretas (tabela receitas — serviços, outras entradas)
+  receitas.forEach((r) => {
+    if (!r.data) return;
+    const ano = anoFromDate(r.data);
+    if (!ano) return;
+    // Agrupa pelo plantio_id quando disponível; caso contrário usa '__receita__'
+    const pid = r.plantio_id ? String(r.plantio_id) : '__receita__';
+    const entry = ensureEntry(pid, ano);
+    entry.receita += r.valor ?? 0;
+    entry.vendas.push({ ...r, valor: r.valor ?? 0, _source: 'receita' });
   });
 
   // Processar movimentos de saída de estoque
@@ -1127,6 +1139,7 @@ export default function FinanceiroPage({ onBack, propriedades = [] }) {
   // Realtime: re-fetch DRE whenever vendas or despesas change (any device/user)
   useRealtimeSync('vendas',   fetchData);
   useRealtimeSync('despesas', fetchData);
+  useRealtimeSync('receitas', fetchData);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
