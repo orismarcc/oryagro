@@ -224,21 +224,26 @@ export async function loadCronogramaAtividades(plantioId) {
 export async function syncCronogramaStatus(plantioId, culturaId, atividade) {
   const { error } = await supabase
     .from('cronograma_atividades')
-    .upsert({
-      plantio_id: plantioId,
-      cultura_id: culturaId,
-      dia_previsto: atividade.dia,
-      etapa: atividade.etapa,
-      produto: atividade.produto || '',
-      dose: atividade.dose || '',
-      forma_aplicacao: atividade.forma || '',
-      tipo: atividade.tipo || 'manejo',
-      status: atividade.status,
-      data_execucao: atividade.data || null,
-      observacao: atividade.obs || null,
-      is_custom: atividade.isCustom || false,
-      updated_at: new Date().toISOString(),
-    });
+    .upsert(
+      {
+        plantio_id:      plantioId,
+        cultura_id:      culturaId,
+        dia_previsto:    atividade.dia,
+        etapa:           atividade.etapa,
+        produto:         atividade.produto        || '',
+        dose:            atividade.dose           || '',
+        forma_aplicacao: atividade.forma          || '',
+        tipo:            atividade.tipo           || 'manejo',
+        status:          atividade.status,
+        data_execucao:   atividade.data           || null,
+        observacao:      atividade.obs            || null,
+        is_custom:       atividade.isCustom       || false,
+        updated_at:      new Date().toISOString(),
+      },
+      // True upsert: update the existing row if one already exists for this
+      // (plantio_id, etapa, is_custom) triplet instead of inserting a duplicate.
+      { onConflict: 'plantio_id,etapa,is_custom' },
+    );
   if (error) logDbError('syncCronogramaStatus', error);
 }
 

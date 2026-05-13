@@ -1156,7 +1156,9 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                       onClick={e => {
                         e.stopPropagation();
                         setConfirmDate(getDefaultConfirmDate(ev.dia));
-                        setConfirming({ id: ev._id, etapa: ev.etapa, tipo: ev.tipo });
+                        // Spread the FULL event so confirmStep can read ev.dia, ev.produto,
+                        // ev.dose, ev.forma, ev._custom — all required by syncCronogramaStatus.
+                        setConfirming({ ...ev, id: ev._id });
                         setStockDebit({ enabled: false, insumoId: '', quantidade: '' });
                         setHarvestData({
                           enabled: ev.tipo === 'colheita',
