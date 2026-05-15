@@ -4,7 +4,7 @@ import {
   ArrowLeft, CalendarDays, Sprout, Package, TrendingUp,
   Cloud, CheckCircle2, Plus, Trash2, AlertTriangle,
   Thermometer, Droplets, ShoppingCart, BookOpen, Loader2, PenLine,
-  Receipt, DollarSign,
+  Receipt, DollarSign, PackagePlus,
 } from 'lucide-react';
 import CronogramaTimeline from './CronogramaTimeline';
 import { useWeather } from '../hooks/useWeather';
@@ -22,6 +22,8 @@ import {
   arquivarCicloLote,
   loadMaoObraRegistros,
   loadMovimentosByLote,
+  upsertInsumo,
+  addMovimento,
 } from '../hooks/useGestao';
 import { loadCompradores, addParcelas } from '../hooks/useCompradores';
 import {
@@ -956,6 +958,16 @@ function TabDespesas({ lote, cor, canDelete }) {
     observacao: '',
   });
 
+  // Estoque integration state
+  const CATS_COM_ESTOQUE = ['Insumos Agrícolas', 'Embalagem e Comercialização'];
+  const showEstoqueToggle = CATS_COM_ESTOQUE.includes(form.categoria);
+  const [estoqueForm, setEstoqueForm] = useState({
+    enabled: false,
+    nomeInsumo: '',
+    qtdMinima: '0',
+    precoUnitario: '',
+  });
+
   const subcats = CATEGORIAS_DESPESA.find(c => c.label === form.categoria)?.subcategorias || [];
   const autoUnidade = getUnidade(form.categoria, form.subcategoria);
 
@@ -963,6 +975,22 @@ function TabDespesas({ lote, cor, canDelete }) {
   useEffect(() => {
     setForm(f => ({ ...f, unidade: getUnidade(f.categoria, f.subcategoria) }));
   }, [form.categoria, form.subcategoria]);
+
+  // When categoria changes to one without estoque, disable toggle
+  useEffect(() => {
+    if (!CATS_COM_ESTOQUE.includes(form.categoria)) {
+      setEstoqueForm(e => ({ ...e, enabled: false }));
+    }
+  }, [form.categoria]);
+
+  // Pre-fill nome insumo from subcategoria or categoria
+  useEffect(() => {
+    if (!estoqueForm.enabled) return;
+    setEstoqueForm(e => ({
+      ...e,
+      nomeInsumo: form.subcategoria || form.categoria,
+    }));
+  }, [form.subcategoria, form.categoria, estoqueForm.enabled]);
 
   const fetchRegistros = useCallback(async () => {
     setLoading(true);
@@ -996,6 +1024,31 @@ function TabDespesas({ lote, cor, canDelete }) {
         data:          form.data,
         observacao:    form.observacao   || null,
       });
+
+      // ── Estoque integration ─────────────────────────────────────────────────
+      if (estoqueForm.enabled && estoqueForm.nomeInsumo.trim() && lote.propriedade_id) {
+        const qtd = parseFloat(form.quantidade) || 0;
+        const insumo = await upsertInsumo({
+          nome:              estoqueForm.nomeInsumo.trim(),
+          unidade:           form.unidade || 'un',
+          quantidade:        0,                                        // managed via movimentos
+          quantidade_minima: parseFloat(estoqueForm.qtdMinima) || 0,
+          preco_unitario:    parseFloat(estoqueForm.precoUnitario) || 0,
+          propriedadeId:     lote.propriedade_id,
+        });
+        if (insumo?.id && qtd > 0) {
+          await addMovimento({
+            insumoId:    insumo.id,
+            tipo:        'entrada',
+            quantidade:  qtd,
+            observacao:  `Despesa: ${form.descricao || form.subcategoria || form.categoria}`,
+            data:        form.data,
+            plantioId:   lote.id,
+          });
+        }
+      }
+      // ───────────────────────────────────────────────────────────────────────
+
       await fetchRegistros();
       setForm({
         data: today(),
@@ -1008,6 +1061,7 @@ function TabDespesas({ lote, cor, canDelete }) {
         valor: '',
         observacao: '',
       });
+      setEstoqueForm({ enabled: false, nomeInsumo: '', qtdMinima: '0', precoUnitario: '' });
     } finally {
       setSaving(false);
     }
@@ -1171,6 +1225,100 @@ function TabDespesas({ lote, cor, canDelete }) {
             />
           </div>
         </div>
+
+        {/* Estoque toggle — só aparece para categorias relevantes */}
+        {showEstoqueToggle && (
+          <div className="mb-3">
+            <button
+              type="button"
+              onClick={() => setEstoqueForm(e => ({ ...e, enabled: !e.enabled }))}
+              className="flex items-center gap-2 w-full rounded-xl border px-3 py-2.5 text-[13px] font-semibold transition-colors"
+              style={{
+                borderColor: estoqueForm.enabled ? cor : 'hsl(var(--border))',
+                background:  estoqueForm.enabled ? `${cor}12` : 'transparent',
+                color:       estoqueForm.enabled ? cor : 'hsl(var(--muted-foreground))',
+              }}
+            >
+              <PackagePlus size={15} />
+              Adicionar ao estoque?
+              <span
+                className="ml-auto w-9 h-5 rounded-full flex items-center transition-colors flex-shrink-0"
+                style={{ background: estoqueForm.enabled ? cor : 'hsl(var(--border))' }}
+              >
+                <span
+                  className="w-4 h-4 bg-white rounded-full shadow transition-transform mx-0.5"
+                  style={{ transform: estoqueForm.enabled ? 'translateX(16px)' : 'translateX(0)' }}
+                />
+              </span>
+            </button>
+
+            <AnimatePresence>
+              {estoqueForm.enabled && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-3 p-3 rounded-xl space-y-3" style={{ background: `${cor}08`, border: `1px solid ${cor}20` }}>
+                    <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: cor }}>
+                      Dados do Estoque
+                    </p>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Nome do insumo</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Fertilizante NPK"
+                        value={estoqueForm.nomeInsumo}
+                        onChange={e => setEstoqueForm(f => ({ ...f, nomeInsumo: e.target.value }))}
+                        className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
+                        style={{ '--tw-ring-color': cor }}
+                      />
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Se já existir no estoque com esse nome, a entrada será adicionada ao mesmo item.</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Qtd. mínima</label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            placeholder="0"
+                            value={estoqueForm.qtdMinima}
+                            onChange={e => setEstoqueForm(f => ({ ...f, qtdMinima: e.target.value }))}
+                            className="flex-1 rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
+                            style={{ '--tw-ring-color': cor }}
+                          />
+                          <span className="text-[11px] font-bold text-muted-foreground flex-shrink-0">{form.unidade || 'un'}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Preço unit. (R$)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0,00"
+                          value={estoqueForm.precoUnitario}
+                          onChange={e => setEstoqueForm(f => ({ ...f, precoUnitario: e.target.value }))}
+                          className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
+                          style={{ '--tw-ring-color': cor }}
+                        />
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-muted-foreground">
+                      A quantidade do campo acima ({form.quantidade || '0'} {form.unidade || 'un'}) será registrada como entrada no estoque da propriedade.
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
 
         <motion.button
           whileTap={{ scale: 0.97 }}
