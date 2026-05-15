@@ -4,14 +4,10 @@ import { Bell, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { CULTURAS } from '../data/culturas';
 import { loadCronogramaAtividades } from '../hooks/useSupabaseSync';
+import { makeStableId } from '../hooks/useCronogramaSync';
 
 // ─── constants ────────────────────────────────────────────────────────────────
 const GREEN = 'hsl(160 84% 27%)';
-
-// ─── helpers ──────────────────────────────────────────────────────────────────
-function makeStableId(prefix, name) {
-  return prefix + '_' + name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
-}
 
 function addDays(date, days) {
   const d = new Date(date);
@@ -96,9 +92,10 @@ export default function NotificacoesBell({
         const cultura = CULTURAS[lote.cultura_id];
         if (!cultura?.cronograma) return;
 
-        // 1. Tenta carregar status do Supabase
         let concluidas = new Set();
         let removidas  = new Set();
+
+        // 1. Carrega do Supabase (fonte de verdade)
         try {
           const dbRows = await loadCronogramaAtividades(lote.id);
           dbRows.forEach(row => {
@@ -106,17 +103,18 @@ export default function NotificacoesBell({
             if (row.status === 'feito')    concluidas.add(_id);
             if (row.status === 'removida') removidas.add(_id);
           });
-        } catch (_) {
-          // 2. Fallback: lê do localStorage com a chave correta
-          const statusKey = `cronograma_status_lote_${lote.id}`;
-          try {
-            const statusLocal = JSON.parse(localStorage.getItem(statusKey) || '{}');
-            Object.entries(statusLocal).forEach(([id, val]) => {
-              if (val?.status === 'feito')    concluidas.add(id);
-              if (val?.status === 'removida') removidas.add(id);
-            });
-          } catch (_) {}
-        }
+        } catch (_) { /* continua com sets vazios, complementado pelo localStorage */ }
+
+        // 2. Sempre mescla localStorage — captura deleções feitas antes do fix de sync
+        //    (status 'removida' que nunca chegou ao Supabase)
+        const statusKey = `cronograma_status_lote_${lote.id}`;
+        try {
+          const statusLocal = JSON.parse(localStorage.getItem(statusKey) || '{}');
+          Object.entries(statusLocal).forEach(([id, val]) => {
+            if (val?.status === 'feito')    concluidas.add(id);
+            if (val?.status === 'removida') removidas.add(id);
+          });
+        } catch (_) {}
 
         const dataBase = new Date(lote.data_plantio + 'T12:00:00');
 

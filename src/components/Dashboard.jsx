@@ -340,8 +340,8 @@ function EstaSemanaSection({ lotes, statusByLote = {} }) {
       ];
 
       steps.forEach(step => {
-        const done = doneStatus[step._id]?.status === 'feito';
-        if (done) return;
+        const st = doneStatus[step._id]?.status;
+        if (st === 'feito' || st === 'removida') return;
         const dataEtapa = new Date(dataPlantio.getTime() + step.dia * 86_400_000);
         if (dataEtapa >= hoje && dataEtapa <= em7dias) {
           itens.push({ lote, cultura, etapa: step.etapa, data: dataEtapa, dia: step.dia });
