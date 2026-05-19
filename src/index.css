@@ -2,6 +2,11 @@
 
 @import "tailwindcss";
 
+/* Carrega as cores customizadas (verde, ambar, terra, borda, papel…) definidas
+   no tailwind.config.js para compatibilidade com Tailwind v4. Sem esta linha,
+   utilitários como bg-verde-800 / border-borda / bg-papel não são gerados. */
+@config "../tailwind.config.js";
+
 /*
   OryAgro — Design System
   Inspired by: GranjaTop Design System v2
