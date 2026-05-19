@@ -18,7 +18,7 @@ const DialogContent = React.forwardRef(({ className, children, ...props }, ref) 
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content ref={ref}
-      className={cn('fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-lg border border-borda shadow-xl p-6 data-[state=open]:animate-in', className)}
+      className={cn('fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-lg border border-borda shadow-xl p-6 data-[state=open]:animate-in max-h-[90svh] overflow-y-auto', className)}
       {...props}>
       {children}
       <DialogPrimitive.Close className="absolute right-4 top-4 rounded p-1 hover:bg-papel text-gray-400 hover:text-gray-700">

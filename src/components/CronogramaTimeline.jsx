@@ -1194,9 +1194,9 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
           setAddHarvest({ jaRealizada: false, qtd: '', unidade: 'kg', polpa: false, qtdPolpa: '', unidadePolpa: 'kg' });
         }
       }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Nova etapa</DialogTitle></DialogHeader>
-          <div className="flex flex-col gap-3">
+        <DialogContent className="max-w-lg flex flex-col p-0 gap-0 max-h-[92svh]">
+          <DialogHeader className="px-6 pt-6 pb-2 shrink-0"><DialogTitle>Nova etapa</DialogTitle></DialogHeader>
+          <div className="flex flex-col gap-3 overflow-y-auto flex-1 px-6 pb-2">
 
             {/* ── Dia + Tipo ── */}
             <div className="flex gap-3">
@@ -1438,7 +1438,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
             )}
 
           </div>
-          <DialogFooter>
+          <DialogFooter className="px-6 py-4 border-t shrink-0">
             <Button variant="outline" onClick={() => {
               setAddDialog(false);
               setAddHarvest({ jaRealizada: false, qtd: '', unidade: 'kg', polpa: false, qtdPolpa: '', unidadePolpa: 'kg' });

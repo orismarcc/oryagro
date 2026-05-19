@@ -74,6 +74,11 @@ function AppInner({ session, displayName, signOut }) {
   const [loteOpenedFrom, setLoteOpenedFrom] = useState('dashboard');
   const [pickerOpenedFrom, setPickerOpenedFrom] = useState('dashboard');
 
+  // Bug 1: Reset scroll to top on every view/lote/propriedade change
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [mainView, selectedLote?.id, selectedPropriedade?.id]);
+
   // Check on mount if migration is needed; also load propriedades for AnalysePage
   useEffect(() => {
     if (!session) return;
