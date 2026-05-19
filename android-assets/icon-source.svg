@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Background circle -->
+  <rect width="1024" height="1024" rx="200" fill="#16a34a"/>
+
+  <!-- Leaf / Plant icon centered -->
+  <!-- Stem -->
+  <rect x="492" y="540" width="40" height="240" rx="20" fill="#bbf7d0"/>
+
+  <!-- Main leaf -->
+  <path d="M512 180 C340 180 220 320 220 480 C220 600 300 700 420 740 C440 746 460 750 480 752 L480 420 C480 400 496 384 512 384 C528 384 544 400 544 420 L544 752 C564 750 584 746 604 740 C724 700 804 600 804 480 C804 320 684 180 512 180Z" fill="#4ade80"/>
+
+  <!-- Left sub-leaf -->
+  <path d="M480 500 C480 500 380 460 320 380 C360 440 400 500 480 540Z" fill="#86efac"/>
+
+  <!-- Right sub-leaf -->
+  <path d="M544 500 C544 500 644 460 704 380 C664 440 624 500 544 540Z" fill="#86efac"/>
+
+  <!-- Highlight on main leaf -->
+  <path d="M460 220 C400 260 360 320 340 380 C380 340 430 300 480 280Z" fill="#86efac" opacity="0.5"/>
+</svg>

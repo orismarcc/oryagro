@@ -43,3 +43,18 @@ dist-ssr
 *.pfx
 secrets/
 credentials/
+
+# ── Android (Capacitor) ──────────────────────────────────────────────────────
+android/.gradle
+android/app/build
+android/build
+android/.idea
+android/local.properties
+android/capacitor.settings.gradle
+android/app/release
+android-assets/icon/
+android-assets/splash/
+
+# Keystore de release (NUNCA commitar)
+*.keystore
+*.jks

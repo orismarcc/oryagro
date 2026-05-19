@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732" width="2732" height="2732">
+  <!-- Background -->
+  <rect width="2732" height="2732" fill="#16a34a"/>
+
+  <!-- Icon centered (scaled up) -->
+  <!-- Stem -->
+  <rect x="1326" y="1480" width="80" height="480" rx="40" fill="#bbf7d0"/>
+
+  <!-- Main leaf -->
+  <path d="M1366 700 C1094 700 900 940 900 1200 C900 1400 1020 1560 1220 1620 C1260 1632 1300 1640 1340 1644 L1340 1220 C1340 1196 1356 1180 1366 1180 C1376 1180 1392 1196 1392 1220 L1392 1644 C1432 1640 1472 1632 1512 1620 C1712 1560 1832 1400 1832 1200 C1832 940 1638 700 1366 700Z" fill="#4ade80"/>
+
+  <!-- Left sub-leaf -->
+  <path d="M1340 1300 C1340 1300 1180 1240 1080 1120 C1140 1220 1220 1320 1340 1380Z" fill="#86efac"/>
+
+  <!-- Right sub-leaf -->
+  <path d="M1392 1300 C1392 1300 1552 1240 1652 1120 C1592 1220 1512 1320 1392 1380Z" fill="#86efac"/>
+
+  <!-- App name text -->
+  <text x="1366" y="2080" font-family="Arial, sans-serif" font-size="180" font-weight="bold" fill="white" text-anchor="middle" letter-spacing="8">OryAgro</text>
+
+  <!-- Tagline -->
+  <text x="1366" y="2180" font-family="Arial, sans-serif" font-size="80" fill="#bbf7d0" text-anchor="middle" letter-spacing="4">Gestão Agrícola Inteligente</text>
+</svg>
