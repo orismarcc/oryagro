@@ -74,9 +74,19 @@ function AppInner({ session, displayName, signOut }) {
   const [loteOpenedFrom, setLoteOpenedFrom] = useState('dashboard');
   const [pickerOpenedFrom, setPickerOpenedFrom] = useState('dashboard');
 
-  // Bug 1: Reset scroll to top on every view/lote/propriedade change
+  // Reset scroll to top on every view/lote/propriedade change.
+  // We use three methods + requestAnimationFrame to reliably cover Android
+  // WebView (Capacitor), where window.scrollTo can be ignored when
+  // scroll-behavior:smooth is active or the DOM hasn't re-rendered yet.
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    const resetScroll = () => {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+    resetScroll();
+    const rafId = requestAnimationFrame(resetScroll);
+    return () => cancelAnimationFrame(rafId);
   }, [mainView, selectedLote?.id, selectedPropriedade?.id]);
 
   // Check on mount if migration is needed; also load propriedades for AnalysePage

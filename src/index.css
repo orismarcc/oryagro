@@ -65,7 +65,9 @@
 
   html {
     -webkit-tap-highlight-color: transparent;
-    scroll-behavior: smooth;
+    /* scroll-behavior: smooth removed — it prevents instant scroll-to-top on
+       Android WebView (Capacitor). Navigation scroll reset uses JS directly. */
+    scroll-behavior: auto;
   }
 
   body {
