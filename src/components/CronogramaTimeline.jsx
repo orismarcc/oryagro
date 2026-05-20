@@ -428,7 +428,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
         }
         return { ...e, ...override, dia: scaleBaseDia(e.dia), _id: makeStableId('default', e.etapa), _custom: false };
       }),
-    ...customRows.map((e, i) => ({ ...e, _id: `custom_${i}`, _custom: true })),
+    ...customRows.map((e, i) => ({ ...e, _id: `custom_${i}`, _custom: true, _noScaleDose: true })),
   ]
   .filter(e => status[e._id]?.status !== 'removida')
   .sort((a, b) => a.dia - b.dia);
@@ -920,9 +920,6 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                           <>
                             <span className="opacity-40">·</span>
                             <span className="font-semibold text-foreground">{scaledDose}</span>
-                            {isScaled && ev.dose !== '—' && (
-                              <span className="text-[10px] text-muted-foreground opacity-60">(base: {ev.dose})</span>
-                            )}
                           </>
                         )}
                       </p>
@@ -1476,7 +1473,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                 exit={{ y: '100%' }}
                 transition={{ type: 'spring', stiffness: 320, damping: 32 }}
                 className="relative rounded-t-3xl p-6 pb-10"
-                style={{ background: 'white', maxHeight: '60vh', overflowY: 'auto' }}
+                style={{ background: 'white', maxHeight: '82svh', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}
                 onClick={e => e.stopPropagation()}
               >
                 {/* Drag handle */}
