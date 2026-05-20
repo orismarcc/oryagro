@@ -10,7 +10,7 @@ const config: CapacitorConfig = {
     allowMixedContent: false,
     captureInput: true,
     webContentsDebuggingEnabled: false,
-    adjustResize: true,
+    // adjustResize removido — não é uma opção válida do Capacitor
   },
   plugins: {
     SplashScreen: {
@@ -26,7 +26,9 @@ const config: CapacitorConfig = {
     StatusBar: {
       style: 'DARK',
       backgroundColor: '#16a34a',
-      overlaysWebView: true,
+      // overlaysWebView: false (padrão) — a barra de status fica ACIMA do
+      // WebView com cor sólida (#16a34a). O WebView começa abaixo dela.
+      // Não é necessário env(safe-area-inset-top) no CSS.
     },
   },
 };

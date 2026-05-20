@@ -70,9 +70,11 @@
 
   html {
     -webkit-tap-highlight-color: transparent;
-    /* scroll-behavior: smooth removed — it prevents instant scroll-to-top on
-       Android WebView (Capacitor). Navigation scroll reset uses JS directly. */
     scroll-behavior: auto;
+    /* html/body não fazem scroll — o <main> com overflow-y:auto é o
+       contêiner de scroll real, permitindo resetar scrollTop via ref JS */
+    height: 100%;
+    overflow: hidden;
   }
 
   body {
@@ -82,10 +84,13 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     line-height: 1.5;
-    padding-top: env(safe-area-inset-top, 0px);
+    height: 100%;
+    overflow: hidden;
+    /* padding-top removido: StatusBar.overlaysWebView=false coloca o WebView
+       abaixo da barra de status, sem necessidade de inset CSS no topo. */
     padding-left: env(safe-area-inset-left, 0px);
     padding-right: env(safe-area-inset-right, 0px);
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   h1, h2, h3, h4, h5, h6 {

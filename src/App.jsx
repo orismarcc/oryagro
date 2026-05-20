@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Dashboard from './components/Dashboard';
 import CulturaPicker from './components/CulturaPicker';
@@ -60,6 +60,10 @@ export default function App() {
 function AppInner({ session, displayName, signOut }) {
   const { getUserRole, isGlobalAdmin } = useFarm();
 
+  // Ref para o contêiner de scroll principal — reseta scrollTop diretamente,
+  // método mais confiável no WebView do Android vs. window.scrollTo.
+  const mainRef = useRef(null);
+
   // Navigation state
   // mainView: 'dashboard' | 'cultura-picker' | 'cultura' | 'lote' | 'simulador' | 'comparacao' | 'analise' | 'propriedades' | 'propriedade' | 'estoque' | 'financeiro' | 'compradores' | 'calculadora' | 'configuracoes'
   const [mainView, setMainView]             = useState('dashboard');
@@ -74,19 +78,14 @@ function AppInner({ session, displayName, signOut }) {
   const [loteOpenedFrom, setLoteOpenedFrom] = useState('dashboard');
   const [pickerOpenedFrom, setPickerOpenedFrom] = useState('dashboard');
 
-  // Reset scroll to top on every view/lote/propriedade change.
-  // We use three methods + requestAnimationFrame to reliably cover Android
-  // WebView (Capacitor), where window.scrollTo can be ignored when
-  // scroll-behavior:smooth is active or the DOM hasn't re-rendered yet.
+  // Reseta scroll ao trocar de tela.
+  // Usa mainRef.current.scrollTop (elemento DOM real) em vez de window.scrollTo,
+  // porque o WebView do Android ignora window.scrollTo quando o contêiner de
+  // scroll real não é o window (html/body têm overflow:hidden no CSS).
   useEffect(() => {
-    const resetScroll = () => {
-      window.scrollTo(0, 0);
-      document.documentElement.scrollTop = 0;
-      document.body.scrollTop = 0;
-    };
-    resetScroll();
-    const rafId = requestAnimationFrame(resetScroll);
-    return () => cancelAnimationFrame(rafId);
+    if (mainRef.current) {
+      mainRef.current.scrollTop = 0;
+    }
   }, [mainView, selectedLote?.id, selectedPropriedade?.id]);
 
   // Check on mount if migration is needed; also load propriedades for AnalysePage
@@ -251,7 +250,7 @@ function AppInner({ session, displayName, signOut }) {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background" style={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <NetworkStatusBanner />
 
       {/* ── Hamburger menu (fixed overlay, all main views) ── */}
@@ -284,7 +283,17 @@ function AppInner({ session, displayName, signOut }) {
           onNavigateToCompradores={handleGoCompradores}
         />
       )}
-      <main className="pb-36">
+      <main
+        ref={mainRef}
+        className="pb-36"
+        style={{
+          flex: '1 1 0%',
+          minHeight: 0,         /* necessário para overflow funcionar em flex */
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          WebkitOverflowScrolling: 'touch',
+        }}
+      >
         <AnimatePresence mode="wait">
           <motion.div
             key={

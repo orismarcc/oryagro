@@ -5,11 +5,11 @@ import './index.css';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 
-// Initialise native StatusBar when running inside Capacitor APK.
-// overlaysWebView: true → WebView is truly full-screen; we handle the status-bar
-// inset via CSS  env(safe-area-inset-top)  (already applied in index.css).
+// Inicializa a StatusBar quando rodando dentro do APK (Capacitor).
+// overlay: false → a barra de status tem fundo sólido (#16a34a) e o WebView
+// começa ABAIXO dela — sem necessidade de env(safe-area-inset-top) no CSS.
 if (Capacitor.isNativePlatform()) {
-  StatusBar.setOverlaysWebView({ overlay: true });
+  StatusBar.setOverlaysWebView({ overlay: false });
   StatusBar.setStyle({ style: Style.Dark });
   StatusBar.setBackgroundColor({ color: '#16a34a' });
 }
