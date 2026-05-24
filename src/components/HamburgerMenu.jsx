@@ -35,8 +35,11 @@ export default function HamburgerMenu({ currentView, onNavigate, hasPropriedade 
       <motion.button
         whileTap={{ scale: 0.88 }}
         onClick={() => setOpen(true)}
-        className="fixed top-3 right-3 z-50 flex items-center justify-center w-10 h-10 rounded-2xl shadow-md"
+        className="fixed z-50 flex items-center justify-center w-10 h-10 rounded-2xl shadow-md"
         style={{
+          /* Posiciona abaixo da status bar usando --safe-top (mínimo 28px garantido) */
+          top: 'calc(var(--safe-top) + 8px)',
+          right: '12px',
           background: 'rgba(255,255,255,0.92)',
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
@@ -75,6 +78,9 @@ export default function HamburgerMenu({ currentView, onNavigate, hasPropriedade 
                 width: 280,
                 background: '#ffffff',
                 boxShadow: '-4px 0 40px rgb(0 0 0 / 0.16)',
+                /* O drawer abre sobre a status bar; usamos paddingTop para
+                   empurrar seu conteúdo abaixo dela. */
+                paddingTop: 'var(--safe-top)',
               }}
             >
               {/* Header */}

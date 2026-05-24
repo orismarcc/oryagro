@@ -226,13 +226,15 @@ export default function NotificacoesBell({
   return (
     <>
       {/* ── Trigger (sino) — imediatamente à esquerda do HamburgerMenu ── */}
-      {/* HamburgerMenu: fixed top-3 right-3 w-10 → right edge at 12px, width 40px */}
-      {/* Bell sits at right-14 (56px) → gap of 4px between buttons           */}
+      {/* Hamburger: right:12px, width:40px → left edge at right:52px         */}
+      {/* Bell: right:60px (52px + 4px gap + 4px extra) → gap de 4px         */}
       <motion.button
         whileTap={{ scale: 0.88 }}
         onClick={() => setOpen(prev => !prev)}
-        className="fixed top-3 right-14 z-50 flex items-center justify-center w-10 h-10 rounded-2xl shadow-md"
+        className="fixed z-50 flex items-center justify-center w-10 h-10 rounded-2xl shadow-md"
         style={{
+          top: 'calc(var(--safe-top) + 8px)',
+          right: '60px',
           background: 'rgba(255,255,255,0.92)',
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
@@ -276,8 +278,10 @@ export default function NotificacoesBell({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.97 }}
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="fixed top-[3.5rem] right-3 z-50 w-80 max-h-[70vh] flex flex-col rounded-2xl shadow-xl overflow-hidden"
+              className="fixed z-50 w-80 max-h-[70vh] flex flex-col rounded-2xl shadow-xl overflow-hidden"
               style={{
+                top: 'calc(var(--safe-top) + 58px)',
+                right: '12px',
                 background: '#ffffff',
                 border: '1px solid hsl(214 20% 90%)',
                 boxShadow: '0 8px 40px -4px rgb(0 0 0 / 0.18)',

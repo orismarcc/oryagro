@@ -5,7 +5,7 @@ import { loadTodosLotes, loadPropriedades } from '../hooks/useSupabaseSync';
 import { loadEstoque } from '../hooks/useGestao';
 import { useCronogramaStatusBatch, makeStableId } from '../hooks/useCronogramaSync';
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
-import { Plus, CalendarDays, Sprout, CheckCircle2, LogOut, Layers, AlertCircle, Clock, ArrowRight, Leaf, Building2, ChevronRight, AlertTriangle, Settings } from 'lucide-react';
+import { Plus, CalendarDays, Sprout, CheckCircle2, Layers, AlertCircle, Clock, ArrowRight, Leaf, Building2, ChevronRight, AlertTriangle } from 'lucide-react';
 
 
 
@@ -435,6 +435,9 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
       });
       setAlertasPorProp(alerts);
       setLoading(false);
+    }).catch(err => {
+      console.error('[Dashboard] loadData error:', err);
+      setLoading(false);
     });
   }, [refreshKey]);
 
@@ -456,31 +459,19 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
           <Sprout size={120} color="white" />
         </div>
 
-        <div className="relative z-10 px-5 pt-5 pb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl flex items-center justify-center border flex-shrink-0"
-                style={{ background: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.28)' }}>
-                <Sprout size={18} color="white" />
-              </div>
-              <div>
-                <p className="text-white/60 text-xs font-medium">
-                  {userName ? `Olá, ${userName}` : 'Guia Hortícola'}
-                </p>
-                <h1 className="font-display text-white text-xl font-extrabold leading-tight">OryAgro</h1>
-              </div>
+        {/* pt usa var(--hero-pad-top) para iniciar abaixo do hamburger + sino flutuantes */}
+        <div className="relative z-10 px-5 pb-6" style={{ paddingTop: 'var(--hero-pad-top)' }}>
+          <div className="flex items-center gap-3 mb-4 pr-24">
+            {/* pr-24 reserva espaço à direita para os botões flutuantes */}
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center border flex-shrink-0"
+              style={{ background: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.28)' }}>
+              <Sprout size={18} color="white" />
             </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={onGoSettings}
-                className="flex items-center gap-1.5 text-white/50 hover:text-white/80 transition-colors p-1.5"
-                title="Configurações"
-              >
-                <Settings size={15} />
-              </button>
-              <button onClick={onSignOut} className="flex items-center gap-1.5 text-white/50 hover:text-white/80 transition-colors p-1.5">
-                <LogOut size={15} />
-              </button>
+            <div className="min-w-0">
+              <p className="text-white/60 text-xs font-medium truncate">
+                {userName ? `Olá, ${userName}` : 'Guia Hortícola'}
+              </p>
+              <h1 className="font-display text-white text-xl font-extrabold leading-tight">OryAgro</h1>
             </div>
           </div>
 

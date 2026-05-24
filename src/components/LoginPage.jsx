@@ -90,7 +90,8 @@ export default function LoginPage() {
           <Sprout size={130} color="white" />
         </div>
 
-        <div className="relative z-10 px-6 pt-14 pb-10 text-center">
+        {/* pt combina safe-area + espaçamento: env() é 0 no web, status-bar height no APK */}
+        <div className="relative z-10 px-6 pb-10 text-center" style={{ paddingTop: 'calc(var(--safe-top) + 24px)' }}>
           <motion.div
             initial={{ opacity: 0, y: -16 }}
             animate={{ opacity: 1, y: 0 }}

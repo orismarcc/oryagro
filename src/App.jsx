@@ -24,6 +24,7 @@ import { CULTURAS } from './data/culturas';
 import { useAuth } from './hooks/useAuth';
 import { loadPropriedades, loadTodosLotes } from './hooks/useSupabaseSync';
 import { FarmProvider, useFarm } from './context/FarmContext';
+import { ToastProvider } from './context/ToastContext';
 import { can, FARM_ACTIONS } from './lib/permissions';
 import { Home, CalendarDays, Building2, Wallet, Activity, Loader2 } from 'lucide-react';
 
@@ -40,20 +41,28 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 size={28} className="animate-spin" style={{ color: 'hsl(160 84% 27%)' }} />
-      </div>
+      <ToastProvider>
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <Loader2 size={28} className="animate-spin" style={{ color: 'hsl(160 84% 27%)' }} />
+        </div>
+      </ToastProvider>
     );
   }
 
   if (!session) {
-    return <LoginPage />;
+    return (
+      <ToastProvider>
+        <LoginPage />
+      </ToastProvider>
+    );
   }
 
   return (
-    <FarmProvider session={session}>
-      <AppInner session={session} displayName={displayName} signOut={signOut} />
-    </FarmProvider>
+    <ToastProvider>
+      <FarmProvider session={session}>
+        <AppInner session={session} displayName={displayName} signOut={signOut} />
+      </FarmProvider>
+    </ToastProvider>
   );
 }
 
@@ -79,13 +88,16 @@ function AppInner({ session, displayName, signOut }) {
   const [pickerOpenedFrom, setPickerOpenedFrom] = useState('dashboard');
 
   // Reseta scroll ao trocar de tela.
-  // Usa mainRef.current.scrollTop (elemento DOM real) em vez de window.scrollTo,
-  // porque o WebView do Android ignora window.scrollTo quando o contêiner de
-  // scroll real não é o window (html/body têm overflow:hidden no CSS).
+  // Usa mainRef.current.scrollTop (elemento DOM real) + requestAnimationFrame
+  // para garantir que o reset acontece APÓS a renderização do novo conteúdo,
+  // evitando que a animação do AnimatePresence atrapalhe a posição.
   useEffect(() => {
-    if (mainRef.current) {
-      mainRef.current.scrollTop = 0;
-    }
+    const el = mainRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+    // rAF garante reset após o primeiro frame pintado com o novo conteúdo
+    const id = requestAnimationFrame(() => { if (el) el.scrollTop = 0; });
+    return () => cancelAnimationFrame(id);
   }, [mainView, selectedLote?.id, selectedPropriedade?.id]);
 
   // Check on mount if migration is needed; also load propriedades for AnalysePage
@@ -288,10 +300,11 @@ function AppInner({ session, displayName, signOut }) {
         className="pb-36"
         style={{
           flex: '1 1 0%',
-          minHeight: 0,         /* necessário para overflow funcionar em flex */
+          minHeight: 0,              /* necessário para overflow funcionar em flex */
           overflowY: 'auto',
           overflowX: 'hidden',
           WebkitOverflowScrolling: 'touch',
+          overscrollBehavior: 'none', /* impede scroll além do fim da lista */
         }}
       >
         <AnimatePresence mode="wait">
@@ -339,6 +352,7 @@ function AppInner({ session, displayName, signOut }) {
                 cultura={CULTURAS[selectedLote.cultura_id]}
                 onBack={handleBackFromLote}
                 userRole={userRole}
+                propriedade={selectedPropriedade}
               />
             )}
             {mainView === 'simulador'  && <SimuladorPage />}

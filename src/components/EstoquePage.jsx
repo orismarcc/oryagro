@@ -77,6 +77,12 @@ function MovModal({ insumo, onClose, onMoved }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!qty || parseFloat(qty) <= 0) return;
+    if (tipo === 'saida' && parseFloat(qty) > insumo.quantidade) {
+      const ok = window.confirm(
+        `A quantidade de saída (${parseFloat(qty)} ${insumo.unidade}) é maior que o estoque disponível (${insumo.quantidade} ${insumo.unidade}). O estoque ficará negativo. Deseja continuar?`
+      );
+      if (!ok) return;
+    }
     setSaving(true);
     await addMovimento({ insumoId: insumo.id, tipo, quantidade: parseFloat(qty), observacao: obs, data });
     setSaving(false);
@@ -93,7 +99,7 @@ function MovModal({ insumo, onClose, onMoved }) {
             Estoque atual: <strong>{insumo.quantidade} {insumo.unidade}</strong>
           </p>
         </div>
-        <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center bg-muted">
+        <button onClick={onClose} className="w-11 h-11 rounded-full flex items-center justify-center bg-muted">
           <X size={14} />
         </button>
       </div>
@@ -249,7 +255,7 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
         <h3 className="font-bold text-[15px]">
           {isEdit ? `Editar — ${existingInsumo.nome}` : 'Novo insumo'}
         </h3>
-        <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center bg-muted">
+        <button onClick={onClose} className="w-11 h-11 rounded-full flex items-center justify-center bg-muted">
           <X size={14} />
         </button>
       </div>
@@ -425,7 +431,7 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero */}
-      <div className="gradient-hero px-5 pt-6 pb-5">
+      <div className="gradient-hero px-5 pb-5" style={{ paddingTop: 'var(--hero-pad-top)' }}>
         {onBack && (
           <button onClick={onBack}
             className="flex items-center gap-1.5 text-white/70 hover:text-white transition-colors mb-3"
@@ -521,7 +527,7 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
                       {canEdit && (
                         <button
                           onClick={() => setEditModal(insumo)}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+                          className="w-11 h-11 flex items-center justify-center rounded-lg transition-colors"
                           style={{ color: 'hsl(215 16% 50%)' }}
                           title="Editar"
                         >
@@ -539,7 +545,7 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
                       {canDelete && (
                         <button
                           onClick={() => handleDelete(insumo.id)}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-500 transition-colors">
+                          className="w-11 h-11 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-500 transition-colors">
                           <Trash2 size={12} />
                         </button>
                       )}

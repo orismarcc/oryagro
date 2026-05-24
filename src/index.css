@@ -43,6 +43,16 @@
   --bg-card:       hsl(0 0% 100%);
   --fg:            hsl(222 47% 11%);
 
+  /* Webapp: env(safe-area-inset-top) retorna 0 no browser — sem padding extra. */
+  --safe-top: env(safe-area-inset-top, 0px);
+
+  /* Padding interno dos heroes: centraliza o título na mesma faixa vertical dos
+     botões flutuantes (hamburger + sino).
+     Botões: top = var(--safe-top)+8px, height=40px → centro = safe-top+28px.
+     Com --hero-pad-top=1rem e texto de ~20px, centro do texto ≈ safe-top+26px ✓ */
+  --hero-pad-top:         1rem;   /* 16px — alinha título com o centro dos botões */
+  --hero-pad-top-no-btns: 1rem;  /* 16px — páginas sem hamburger */
+
   /* Radius */
   --radius-sm:  0.625rem;
   --radius:     1rem;
@@ -64,6 +74,13 @@
   --glass-blur:   16px;
 }
 
+/* APK (Capacitor) — fallback para o primeiro frame, antes do JS medir e
+   sobrescrever via inline style. 40px cobre barras de status de qualquer
+   densidade em dispositivos Android atuais (24-36dp). */
+html.native {
+  --safe-top: 40px;
+}
+
 /* ── Base reset ──────────────────────────────────────────── */
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
@@ -75,6 +92,8 @@
        contêiner de scroll real, permitindo resetar scrollTop via ref JS */
     height: 100%;
     overflow: hidden;
+    /* Previne overscroll/rubber-band em toda a página */
+    overscroll-behavior: none;
   }
 
   body {
@@ -86,8 +105,10 @@
     line-height: 1.5;
     height: 100%;
     overflow: hidden;
-    /* padding-top removido: StatusBar.overlaysWebView=false coloca o WebView
-       abaixo da barra de status, sem necessidade de inset CSS no topo. */
+    /* overlay:true → WebView fica atrás da status bar.
+       Usa var(--safe-top) em vez de env() direto para garantir mínimo de 28px
+       em dispositivos onde env(safe-area-inset-top) retorna 0 incorretamente. */
+    padding-top: var(--safe-top);
     padding-left: env(safe-area-inset-left, 0px);
     padding-right: env(safe-area-inset-right, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);

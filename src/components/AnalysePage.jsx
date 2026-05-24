@@ -5,7 +5,7 @@ import { exportarRelatorioPDF } from '../lib/pdfExport';
 import { loadTodosLotes, loadAllColheitaEventos } from '../hooks/useSupabaseSync';
 import { loadMovimentosByLote, loadTodasVendas } from '../hooks/useGestao';
 import { loadTodasDespesas } from '../hooks/useDespesas';
-import { resolveLifecycle, fmtDateBR } from '../lib/lifecycle';
+import { resolveLifecycle, fmtDateBR, parseCicloDias } from '../lib/lifecycle';
 import { logDbError } from '../lib/logger';
 import { estimateKgAnual, getProductionBase } from '../constants/cropYields';
 import { can, FARM_ACTIONS } from '../lib/permissions';
@@ -26,28 +26,6 @@ import {
 } from 'lucide-react';
 
 /* ─── helpers ─────────────────────────────────────────────── */
-
-/**
- * Parses a cycle string correctly:
- * - "10–14 meses (1ª colheita)" → average months × 30.5 days
- * - "45–60 dias" → average days
- * - Fallback: 365
- */
-function parseCicloDias(cicloStr) {
-  if (!cicloStr) return 365;
-  const mesesMatch = cicloStr.match(/(\d+)\s*(?:[–\-a]\s*(\d+))?\s*meses?/i);
-  if (mesesMatch) {
-    const min = parseInt(mesesMatch[1], 10);
-    const max = mesesMatch[2] ? parseInt(mesesMatch[2], 10) : min;
-    return Math.round(((min + max) / 2) * 30.5);
-  }
-  const clean = cicloStr.replace(/\(.*?\)/g, '');
-  const nums = clean.match(/\d+/g);
-  if (!nums) return 365;
-  const vals = nums.map(Number);
-  const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
-  return Math.round(avg);
-}
 
 function formatDate(dateStr) {
   if (!dateStr) return '—';
@@ -1605,39 +1583,28 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* ── Hero header ── */}
-      <div className="gradient-hero text-white px-4 pt-10 pb-6 flex flex-col gap-4">
-        {/* Top bar */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <BarChart2 size={18} className="opacity-80" />
-            <div>
+      <div className="gradient-hero text-white px-4 pb-6 flex flex-col gap-4" style={{ paddingTop: 'var(--hero-pad-top)' }}>
+        {/* Top bar — pr-24 para não sobrepor os botões flutuantes à direita */}
+        <div className="flex items-center justify-between pr-24">
+          <div className="flex items-center gap-2 min-w-0">
+            <BarChart2 size={18} className="opacity-80 flex-shrink-0" />
+            <div className="min-w-0">
               <h1 className="text-[16px] font-bold leading-tight">Análise de Produção</h1>
               {userName && (
-                <p className="text-[10px] text-white/60 leading-none mt-0.5">{userName}</p>
+                <p className="text-[10px] text-white/60 leading-none mt-0.5 truncate">{userName}</p>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {can(userRole ?? 'admin', FARM_ACTIONS.EXPORT_PDF) && (
-              <button
-                onClick={handleExportPDF}
-                disabled={exportingPDF || lotes.length === 0}
-                className="flex items-center gap-1.5 text-[11px] text-white/70 hover:text-white transition-colors bg-white/10 rounded-lg px-3 py-1.5 disabled:opacity-40"
-              >
-                <FileDown size={12} />
-                {exportingPDF ? 'Gerando…' : 'PDF'}
-              </button>
-            )}
-            {onSignOut && (
-              <button
-                onClick={onSignOut}
-                className="flex items-center gap-1.5 text-[11px] text-white/70 hover:text-white transition-colors bg-white/10 rounded-lg px-3 py-1.5"
-              >
-                <LogOut size={12} />
-                Sair
-              </button>
-            )}
-          </div>
+          {can(userRole ?? 'admin', FARM_ACTIONS.EXPORT_PDF) && (
+            <button
+              onClick={handleExportPDF}
+              disabled={exportingPDF || lotes.length === 0}
+              className="flex items-center gap-1.5 text-[11px] text-white/70 hover:text-white transition-colors bg-white/10 rounded-lg px-3 py-1.5 disabled:opacity-40 flex-shrink-0"
+            >
+              <FileDown size={12} />
+              {exportingPDF ? 'Gerando…' : 'PDF'}
+            </button>
+          )}
         </div>
 
         {/* KPI cards — 4 in a 2×2 grid */}

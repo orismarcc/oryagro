@@ -88,8 +88,8 @@ function calcScale(cultura, lote) {
 
 // ─── WeatherWidget ──────────────────────────────────────────────────────────
 
-function WeatherWidget({ cor }) {
-  const { data, loading, location, alert } = useWeather();
+function WeatherWidget({ cor, cidade, estado }) {
+  const { data, loading, location, alert } = useWeather({ cidade, estado });
 
   if (loading) {
     return (
@@ -1455,6 +1455,8 @@ function TabReceitas({ cultura, lote, canDelete }) {
   const [primeiroVencimento, setPrimeiroVencimento] = useState(today());
   const [parcelasEditaveis, setParcelasEditaveis] = useState([]);
 
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
   // Auto-generate parcelas preview when relevant inputs change
   useEffect(() => {
     if (tipoPagamento !== 'parcelado') return;
@@ -1554,10 +1556,18 @@ function TabReceitas({ cultura, lote, canDelete }) {
   };
 
   const handleDeleteVenda = async (id) => {
-    try {
-      await deleteVenda(id);
-      setVendas(prev => prev.filter(v => v.id !== id));
-    } catch {}
+    if (confirmDeleteId === id) {
+      // Second click — confirm
+      try {
+        await deleteVenda(id);
+        setVendas(prev => prev.filter(v => v.id !== id));
+      } catch {}
+      setConfirmDeleteId(null);
+    } else {
+      // First click — ask for confirmation
+      setConfirmDeleteId(id);
+      setTimeout(() => setConfirmDeleteId(null), 3000);
+    }
   };
 
   const sorted = [...vendas].sort((a, b) => (b.data ?? '').localeCompare(a.data ?? ''));
@@ -1900,7 +1910,10 @@ function TabReceitas({ cultura, lote, canDelete }) {
                   <motion.button
                     whileTap={{ scale: 0.85 }}
                     onClick={() => handleDeleteVenda(entry.id)}
-                    className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5"
+                    className="p-2 rounded-lg transition-colors flex-shrink-0 mt-0.5"
+                    style={confirmDeleteId === entry.id
+                      ? { background: '#fee2e2', color: '#dc2626' }
+                      : { color: 'hsl(215 16% 50%)' }}
                   >
                     <Trash2 size={14} />
                   </motion.button>
@@ -1924,7 +1937,7 @@ const TABS = [
   { value: 'diario',     label: 'Diário',     Icon: BookOpen },
 ];
 
-export default function LotePage({ lote, cultura, onBack, userRole = null }) {
+export default function LotePage({ lote, cultura, onBack, userRole = null, propriedade = null }) {
   const canDelete = can(userRole, FARM_ACTIONS.DELETE_ANY);
   const [tab, setTab] = useState('cronograma');
   const [concluindo, setConcluindo] = useState(false);
@@ -1940,12 +1953,13 @@ export default function LotePage({ lote, cultura, onBack, userRole = null }) {
     setConcluindo(true);
     try {
       // Load all data needed for the archive summary in parallel
-      const [vendas, movimentos, maoObraRegistros] = await Promise.all([
+      const [vendas, despesas, movimentos, maoObraRegistros] = await Promise.all([
         loadVendas(lote.id),
+        loadDespesasByLote(lote.id),
         loadMovimentosByLote(lote.id),
         loadMaoObraRegistros(lote.id),
       ]);
-      await arquivarCicloLote(lote, vendas, [], movimentos, maoObraRegistros);
+      await arquivarCicloLote(lote, vendas, despesas, movimentos, maoObraRegistros);
       await updateLoteStatus(lote.id, 'concluido');
       setConcluido(true);
     } catch {
@@ -1990,7 +2004,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null }) {
           {lote.nome}
         </div>
 
-        <div className="relative z-10 px-5 pt-4 pb-5">
+        <div className="relative z-10 px-5 pb-5" style={{ paddingTop: 'var(--hero-pad-top-no-btns)' }}>
           {/* Back button + Concluir */}
           <div className="flex items-center justify-between mb-4">
             <button
@@ -2095,7 +2109,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null }) {
           </motion.div>
 
           {/* Weather widget */}
-          <WeatherWidget cor={cor} />
+          <WeatherWidget cor={cor} cidade={propriedade?.cidade} estado={propriedade?.estado} />
         </div>
       </div>
 
@@ -2131,7 +2145,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null }) {
                 )}
                 <span className="relative z-10 flex items-center gap-1.5">
                   <Icon size={12} />
-                  <span className="hidden sm:inline">{label}</span>
+                  <span>{label}</span>
                 </span>
               </button>
             );
