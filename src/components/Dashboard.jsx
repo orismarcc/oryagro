@@ -13,9 +13,10 @@ import { Plus, CalendarDays, Sprout, CheckCircle2, Layers, AlertCircle, Clock, A
 function getStatusEtapas(cultura, lote, doneStatus = {}) {
   if (!cultura?.cronograma) return { atrasadas: 0, hoje: null, amanha: null, proxima: null };
   try {
-    const diasDecorridos = Math.max(
-      0, Math.floor((Date.now() - new Date(lote.data_plantio + 'T12:00:00')) / 86_400_000)
+    const diasDecorridosRaw = Math.floor(
+      (Date.now() - new Date(lote.data_plantio + 'T12:00:00')) / 86_400_000
     );
+    const isLoteFuturo = diasDecorridosRaw < 0;
     const metodoObj = lote.metodo_propagacao && cultura.metodosPropagacao
       ? cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao) ?? null
       : null;
@@ -36,10 +37,10 @@ function getStatusEtapas(cultura, lote, doneStatus = {}) {
       })),
     ].filter(s => doneStatus[s._id]?.status !== 'removida');
     const pending = steps.filter(s => !s.done);
-    const atrasadas = pending.filter(s => s.dia < diasDecorridos).length;
-    const hoje   = pending.find(s => s.dia === diasDecorridos) || null;
-    const amanha = pending.find(s => s.dia === diasDecorridos + 1) || null;
-    const proxima = pending.find(s => s.dia > diasDecorridos + 1) || null;
+    const atrasadas = isLoteFuturo ? 0 : pending.filter(s => s.dia < diasDecorridosRaw).length;
+    const hoje      = isLoteFuturo ? null : (pending.find(s => s.dia === diasDecorridosRaw) || null);
+    const amanha    = isLoteFuturo ? null : (pending.find(s => s.dia === diasDecorridosRaw + 1) || null);
+    const proxima   = pending.find(s => s.dia > Math.max(0, diasDecorridosRaw) + 1) || null;
     return { atrasadas, hoje, amanha, proxima };
   } catch { return { atrasadas: 0, hoje: null, amanha: null, proxima: null }; }
 }
@@ -68,7 +69,7 @@ function LoteCard({ lote, onSelect, index, doneStatus = {} }) {
     <motion.button
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.055, duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+      transition={{ delay: Math.min(index * 0.055, 0.32), duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
       onClick={() => onSelect(lote)}
       className="card-interactive w-full text-left p-4"
       style={{ borderLeft: `3px solid ${cor}` }}
@@ -210,7 +211,7 @@ function PropriedadeCard({ propriedade, lotes, alertasCount, onSelect, index }) 
     <motion.button
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.055, duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+      transition={{ delay: Math.min(index * 0.055, 0.32), duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
       onClick={() => onSelect(propriedade)}
       className="card-interactive w-full text-left p-4"
     >

@@ -4,7 +4,7 @@ import { CULTURAS } from '../data/culturas';
 import { exportarRelatorioPDF } from '../lib/pdfExport';
 import { loadTodosLotes, loadAllColheitaEventos } from '../hooks/useSupabaseSync';
 import { loadMovimentosByLote, loadTodasVendas } from '../hooks/useGestao';
-import { loadTodasDespesas } from '../hooks/useDespesas';
+import { loadTodasDespesas, loadDespesasByLote } from '../hooks/useDespesas';
 import { resolveLifecycle, fmtDateBR, parseCicloDias } from '../lib/lifecycle';
 import { logDbError } from '../lib/logger';
 import { estimateKgAnual, getProductionBase } from '../constants/cropYields';
@@ -1265,18 +1265,27 @@ function ProjecaoProducaoCard({ lotes }) {
 
 function CustoProducaoCard({ lotes, todasVendas }) {
   const [movimentosPorLote, setMovimentosPorLote] = useState({});
+  const [despesasPorLote, setDespesasPorLote] = useState({});
   const [loadingCustos, setLoadingCustos] = useState(true);
 
   useEffect(() => {
     if (lotes.length === 0) { setLoadingCustos(false); return; }
     let cancelled = false;
     Promise.all(
-      lotes.map(l => loadMovimentosByLote(l.id).then(movs => ({ id: l.id, movs })))
+      lotes.map(l => Promise.all([
+        loadMovimentosByLote(l.id).then(movs => movs),
+        loadDespesasByLote(l.id).catch(() => []),
+      ]).then(([movs, despesas]) => ({ id: l.id, movs, despesas })))
     ).then(results => {
       if (cancelled) return;
-      const map = {};
-      results.forEach(({ id, movs }) => { map[id] = movs; });
-      setMovimentosPorLote(map);
+      const movMap = {};
+      const despMap = {};
+      results.forEach(({ id, movs, despesas }) => {
+        movMap[id] = movs;
+        despMap[id] = despesas;
+      });
+      setMovimentosPorLote(movMap);
+      setDespesasPorLote(despMap);
       setLoadingCustos(false);
     }).catch(() => { if (!cancelled) setLoadingCustos(false); });
     return () => { cancelled = true; };
@@ -1307,8 +1316,12 @@ function CustoProducaoCard({ lotes, todasVendas }) {
     // Labor cost: from mao_obra_total field on lote
     const maoObra = parseFloat(lote.mao_obra_total) || 0;
 
+    // Expenses cost: from despesas table
+    const despesas = despesasPorLote[lote.id] || [];
+    const custoDespesas = despesas.reduce((s, d) => s + (d.valor ?? 0), 0);
+
     // Total cost
-    const custoTotal = custoInsumos + maoObra;
+    const custoTotal = custoInsumos + maoObra + custoDespesas;
 
     // Revenue: from vendas (actual) or projected
     const vendasLote = todasVendas.filter(v => String(v.plantio_id) === String(lote.id));
@@ -1320,7 +1333,7 @@ function CustoProducaoCard({ lotes, todasVendas }) {
     const margem = receita - custoTotal;
     const pctMargem = receita > 0 ? Math.round((margem / receita) * 100) : null;
 
-    return { lote, cultura, custoInsumos, maoObra, custoTotal, receitaReal, receitaProjetada, receita, margem, pctMargem, hasReal };
+    return { lote, cultura, custoInsumos, maoObra, custoDespesas, custoTotal, receitaReal, receitaProjetada, receita, margem, pctMargem, hasReal };
   }).filter(Boolean);
 
   const lotesComCusto = rows.filter(r => r.custoTotal > 0 || r.receita > 0);
@@ -1375,7 +1388,7 @@ function CustoProducaoCard({ lotes, todasVendas }) {
 
       {/* Per-lote breakdown */}
       <div className="divide-y divide-gray-50">
-        {lotesComCusto.map(({ lote, cultura, custoInsumos, maoObra, custoTotal, receita, margem, pctMargem, hasReal }) => {
+        {lotesComCusto.map(({ lote, cultura, custoInsumos, maoObra, custoDespesas, custoTotal, receita, margem, pctMargem, hasReal }) => {
           const cor = cultura.cor;
           const isPositive = margem >= 0;
           return (
@@ -1399,6 +1412,12 @@ function CustoProducaoCard({ lotes, todasVendas }) {
                   <span className="text-gray-400">Mão de obra</span>
                   <span className="font-semibold text-gray-600">{fmtBRL(maoObra)}</span>
                 </div>
+                {custoDespesas > 0 && (
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-muted-foreground">Despesas</span>
+                    <span className="font-semibold">{fmtBRL(custoDespesas)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-gray-400">Receita {hasReal ? '(real)' : '(proj.)'}</span>
                   <span className="font-semibold text-green-700">{fmtBRL(receita)}</span>
@@ -1408,6 +1427,15 @@ function CustoProducaoCard({ lotes, todasVendas }) {
                   <span className={`font-bold ${isPositive ? 'text-emerald-700' : 'text-red-600'}`}>{fmtBRL(margem)}</span>
                 </div>
               </div>
+
+              {lote.total_plantas > 0 && custoTotal > 0 && (
+                <div className="flex justify-between text-[11px] mt-1 pt-1 border-t" style={{ borderColor: 'hsl(214 20% 91%)' }}>
+                  <span className="text-muted-foreground font-semibold">Custo por planta</span>
+                  <span className="font-bold" style={{ color: cor || '#16a34a' }}>
+                    {fmtBRL(custoTotal / lote.total_plantas)}
+                  </span>
+                </div>
+              )}
 
               {/* Cost bar */}
               {custoTotal > 0 && receita > 0 && (

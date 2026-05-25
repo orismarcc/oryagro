@@ -446,6 +446,12 @@ function TabDRE({ rawData, loading, propriedades }) {
 
   const dreMap = useMemo(() => (rawData ? buildDreMap(rawData) : {}), [rawData]);
 
+  // Despesas indiretas da propriedade (sem plantio_id = custos indiretos)
+  const despesasIndiretas = useMemo(
+    () => (rawData?.despesas || []).filter((d) => !d.plantio_id && d.data),
+    [rawData]
+  );
+
   // Anos disponíveis nos dados
   const anosDisponiveis = useMemo(() => {
     const anos = new Set();
@@ -517,6 +523,18 @@ function TabDRE({ rawData, loading, propriedades }) {
     const margem = receita > 0 ? (lucro / receita) * 100 : null;
     return { receita, custo_insumos, custo_despesas, lucro, margem };
   }, [dreMap, anoFiltro]);
+
+  // Total de despesas indiretas filtrado pelo ano selecionado
+  const totalDespesasIndiretas = useMemo(
+    () =>
+      despesasIndiretas
+        .filter((d) => !anoFiltro || String(anoFromDate(d.data)) === String(anoFiltro))
+        .reduce((s, d) => s + (d.valor ?? 0), 0),
+    [despesasIndiretas, anoFiltro]
+  );
+
+  // Lucro líquido real = lucro dos lotes − custos indiretos da propriedade
+  const lucroLiquido = totais.lucro - totalDespesasIndiretas;
 
   if (loading) return <Spinner />;
   if (anosDisponiveis.length === 0) return <EmptyState />;
@@ -626,31 +644,37 @@ function TabDRE({ rawData, loading, propriedades }) {
               <p className="text-[15px] font-bold text-red-600">{fmtBRL(totais.custo_insumos)}</p>
             </div>
             <div className="bg-orange-50 rounded-xl px-3 py-2">
-              <p className="text-[10px] text-orange-600/60 font-medium">Despesas</p>
+              <p className="text-[10px] text-orange-600/60 font-medium">Despesas lotes</p>
               <p className="text-[15px] font-bold text-orange-600">{fmtBRL(totais.custo_despesas)}</p>
             </div>
-            <div className={`rounded-xl px-3 py-2 ${totais.lucro >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
-              <p className={`text-[10px] font-medium ${totais.lucro >= 0 ? 'text-emerald-700/60' : 'text-red-600/60'}`}>
+            <div className={`rounded-xl px-3 py-2 ${lucroLiquido >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+              <p className={`text-[10px] font-medium ${lucroLiquido >= 0 ? 'text-emerald-700/60' : 'text-red-600/60'}`}>
                 Lucro líquido
               </p>
-              <p className={`text-[15px] font-bold ${totais.lucro >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                {fmtBRL(totais.lucro)}
+              <p className={`text-[15px] font-bold ${lucroLiquido >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                {fmtBRL(lucroLiquido)}
               </p>
             </div>
           </div>
+          {totalDespesasIndiretas > 0 && (
+            <div className="flex justify-between items-center py-2 px-4 border-t" style={{ borderColor: 'hsl(214 20% 90%)' }}>
+              <span className="text-[12px] text-muted-foreground font-medium text-gray-500">Custos indiretos (propriedade)</span>
+              <span className="text-[13px] font-bold text-orange-600">{fmtBRL(totalDespesasIndiretas)}</span>
+            </div>
+          )}
           {totais.margem !== null && (
             <div className="px-4 pb-4">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] font-bold text-gray-500">Margem líquida</span>
-                <span className={`text-[12px] font-bold ${totais.margem >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-                  {fmtPct(totais.margem)}
+                <span className={`text-[12px] font-bold ${lucroLiquido >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {fmtPct(totais.receita > 0 ? (lucroLiquido / totais.receita) * 100 : null)}
                 </span>
               </div>
               <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
                 <motion.div
-                  className={`h-full rounded-full ${totais.margem >= 0 ? 'bg-emerald-400' : 'bg-red-400'}`}
+                  className={`h-full rounded-full ${lucroLiquido >= 0 ? 'bg-emerald-400' : 'bg-red-400'}`}
                   initial={{ width: 0 }}
-                  animate={{ width: `${Math.min(100, Math.abs(totais.margem))}%` }}
+                  animate={{ width: `${Math.min(100, Math.abs(totais.receita > 0 ? (lucroLiquido / totais.receita) * 100 : 0))}%` }}
                   transition={{ duration: 0.7, ease: 'easeOut' }}
                 />
               </div>

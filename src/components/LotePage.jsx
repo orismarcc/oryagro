@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useToast } from '../context/ToastContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, CalendarDays, Sprout, Package, TrendingUp,
@@ -33,6 +34,7 @@ import {
 } from '../hooks/useDespesas';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import { can, FARM_ACTIONS } from '../lib/permissions';
+import { makeStableId } from '../hooks/useCronogramaSync';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -390,13 +392,6 @@ function TabColheita({ cultura, lote }) {
   function isoLocal(d) {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
-  function makeStableIdLocal(prefix, etapa) {
-    const slug = etapa.toLowerCase()
-      .normalize('NFD').replace(/[̀-ͯ]/g, '')
-      .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-    return `${prefix}_${slug}`;
-  }
-
   // Resolve viveiro shift
   const shift = (() => {
     if (lote.metodo_propagacao && cultura?.metodosPropagacao) {
@@ -424,7 +419,7 @@ function TabColheita({ cultura, lote }) {
           const isViveiro = (cultura.metodosPropagacao || [])
             .flatMap(m => m.etapasViveiro || [])
             .some(e => e.etapa === row.etapa);
-          statusMap[makeStableIdLocal(isViveiro ? 'viveiro' : 'default', row.etapa)] =
+          statusMap[makeStableId(isViveiro ? 'viveiro' : 'default', row.etapa)] =
             { status: row.status, data: row.data_execucao };
         });
         customDb.forEach((row, i) => {
@@ -450,7 +445,7 @@ function TabColheita({ cultura, lote }) {
     if (etapa.tipo !== 'colheita') return;
     const dia          = etapa.dia + shift;
     const dataPlanned  = isoLocal(addDaysLocal(plantioDate, dia));
-    const st           = doneStatus[makeStableIdLocal('default', etapa.etapa)]; // fixed: was default_${i}
+    const st           = doneStatus[makeStableId('default', etapa.etapa)]; // fixed: was default_${i}
     const dataReal     = (st?.status === 'feito' && st?.data) ? st.data : null;
     colheitas.push({
       id: `static_${i}`,
@@ -774,10 +769,13 @@ function TipoBadge({ tipo }) {
 
 function TabDiario({ lote, canDelete }) {
   const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
+  const toast = useToast();
 
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const submittingRef = useRef(false);
 
   const [form, setForm] = useState({
     data: today(),
@@ -802,7 +800,8 @@ function TabDiario({ lote, canDelete }) {
   }, [fetchDiario]);
 
   const handleAdd = async () => {
-    if (!form.texto.trim()) return;
+    if (!form.texto.trim() || submittingRef.current) return;
+    submittingRef.current = true;
     setSaving(true);
     try {
       await addDiarioEntry({
@@ -814,9 +813,10 @@ function TabDiario({ lote, canDelete }) {
       await fetchDiario();
       setForm({ data: today(), tipo: 'anotacao', texto: '' });
     } catch {
-      // fail silently
+      toast.error('Erro ao salvar entrada. Tente novamente.');
     } finally {
       setSaving(false);
+      submittingRef.current = false;
     }
   };
 
@@ -869,6 +869,7 @@ function TabDiario({ lote, canDelete }) {
             placeholder="Descreva a observação..."
             value={form.texto}
             onChange={e => setForm(f => ({ ...f, texto: e.target.value }))}
+            maxLength={1000}
             className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2 resize-none"
           />
         </div>
@@ -923,7 +924,7 @@ function TabDiario({ lote, canDelete }) {
                 <motion.button
                   whileTap={{ scale: 0.85 }}
                   onClick={() => handleDelete(entry.id)}
-                  className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5"
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0"
                 >
                   <Trash2 size={14} />
                 </motion.button>
@@ -940,6 +941,7 @@ function TabDiario({ lote, canDelete }) {
 
 function TabDespesas({ lote, cor, canDelete }) {
   const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
+  const toast = useToast();
 
   const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1062,6 +1064,8 @@ function TabDespesas({ lote, cor, canDelete }) {
         observacao: '',
       });
       setEstoqueForm({ enabled: false, nomeInsumo: '', qtdMinima: '0', precoUnitario: '' });
+    } catch {
+      toast.error('Erro ao salvar despesa. Verifique sua conexão.');
     } finally {
       setSaving(false);
     }
@@ -1407,7 +1411,7 @@ function TabDespesas({ lote, cor, canDelete }) {
                   <motion.button
                     whileTap={{ scale: 0.85 }}
                     onClick={() => setConfirmDeleteId(r.id)}
-                    className="p-2 rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5"
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0"
                   >
                     <Trash2 size={14} />
                   </motion.button>
@@ -1426,6 +1430,7 @@ function TabDespesas({ lote, cor, canDelete }) {
 function TabReceitas({ cultura, lote, canDelete }) {
   const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
   const cor = cultura.cor;
+  const toast = useToast();
   const unidadeDefault = cultura.venda?.unidade ?? 'un';
 
   const [vendas, setVendas] = useState([]);
@@ -1490,6 +1495,10 @@ function TabReceitas({ cultura, lote, canDelete }) {
 
   const handleAdd = async () => {
     if (!form.quantidade || parseFloat(form.quantidade) <= 0) return;
+    if (!parseFloat(form.precoUnitario) || parseFloat(form.precoUnitario) <= 0) {
+      const ok = window.confirm('O preço unitário está em R$ 0,00. Deseja continuar?');
+      if (!ok) return;
+    }
     setSaving(true);
     try {
       const novaVenda = await addVenda({
@@ -1549,7 +1558,7 @@ function TabReceitas({ cultura, lote, canDelete }) {
       setNumParcelas(2);
       setParcelasEditaveis([]);
     } catch {
-      // fail silently
+      toast.error('Erro ao salvar receita. Verifique sua conexão.');
     } finally {
       setSaving(false);
     }
@@ -1698,6 +1707,7 @@ function TabReceitas({ cultura, lote, canDelete }) {
               placeholder="Opcional"
               value={form.observacao}
               onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))}
+              maxLength={300}
               className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
             />
           </div>
@@ -1910,7 +1920,7 @@ function TabReceitas({ cultura, lote, canDelete }) {
                   <motion.button
                     whileTap={{ scale: 0.85 }}
                     onClick={() => handleDeleteVenda(entry.id)}
-                    className="p-2 rounded-lg transition-colors flex-shrink-0 mt-0.5"
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg transition-colors flex-shrink-0"
                     style={confirmDeleteId === entry.id
                       ? { background: '#fee2e2', color: '#dc2626' }
                       : { color: 'hsl(215 16% 50%)' }}
@@ -1939,6 +1949,7 @@ const TABS = [
 
 export default function LotePage({ lote, cultura, onBack, userRole = null, propriedade = null }) {
   const canDelete = can(userRole, FARM_ACTIONS.DELETE_ANY);
+  const toast = useToast();
   const [tab, setTab] = useState('cronograma');
   const [concluindo, setConcluindo] = useState(false);
   const [concluido, setConcluido] = useState(lote.status === 'concluido');
@@ -1959,11 +1970,22 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
         loadMovimentosByLote(lote.id),
         loadMaoObraRegistros(lote.id),
       ]);
+      if (vendas.length === 0) {
+        const ok = window.confirm(
+          'Este lote não possui receitas registradas. Deseja concluir mesmo assim?'
+        );
+        if (!ok) {
+          setConcluindo(false);
+          return;
+        }
+      }
       await arquivarCicloLote(lote, vendas, despesas, movimentos, maoObraRegistros);
       await updateLoteStatus(lote.id, 'concluido');
       setConcluido(true);
     } catch {
-      // silently fail — UI state stays consistent even if archiving errors
+      toast.error('Erro ao concluir lote. O ciclo pode não ter sido arquivado. Tente novamente.');
+      setConcluindo(false);
+      return;
     } finally {
       setConcluindo(false);
     }

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Package2, Plus, TrendingUp, TrendingDown, X, Trash2, AlertTriangle, Pencil, ChevronLeft } from 'lucide-react';
-import { loadEstoque, upsertInsumo, deleteInsumo, addMovimento, loadMovimentos } from '../hooks/useGestao';
+import { loadEstoque, upsertInsumo, deleteInsumo, addMovimento, loadMovimentos, loadMovimentosBatch } from '../hooks/useGestao';
+import { loadLotesByPropriedade } from '../hooks/useSupabaseSync';
 import { logDbError } from '../lib/logger';
 import { useFarm } from '../context/FarmContext';
 import { can, FARM_ACTIONS } from '../lib/permissions';
@@ -47,7 +48,7 @@ function BottomSheet({ onClose, children, maxHeight = '92vh' }) {
         initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
         transition={{ type: 'spring', stiffness: 320, damping: 32 }}
         className="rounded-t-3xl overflow-y-auto"
-        style={{ background: 'white', maxHeight }}
+        style={{ background: 'white', maxHeight, overscrollBehavior: 'contain' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Drag handle */}
@@ -62,17 +63,26 @@ function BottomSheet({ onClose, children, maxHeight = '92vh' }) {
 
 // ── Modal: movimentação ──────────────────────────────────────────────────────
 
-function MovModal({ insumo, onClose, onMoved }) {
+function MovModal({ insumo, propriedadeId, onClose, onMoved }) {
   const [tipo, setTipo]     = useState('entrada');
   const [qty, setQty]       = useState('');
   const [obs, setObs]       = useState('');
   const [data, setData]     = useState(() => new Date().toISOString().split('T')[0]);
   const [saving, setSaving] = useState(false);
   const [historico, setHistorico] = useState([]);
+  const [lotes, setLotes] = useState([]);
+  const [loteSelecionado, setLoteSelecionado] = useState('');
 
   useEffect(() => {
     loadMovimentos(insumo.id).then(setHistorico);
   }, [insumo.id]);
+
+  useEffect(() => {
+    if (!propriedadeId) return;
+    loadLotesByPropriedade(propriedadeId).then(ls => {
+      setLotes(ls.filter(l => l.status === 'ativo'));
+    }).catch(() => {});
+  }, [propriedadeId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -84,7 +94,14 @@ function MovModal({ insumo, onClose, onMoved }) {
       if (!ok) return;
     }
     setSaving(true);
-    await addMovimento({ insumoId: insumo.id, tipo, quantidade: parseFloat(qty), observacao: obs, data });
+    await addMovimento({
+      insumoId: insumo.id,
+      tipo,
+      quantidade: parseFloat(qty),
+      observacao: obs.trim() || null,
+      data,
+      plantioId: tipo === 'saida' && loteSelecionado ? loteSelecionado : null,
+    });
     setSaving(false);
     onMoved();
     onClose();
@@ -121,6 +138,30 @@ function MovModal({ insumo, onClose, onMoved }) {
               </button>
             ))}
           </div>
+
+          {tipo === 'saida' && lotes.length > 0 && (
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Lote (opcional)
+              </label>
+              <select
+                value={loteSelecionado}
+                onChange={e => setLoteSelecionado(e.target.value)}
+                className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
+                style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }}
+              >
+                <option value="">— nenhum lote específico —</option>
+                {lotes.map(l => (
+                  <option key={l.id} value={l.id}>
+                    {l.nome || `Lote #${l.id}`}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Vincule a saída a um lote para rastrear o consumo no custo de produção.
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -402,20 +443,19 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
   useRealtimeSync('estoque_insumos',   reload, { column: 'propriedade_id', value: propriedadeId });
   useRealtimeSync('estoque_movimentos', reload);
 
-  // Load movimentos for all insumos to compute dias restantes
+  // Load movimentos for all insumos to compute dias restantes (1 batch query)
   useEffect(() => {
     if (insumos.length === 0) return;
     let cancelled = false;
-    Promise.all(
-      insumos.map(i => loadMovimentos(i.id).then(movs => ({ id: i.id, movs })))
-    ).then(results => {
+    const ids = insumos.map(i => i.id);
+    loadMovimentosBatch(ids).then(movMap => {
       if (cancelled) return;
-      const map = {};
-      results.forEach(({ id, movs }) => {
-        const insumo = insumos.find(i => i.id === id);
-        if (insumo) map[id] = calcDiasRestantes(insumo, movs);
+      const diasMap = {};
+      insumos.forEach(i => {
+        const movs = movMap[i.id] || [];
+        diasMap[i.id] = calcDiasRestantes(i, movs);
       });
-      setDiasPorInsumo(map);
+      setDiasPorInsumo(diasMap);
     });
     return () => { cancelled = true; };
   }, [insumos]);
@@ -568,6 +608,7 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
         {movModal && (
           <MovModal
             insumo={movModal}
+            propriedadeId={propriedadeId}
             onClose={() => setMovModal(null)}
             onMoved={reload}
           />

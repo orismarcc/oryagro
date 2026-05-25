@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, CalendarDays, X, DollarSign } from 'lucide-react';
 import { CULTURAS } from '../data/culturas';
 import { loadTodosLotes } from '../hooks/useSupabaseSync';
+import { cacheGet, cacheSet } from '../hooks/useOfflineCache';
 import { supabase } from '../lib/supabase';
 import { updateParcela } from '../hooks/useCompradores';
-import { useCronogramaStatusBatch } from '../hooks/useCronogramaSync';
+import { useCronogramaStatusBatch, makeStableId } from '../hooks/useCronogramaSync';
 
 const DIAS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -64,6 +65,14 @@ const TIPO_DESC = {
   aplicacao: 'Aplicação de produto fitossanitário ou regulador.',
 };
 
+function cacheGetTimestamp(key) {
+  try {
+    const raw = localStorage.getItem('offline_cache_' + key);
+    if (!raw) return null;
+    return JSON.parse(raw).ts || null;
+  } catch { return null; }
+}
+
 /** Resolve o shift de viveiro a partir do metodo_propagacao do lote */
 function resolveShift(lote, cultura) {
   // 1. Tentar pelo método salvo no banco
@@ -82,16 +91,6 @@ function resolveShift(lote, cultura) {
  */
 function resolveStepStatus(statusMap, stepKey) {
   return statusMap?.[stepKey] || null;
-}
-
-/** Make a stable step ID matching CronogramaTimeline's logic */
-function makeStepId(prefix, etapa) {
-  const slug = etapa
-    .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_|_$/g, '');
-  return `${prefix}_${slug}`;
 }
 
 /**
@@ -117,7 +116,7 @@ function getAtividadesLote(lote, cultura, statusMap = {}, customRowsForLote = []
   if (metodoObj?.etapasViveiro) {
     metodoObj.etapasViveiro.forEach((etapa, i) => {
       const dataAtividade = addDays(plantioDate, etapa.dia);
-      const stepKey = makeStepId('viveiro', etapa.etapa);
+      const stepKey = makeStableId('viveiro', etapa.etapa);
       const stepStatus = resolveStepStatus(statusMap, stepKey);
       if (stepStatus?.status === 'removida') return;
       const dataStr = (stepStatus?.status === 'feito' && stepStatus?.data)
@@ -149,7 +148,7 @@ function getAtividadesLote(lote, cultura, statusMap = {}, customRowsForLote = []
   if (cultura.cronograma) {
     cultura.cronograma.forEach((etapa, i) => {
       const dataAtividade = addDays(plantioDate, etapa.dia + shift);
-      const stepKey = makeStepId('default', etapa.etapa);
+      const stepKey = makeStableId('default', etapa.etapa);
       const stepStatus = resolveStepStatus(statusMap, stepKey);
       if (stepStatus?.status === 'removida') return;
       const dataStr = (stepStatus?.status === 'feito' && stepStatus?.data)
@@ -556,9 +555,31 @@ export default function CalendarioPage() {
   const [parcelas, setParcelas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagandoParcela, setPagandoParcela] = useState(false);
+  const [cacheTimestamp, setCacheTimestamp] = useState(null);
+
+  const CACHE_KEY = 'calendario_lotes';
 
   useEffect(() => {
-    loadTodosLotes(100).then(data => { setLotes(data); setLoading(false); });
+    // 1. Exibe cache imediatamente se disponível
+    const cached = cacheGet(CACHE_KEY);
+    if (cached) {
+      setLotes(cached);
+      setLoading(false);
+      setCacheTimestamp(cacheGetTimestamp(CACHE_KEY));
+    }
+
+    // 2. Busca dados frescos em background
+    loadTodosLotes(100)
+      .then(data => {
+        setLotes(data);
+        cacheSet(CACHE_KEY, data);
+        setCacheTimestamp(Date.now());
+        setLoading(false);
+      })
+      .catch(() => {
+        // Sem internet e sem cache — mantém tela de loading
+        if (!cached) setLoading(false);
+      });
   }, []);
 
   // ── Cronograma status from Supabase (source of truth) ───────────────────────
@@ -651,13 +672,25 @@ export default function CalendarioPage() {
     ? `${heroCount} atividade${heroCount !== 1 ? 's' : ''} este mês`
     : `${heroCount} atividade${heroCount !== 1 ? 's' : ''} esta semana`;
 
+  const cacheAge = cacheTimestamp ? Date.now() - cacheTimestamp : null;
+  const isDadosCache = cacheAge !== null && cacheAge > 60 * 60 * 1000; // > 1h
+
   return (
     <div className="min-h-screen bg-background">
       {/* Hero */}
-      <div className="gradient-hero px-5 pt-6 pb-5">
+      <div className="gradient-hero px-5 pb-5" style={{ paddingTop: 'var(--hero-pad-top)' }}>
         <p className="text-white/55 text-xs font-semibold uppercase tracking-widest mb-1">Propriedade</p>
         <h1 className="font-display text-white text-2xl font-extrabold leading-tight">Calendário</h1>
         <p className="text-white/50 text-[11px] mt-1">{heroLabel}</p>
+        {isDadosCache && (
+          <div
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold mb-3"
+            style={{ background: 'hsl(43 90% 93%)', color: 'hsl(38 70% 32%)', border: '1px solid hsl(38 92% 46% / 0.25)' }}
+          >
+            <span>⏱</span>
+            Dados do cache · atualizado {Math.round(cacheAge / 3600000)}h atrás
+          </div>
+        )}
 
         {/* View toggle */}
         <div className="flex items-center gap-1 mt-3 w-fit rounded-xl p-0.5"

@@ -10,7 +10,7 @@ import { Plus, Printer, Trash2, CheckCircle2, Circle, ChevronRight, CalendarDays
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
 import { loadEstoque, addMovimento } from '../hooks/useGestao';
 import { addEvento, syncCronogramaStatus, loadCronogramaAtividades } from '../hooks/useSupabaseSync';
-import { buildStatusFromDbRows, useCronogramaRealtime } from '../hooks/useCronogramaSync';
+import { buildStatusFromDbRows, useCronogramaRealtime, makeStableId } from '../hooks/useCronogramaSync';
 import { logDbError } from '../lib/logger';
 
 const TIPO_META = {
@@ -45,16 +45,6 @@ function stepDate(datePlantio, dia) {
 function formatStepDate(datePlantio, dia) {
   const d = stepDate(datePlantio, dia);
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-}
-
-// ── Stable step IDs ──────────────────────────────────────────────────────────
-function makeStableId(prefix, etapa) {
-  const slug = etapa
-    .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_|_$/g, '');
-  return `${prefix}_${slug}`;
 }
 
 function migrateLegacyStatus(stored, vivSteps, baseSteps) {
@@ -341,9 +331,16 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
     : (usaMudas ? 15 : 0);
 
   // ── Days elapsed for selected lote ──
-  const diasDecorridos = selectedLote
-    ? Math.max(0, Math.floor((Date.now() - new Date(selectedLote.data_plantio + 'T12:00:00')) / 86_400_000))
+  // Valor raw (pode ser negativo para lotes com plantio futuro)
+  const diasDecorridosRaw = selectedLote
+    ? Math.floor((Date.now() - new Date(selectedLote.data_plantio + 'T12:00:00')) / 86_400_000)
     : null;
+
+  // Valor clamped — usado APENAS para exibição ("Dia X do ciclo")
+  const diasDecorridos = diasDecorridosRaw !== null ? Math.max(0, diasDecorridosRaw) : null;
+
+  const isLoteFuturo   = diasDecorridosRaw !== null && diasDecorridosRaw < 0;
+  const diasParaInicio = isLoteFuturo ? Math.abs(diasDecorridosRaw) : 0;
 
   // ── Lifecycle anchor ──
   const metodoLifecycle = metodoObj?.lifecycle ?? null;
@@ -675,14 +672,28 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
         </div>
       )}
 
+      {isLoteFuturo && selectedLote && (
+        <div
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl mb-4 text-[12px] font-semibold"
+          style={{ background: 'hsl(221 90% 95%)', border: '1px solid hsl(221 83% 80%)', color: 'hsl(221 83% 40%)' }}
+        >
+          <CalendarDays size={14} />
+          Plantio agendado para {formatDate(selectedLote.data_plantio)} · inicia em {diasParaInicio} dia{diasParaInicio !== 1 ? 's' : ''}
+        </div>
+      )}
+
       {/* ── Header ── */}
       <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
         <div>
           <h2 className="font-display text-lg font-bold text-foreground">Cronograma</h2>
           <p className="text-[12px] text-muted-foreground mt-0.5">
             <span className="font-bold" style={{ color: cor }}>{feitos}</span> de {allEvents.length} etapas concluídas
-            {selectedLote && diasDecorridos !== null && (
-              <span className="ml-2 text-muted-foreground">· Dia {diasDecorridos} do ciclo</span>
+            {selectedLote && diasDecorridosRaw !== null && (
+              <span className="ml-2 text-muted-foreground">
+                {isLoteFuturo
+                  ? `· Plantio em ${diasParaInicio} dia${diasParaInicio !== 1 ? 's' : ''}`
+                  : `· Dia ${diasDecorridos} do ciclo`}
+              </span>
             )}
           </p>
         </div>
@@ -744,9 +755,9 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
           const isLast = rowIdx === allEvents.length - 1;
           const isConfirming = confirming?.id === ev._id;
 
-          const isPast     = diasDecorridos !== null && diasDecorridos > ev.dia && !isDone;
-          const isToday    = diasDecorridos !== null && diasDecorridos === ev.dia && !isDone;
-          const isTomorrow = diasDecorridos !== null && ev.dia - diasDecorridos === 1 && !isDone;
+          const isPast     = diasDecorridosRaw !== null && !isLoteFuturo && diasDecorridosRaw > ev.dia && !isDone;
+          const isToday    = diasDecorridosRaw !== null && !isLoteFuturo && diasDecorridosRaw === ev.dia && !isDone;
+          const isTomorrow = diasDecorridosRaw !== null && !isLoteFuturo && ev.dia - diasDecorridosRaw === 1 && !isDone;
           const stepDateStr = selectedLote ? formatStepDate(selectedLote.data_plantio, ev.dia) : null;
           const scaledDose  = ev._noScaleDose ? ev.dose : scaleDose(ev.dose, fator);
 

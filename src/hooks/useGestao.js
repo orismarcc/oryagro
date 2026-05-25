@@ -138,6 +138,30 @@ export async function loadMovimentos(insumoId) {
 }
 
 /**
+ * Batch-load dos últimos 30 movimentos de uma lista de insumos em uma única query.
+ * Retorna um Map { insumoId → movimento[] }
+ */
+export async function loadMovimentosBatch(insumoIds) {
+  if (!insumoIds?.length) return {};
+  const userId = await getUserId();
+  if (!userId) return {};
+  const { data } = await supabase
+    .from('estoque_movimentos')
+    .select('*, plantio:plantios(nome)')
+    .eq('user_id', userId)
+    .in('insumo_id', insumoIds)
+    .order('data', { ascending: false });
+  if (!data) return {};
+  // Group by insumo_id
+  const map = {};
+  insumoIds.forEach(id => { map[id] = []; });
+  data.forEach(m => {
+    if (map[m.insumo_id]) map[m.insumo_id].push(m);
+  });
+  return map;
+}
+
+/**
  * Load all 'saida' movements for a specific plantio, joined with insumo price.
  * Used to calculate input cost per lote.
  */
