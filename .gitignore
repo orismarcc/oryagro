@@ -44,17 +44,10 @@ dist-ssr
 secrets/
 credentials/
 
-# ── Android (Capacitor) ──────────────────────────────────────────────────────
-android/.gradle
-android/app/build
-android/build
-android/.idea
-android/local.properties
-android/capacitor.settings.gradle
-android/app/release
-android-assets/icon/
-android-assets/splash/
+# ── Supabase CLI cache (não commitar) ────────────────────────────────────────
+supabase/.temp/
+supabase/.branches/
 
-# Keystore de release (NUNCA commitar)
+# Keystore (legado — projeto agora é PWA, sem APK)
 *.keystore
 *.jks

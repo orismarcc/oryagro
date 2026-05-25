@@ -20,6 +20,7 @@ import FinanceiroPage from './components/FinanceiroPage';
 import CompradoresPage from './components/CompradoresPage';
 import HamburgerMenu from './components/HamburgerMenu';
 import NotificacoesBell from './components/NotificacoesBell';
+import InstallPWA from './components/InstallPWA';
 import { CULTURAS } from './data/culturas';
 import { useAuth } from './hooks/useAuth';
 import { loadPropriedades, loadTodosLotes } from './hooks/useSupabaseSync';
@@ -321,6 +322,7 @@ function AppInner({ session, displayName, signOut }) {
   return (
     <div className="bg-background" style={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <NetworkStatusBanner />
+      <InstallPWA />
 
       {/* ── Hamburger menu (fixed overlay, all main views) ── */}
       {showHamburger && (
