@@ -6,7 +6,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
-import { Plus, Printer, Trash2, CheckCircle2, Circle, ChevronRight, CalendarDays, X, Layers, AlertCircle, Leaf } from 'lucide-react';
+import { Plus, Printer, Trash2, Pencil, CheckCircle2, Circle, ChevronRight, CalendarDays, X, Layers, AlertCircle, Leaf } from 'lucide-react';
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
 import { loadEstoque, addMovimento, deleteMovimentoByCronogramaAtividade } from '../hooks/useGestao';
 import { addEvento, syncCronogramaStatus, loadCronogramaAtividades } from '../hooks/useSupabaseSync';
@@ -198,6 +198,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
   const [descricaoStep, setDescricaoStep] = useState(null); // Feature 2: bottom sheet (portal)
   const confirmFormRefs = useRef({}); // { [cardId]: DOMElement }
   const [addDialog, setAddDialog]   = useState(false);
+  const [editingStep, setEditingStep] = useState(null); // null = modo "Adicionar", set = modo "Editar"
   const [newRow, setNewRow]         = useState({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo', insumo_id: '', dataPrevista: '' });
   const [insumos, setInsumos]   = useState([]);
   const [stockDebit, setStockDebit] = useState({ enabled: false, insumoId: '', quantidade: '' });
@@ -587,9 +588,97 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
   // I-15: removed saveColheitaToCalendario — CalendarioPage now reads directly
   // from cronograma_custom_lote_${id} and cronograma_status_lote_${id} (no duplicate store needed)
 
+  // Abre o dialog em modo "edição" com os valores da etapa pré-preenchidos.
+  // Apenas etapas customizadas podem ser editadas — etapas-base do cultivo são
+  // referência (usuário pode remover + adicionar nova etapa se quiser sobrescrever).
+  const openEdit = (step) => {
+    setNewRow({
+      dia:           String(step.dia ?? 0),
+      etapa:         step.etapa || '',
+      produto:       step.produto || '',
+      dose:          step.dose || '',
+      forma:         step.forma || '',
+      tipo:          step.tipo || 'manejo',
+      insumo_id:     step.insumo_id || '',
+      dataPrevista:  selectedLote ? computeDataPrevista(step.dia) : '',
+    });
+    setEditingStep(step);
+    setAddDialog(true);
+  };
+
   // ── Add dialog submit ──
   const handleAddRow = async () => {
     if (!newRow.etapa) return;
+
+    // ── MODO EDIÇÃO ─────────────────────────────────────────────────────────
+    if (editingStep) {
+      const diaNum = parseInt(newRow.dia) || 0;
+      const oldStableId = editingStep._stableId || editingStep._id;
+      const newStableId = makeCustomId(newRow.etapa, diaNum);
+      const oldStatus = status[oldStableId];
+
+      // 1. Se a etapa mudou de nome, marca a antiga como removida no DB.
+      //    (cronograma_atividades usa UPSERT por (plantio_id, etapa, is_custom);
+      //    sem isso, mudar o nome deixaria a linha antiga órfã.)
+      if (selectedLote?.id && editingStep.etapa !== newRow.etapa) {
+        await syncCronogramaStatus(selectedLote.id, cultura.id, {
+          dia:      editingStep.dia,
+          etapa:    editingStep.etapa,
+          produto:  editingStep.produto || '',
+          dose:     editingStep.dose    || '',
+          forma:    editingStep.forma   || '',
+          tipo:     editingStep.tipo    || 'manejo',
+          status:   'removida',
+          data:     null,
+          isCustom: true,
+        });
+      }
+
+      // 2. Substitui a row em customRows preservando ordem
+      setCustomRows(rows => rows.map(r => {
+        const rId = r._stableId || makeCustomId(r.etapa, r.dia);
+        if (rId !== oldStableId) return r;
+        return {
+          ...newRow,
+          dia: diaNum,
+          insumo_id: newRow.insumo_id || null,
+          _stableId: newStableId,
+        };
+      }));
+
+      // 3. Migra o status (se a etapa estava marcada como feita) para o novo stableId
+      if (oldStatus && oldStableId !== newStableId) {
+        setStatus(s => {
+          const n = { ...s };
+          n[newStableId] = oldStatus;
+          delete n[oldStableId];
+          return n;
+        });
+      }
+
+      // 4. Sincroniza a nova versão no DB (upsert insere/atualiza por etapa)
+      if (selectedLote?.id) {
+        await syncCronogramaStatus(selectedLote.id, cultura.id, {
+          dia:      diaNum,
+          etapa:    newRow.etapa,
+          produto:  newRow.produto || '',
+          dose:     newRow.dose    || '',
+          forma:    newRow.forma   || '',
+          tipo:     newRow.tipo    || 'manejo',
+          status:   oldStatus?.status || 'pendente',
+          data:     oldStatus?.data   || null,
+          isCustom: true,
+        });
+      }
+
+      // Reset form + fecha dialog
+      setEditingStep(null);
+      setAddDialog(false);
+      setNewRow({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo', insumo_id: '', dataPrevista: '' });
+      return;
+    }
+    // ── FIM MODO EDIÇÃO ─────────────────────────────────────────────────────
+
 
     const diaNum = parseInt(newRow.dia) || 0;
     // Op#11: assign stable ID based on etapa+dia hash so ID survives reorders/deletions
@@ -919,6 +1008,17 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                             style={{ background: '#dbeafe', color: '#2563eb' }}>
                             ↗ Amanhã
                           </span>
+                        )}
+                        {/* Edit button — apenas etapas customizadas (etapas-base do cultivo são referência) */}
+                        {ev._custom && removingId !== ev._id && (
+                          <motion.button
+                            whileTap={{ scale: 0.9 }}
+                            className="p-1 rounded-lg text-muted-foreground hover:text-blue-500 transition-all opacity-0 group-hover:opacity-100"
+                            onClick={e => { e.stopPropagation(); openEdit(ev); }}
+                            aria-label="Editar etapa"
+                          >
+                            <Pencil size={12} />
+                          </motion.button>
                         )}
                         {/* Feature 1: inline remove confirm (shown for ALL steps) */}
                         <AnimatePresence mode="wait">
@@ -1306,15 +1406,19 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
         })}
       </div>
 
-      {/* ── Add Dialog ── */}
+      {/* ── Add / Edit Dialog ── */}
       <Dialog open={addDialog} onOpenChange={o => {
         if (!o) {
           setAddDialog(false);
+          setEditingStep(null);
+          setNewRow({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo', insumo_id: '', dataPrevista: '' });
           setAddHarvest({ jaRealizada: false, qtd: '', unidade: 'kg', polpa: false, qtdPolpa: '', unidadePolpa: 'kg' });
         }
       }}>
         <DialogContent className="max-w-lg flex flex-col p-0 gap-0 max-h-[92svh]">
-          <DialogHeader className="px-6 pt-6 pb-2 shrink-0"><DialogTitle>Nova etapa</DialogTitle></DialogHeader>
+          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
+            <DialogTitle>{editingStep ? 'Editar etapa' : 'Nova etapa'}</DialogTitle>
+          </DialogHeader>
           <div className="flex flex-col gap-3 overflow-y-auto flex-1 px-6 pb-2">
 
             {/* ── Dia + Tipo ── */}
@@ -1560,6 +1664,8 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
           <DialogFooter className="px-6 py-4 border-t shrink-0">
             <Button variant="outline" onClick={() => {
               setAddDialog(false);
+              setEditingStep(null);
+              setNewRow({ dia: '', etapa: '', produto: '', dose: '', forma: '', tipo: 'adubo', insumo_id: '', dataPrevista: '' });
               setAddHarvest({ jaRealizada: false, qtd: '', unidade: 'kg', polpa: false, qtdPolpa: '', unidadePolpa: 'kg' });
             }}>
               Cancelar
@@ -1568,7 +1674,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
               disabled={!newRow.etapa}
               onClick={handleAddRow}
             >
-              Adicionar
+              {editingStep ? 'Salvar' : 'Adicionar'}
             </Button>
           </DialogFooter>
         </DialogContent>
