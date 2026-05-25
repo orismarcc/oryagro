@@ -1,13 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Building2, ArrowRight } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase, getUserId } from '../lib/supabase';
 import { createPropriedade } from '../hooks/useSupabaseSync';
-
-async function getUserId() {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.id ?? null;
-}
 
 export default function MigrationWizard({ onComplete }) {
   const [nome, setNome]     = useState('');

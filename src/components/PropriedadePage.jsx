@@ -457,7 +457,7 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="gradient-hero px-5 pt-5 pb-6">
+      <div className="gradient-hero px-5 pb-6" style={{ paddingTop: 'var(--hero-pad-top)' }}>
         <button onClick={onBack} className="flex items-center gap-1.5 text-white/60 text-[12px] font-medium mb-4 hover:text-white transition-colors">
           <ArrowLeft size={14} /> Propriedades
         </button>

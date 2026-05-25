@@ -282,6 +282,35 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
 
   const handleSalvar = async () => {
     if (!nome.trim()) return;
+
+    // Validação de dimensões (o atributo HTML min não é confiável no Android WebView)
+    if (isCampo) {
+      const area = parseFloat(calc.area);
+      if (!area || area <= 0) {
+        alert('Informe uma área válida (maior que zero).');
+        return;
+      }
+    } else {
+      const comp = parseFloat(calc.comprimento);
+      const larg = parseFloat(calc.largura);
+      if (!comp || comp <= 0 || !larg || larg <= 0) {
+        alert('Informe dimensões válidas para o canteiro (maiores que zero).');
+        return;
+      }
+    }
+
+    // Validação do número de plantas calculado
+    if (dim.totalPlantas === 0) {
+      alert('O espaçamento informado resulta em zero plantas. Verifique as dimensões e o espaçamento.');
+      return;
+    }
+
+    // data_plantio obrigatória
+    if (!dataPlantio) {
+      alert('Informe a data de plantio.');
+      return;
+    }
+
     setSaving(true);
 
     const areaHaNum = parseFloat(calc.area) || 1;

@@ -1,13 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, getUserId } from '../lib/supabase';
 import { logDbError } from '../lib/logger';
 import { cacheSet, cacheGet } from './useOfflineCache';
-
-/** Retorna o user_id do usuário autenticado ou null */
-async function getUserId() {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.id ?? null;
-}
 
 /**
  * Debounced upsert of simulator config values to Supabase.
@@ -328,33 +322,62 @@ export async function updatePropriedade(id, { nome, descricao }) {
  * Estoque is FK-cascade-deleted by the DB when the propriedade row is removed.
  */
 export async function deletePropriedade(id) {
-  // 1. Get all plantio IDs for this property
-  const { data: plantiosRows } = await supabase
-    .from('plantios')
-    .select('id')
-    .eq('propriedade_id', id);
-  const plantioIds = (plantiosRows || []).map(r => r.id);
+  const steps = [];
+  try {
+    // 1. Get all plantio IDs for this property
+    const { data: plantiosRows, error: fetchErr } = await supabase
+      .from('plantios')
+      .select('id')
+      .eq('propriedade_id', id);
+    if (fetchErr) { logDbError('deletePropriedade:fetchPlantios', fetchErr); return false; }
 
-  if (plantioIds.length > 0) {
-    // 2. Delete all child data for each plantio
-    await supabase.from('cronograma_atividades').delete().in('plantio_id', plantioIds);
-    await supabase.from('plantio_eventos').delete().in('plantio_id', plantioIds);
-    await supabase.from('mao_obra_registros').delete().in('plantio_id', plantioIds);
-    // Delete venda_parcelas via vendas (2-step: busca ids de vendas, depois deleta parcelas)
-    const { data: vendasRows } = await supabase.from('vendas').select('id').in('plantio_id', plantioIds);
-    const vendaIds = (vendasRows || []).map(r => r.id);
-    if (vendaIds.length > 0) {
-      await supabase.from('venda_parcelas').delete().in('venda_id', vendaIds);
+    const plantioIds = (plantiosRows || []).map(r => r.id);
+
+    if (plantioIds.length > 0) {
+      // 2. Delete all child data for each plantio — collect errors
+      const childDeletes = [
+        supabase.from('cronograma_atividades').delete().in('plantio_id', plantioIds),
+        supabase.from('plantio_eventos').delete().in('plantio_id', plantioIds),
+        supabase.from('mao_obra_registros').delete().in('plantio_id', plantioIds),
+        supabase.from('diario_campo').delete().in('plantio_id', plantioIds),
+      ];
+      const results = await Promise.all(childDeletes);
+      const childErrors = results.filter(r => r.error).map(r => r.error);
+      if (childErrors.length > 0) {
+        childErrors.forEach(e => logDbError('deletePropriedade:childDelete', e));
+        return false;
+      }
+      steps.push('cronograma_atividades', 'plantio_eventos', 'mao_obra_registros', 'diario_campo');
+
+      // Delete venda_parcelas via vendas (FK: venda_parcelas → vendas, not covered by ON DELETE CASCADE)
+      const { data: vendasRows, error: vendasErr } = await supabase
+        .from('vendas').select('id').in('plantio_id', plantioIds);
+      if (vendasErr) { logDbError('deletePropriedade:fetchVendas', vendasErr); return false; }
+      const vendaIds = (vendasRows || []).map(r => r.id);
+      if (vendaIds.length > 0) {
+        const { error: parcelasErr } = await supabase
+          .from('venda_parcelas').delete().in('venda_id', vendaIds);
+        if (parcelasErr) { logDbError('deletePropriedade:venda_parcelas', parcelasErr); return false; }
+      }
+      const { error: vendasDelErr } = await supabase
+        .from('vendas').delete().in('plantio_id', plantioIds);
+      if (vendasDelErr) { logDbError('deletePropriedade:vendas', vendasDelErr); return false; }
+
+      // 3. Delete lotes
+      const { error: lotesErr } = await supabase
+        .from('plantios').delete().eq('propriedade_id', id);
+      if (lotesErr) { logDbError('deletePropriedade:plantios', lotesErr); return false; }
+      steps.push('vendas', 'plantios');
     }
-    await supabase.from('vendas').delete().in('plantio_id', plantioIds);
-    await supabase.from('diario_campo').delete().in('plantio_id', plantioIds);
-    // 3. Delete lotes
-    await supabase.from('plantios').delete().eq('propriedade_id', id);
-  }
 
-  // 4. Delete property (estoque cascade-deleted by FK)
-  const { error } = await supabase.from('propriedades').delete().eq('id', id);
-  return !error;
+    // 4. Delete property (estoque cascade-deleted by FK)
+    const { error } = await supabase.from('propriedades').delete().eq('id', id);
+    if (error) { logDbError('deletePropriedade:propriedade', error); return false; }
+    return true;
+  } catch (err) {
+    logDbError(`deletePropriedade:unexpected (completed steps: ${steps.join(',')})`, err);
+    return false;
+  }
 }
 
 /**
@@ -362,19 +385,46 @@ export async function deletePropriedade(id) {
  * Returns true on success.
  */
 export async function deleteLoteCompleto(id) {
-  await supabase.from('cronograma_atividades').delete().eq('plantio_id', id);
-  await supabase.from('plantio_eventos').delete().eq('plantio_id', id);
-  await supabase.from('mao_obra_registros').delete().eq('plantio_id', id);
-  // Delete venda_parcelas antes das vendas (FK cascade não cobre esse caso)
-  const { data: vendasRows } = await supabase.from('vendas').select('id').eq('plantio_id', id);
-  const vendaIds = (vendasRows || []).map(r => r.id);
-  if (vendaIds.length > 0) {
-    await supabase.from('venda_parcelas').delete().in('venda_id', vendaIds);
+  const steps = [];
+  try {
+    // Delete all child tables in parallel (safe: none depend on each other)
+    const childDeletes = [
+      supabase.from('cronograma_atividades').delete().eq('plantio_id', id),
+      supabase.from('plantio_eventos').delete().eq('plantio_id', id),
+      supabase.from('mao_obra_registros').delete().eq('plantio_id', id),
+      supabase.from('diario_campo').delete().eq('plantio_id', id),
+    ];
+    const results = await Promise.all(childDeletes);
+    const childErrors = results.filter(r => r.error).map(r => r.error);
+    if (childErrors.length > 0) {
+      childErrors.forEach(e => logDbError('deleteLoteCompleto:childDelete', e));
+      return false;
+    }
+    steps.push('cronograma_atividades', 'plantio_eventos', 'mao_obra_registros', 'diario_campo');
+
+    // Delete venda_parcelas antes das vendas (FK cascade não cobre esse caso)
+    const { data: vendasRows, error: vendasErr } = await supabase
+      .from('vendas').select('id').eq('plantio_id', id);
+    if (vendasErr) { logDbError('deleteLoteCompleto:fetchVendas', vendasErr); return false; }
+    const vendaIds = (vendasRows || []).map(r => r.id);
+    if (vendaIds.length > 0) {
+      const { error: parcelasErr } = await supabase
+        .from('venda_parcelas').delete().in('venda_id', vendaIds);
+      if (parcelasErr) { logDbError('deleteLoteCompleto:venda_parcelas', parcelasErr); return false; }
+    }
+    const { error: vendasDelErr } = await supabase
+      .from('vendas').delete().eq('plantio_id', id);
+    if (vendasDelErr) { logDbError('deleteLoteCompleto:vendas', vendasDelErr); return false; }
+    steps.push('vendas');
+
+    // Finally delete the lote itself
+    const { error } = await supabase.from('plantios').delete().eq('id', id);
+    if (error) { logDbError('deleteLoteCompleto:plantio', error); return false; }
+    return true;
+  } catch (err) {
+    logDbError(`deleteLoteCompleto:unexpected (completed steps: ${steps.join(',')})`, err);
+    return false;
   }
-  await supabase.from('vendas').delete().eq('plantio_id', id);
-  await supabase.from('diario_campo').delete().eq('plantio_id', id);
-  const { error } = await supabase.from('plantios').delete().eq('id', id);
-  return !error;
 }
 
 /**

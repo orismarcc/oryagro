@@ -11,7 +11,9 @@ import {
 } from 'lucide-react';
 import { CULTURAS } from '../data/culturas';
 import { loadDreRawData } from '../hooks/useFinanceiro';
+import { loadMaoObraBatch } from '../hooks/useGestao';
 import { logDbError } from '../lib/logger';
+import { calcLucroLote } from '../lib/financeiro';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
 
 /* ─── Formatadores ────────────────────────────────────────────── */
@@ -45,7 +47,7 @@ function anoFromDate(dateStr) {
 }
 
 function buildDreMap(rawData) {
-  const { vendas, receitas = [], movimentos, despesas, plantios } = rawData;
+  const { vendas, receitas = [], movimentos, despesas, plantios, maoObraMap = {} } = rawData;
 
   const map = {};
 
@@ -56,6 +58,7 @@ function buildDreMap(rawData) {
         receita: 0,
         custo_insumos: 0,
         custo_despesas: 0,
+        custo_mao_obra: 0,
         vendas: [],
         movimentos: [],
         despesas: [],
@@ -111,20 +114,34 @@ function buildDreMap(rawData) {
     entry.despesas.push(d);
   });
 
-  // Legado: lotes sem despesas mas com mao_obra_total no plantio
+  // Mão de obra: usa mao_obra_registros como fonte autoritativa (quando há registros),
+  // com fallback para mao_obra_total (legado) quando não há registros e não há despesas.
   plantios.forEach((p) => {
     const pid = String(p.id);
-    const maoObraTotal = parseFloat(p.mao_obra_total) || 0;
-    if (maoObraTotal <= 0) return;
+    const registros = maoObraMap[p.id] || [];
+    const temRegistros = registros.length > 0;
 
-    const temDespesas = despesas.some((d) => String(d.plantio_id) === pid);
-    if (temDespesas) return;
-
-    const ano = anoFromDate(p.data_plantio);
-    if (!ano) return;
-    const entry = ensureEntry(pid, ano);
-    entry.custo_despesas += maoObraTotal;
-    entry.isLegacyMO = true;
+    if (temRegistros) {
+      // Fonte autoritativa: soma de horas * valor_hora
+      const totalMaoObra = registros.reduce((sum, r) => sum + (r.horas * r.valor_hora), 0);
+      if (totalMaoObra <= 0) return;
+      const ano = anoFromDate(p.data_plantio);
+      if (!ano) return;
+      const entry = ensureEntry(pid, ano);
+      entry.custo_mao_obra = (entry.custo_mao_obra || 0) + totalMaoObra;
+      entry.isLegacyMO = false;
+    } else {
+      // Fallback legado: mao_obra_total, somente se não há despesas registradas
+      const maoObraTotal = parseFloat(p.mao_obra_total) || 0;
+      if (maoObraTotal <= 0) return;
+      const temDespesas = despesas.some((d) => String(d.plantio_id) === pid);
+      if (temDespesas) return;
+      const ano = anoFromDate(p.data_plantio);
+      if (!ano) return;
+      const entry = ensureEntry(pid, ano);
+      entry.custo_mao_obra = (entry.custo_mao_obra || 0) + maoObraTotal;
+      entry.isLegacyMO = true;
+    }
   });
 
   return map;
@@ -344,12 +361,26 @@ function LoteCard({ lote, dreMap, anoFiltro, propriedades }) {
   const cultura = getCultura(lote.cultura_id);
   const anoEntries = dreMap[String(lote.id)] || {};
 
-  // Calcular lucro e margem por ano
+  // Calcular lucro e margem por ano — usando fórmula compartilhada com AnalysePage
   const anosComDados = Object.entries(anoEntries)
     .filter(([ano]) => !anoFiltro || Number(ano) === Number(anoFiltro))
     .map(([ano, entry]) => {
-      const lucro = entry.receita - entry.custo_insumos - entry.custo_despesas;
-      const margem = entry.receita > 0 ? (lucro / entry.receita) * 100 : null;
+      // buildDreMap already resolved the legacy/registros branching into custo_mao_obra.
+      // We pass a non-empty registros sentinel so calcLucroLote uses entry.custo_mao_obra
+      // as the authoritative value instead of falling back to lote.mao_obra_total.
+      const maoObraData = entry.custo_mao_obra > 0
+        ? { registros: [{}], total: entry.custo_mao_obra }
+        : { registros: [], total: 0 };
+      const result = calcLucroLote({
+        lote,
+        custoInsumos: entry.custo_insumos,
+        custoDespesas: entry.custo_despesas,
+        maoObraData,
+        receitaVendas: entry.receita,
+        receitaExtras: 0,
+      });
+      const lucro = result.lucro;
+      const margem = result.margemPct !== null ? result.margemPct : null;
       return [Number(ano), { ...entry, lucro, margem }];
     })
     .sort(([a], [b]) => b - a); // mais recente primeiro
@@ -1154,8 +1185,13 @@ export default function FinanceiroPage({ onBack, propriedades = [] }) {
   const fetchData = useCallback(() => {
     setLoading(true);
     loadDreRawData()
-      .then(data  => { setRawData(data);  setLoading(false); })
-      .catch(err  => { logDbError('FinanceiroPage.load', err); setLoading(false); });
+      .then(async (data) => {
+        const plantioIds = (data.plantios || []).map(p => p.id);
+        const maoObraMap = await loadMaoObraBatch(plantioIds).catch(() => ({}));
+        setRawData({ ...data, maoObraMap });
+        setLoading(false);
+      })
+      .catch(err => { logDbError('FinanceiroPage.load', err); setLoading(false); });
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);

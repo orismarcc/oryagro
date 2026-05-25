@@ -18,6 +18,7 @@ export default function LoginPage() {
     setMode(newMode);
     setError('');
     setSuccess('');
+    setEmail('');
     setPassword('');
     setConfirm('');
     setDisplayName('');

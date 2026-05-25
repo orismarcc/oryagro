@@ -33,7 +33,7 @@ export default function SimuladorPage() {
           <TrendingUp size={100} color="white" />
         </div>
 
-        <div className="relative px-5 pt-6 pb-6" style={{ zIndex: 10 }}>
+        <div className="relative px-5 pb-6" style={{ zIndex: 10, paddingTop: 'var(--hero-pad-top)' }}>
           <p className="text-white/55 text-xs font-semibold uppercase tracking-widest mb-1">Simulador Financeiro</p>
           <h1 className="font-display text-white text-2xl font-extrabold leading-tight mb-4">
             Calcule seu retorno

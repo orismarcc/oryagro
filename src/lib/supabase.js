@@ -22,3 +22,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     flowType: 'pkce',
   },
 });
+
+/**
+ * Retorna o user_id do usuário autenticado ou null.
+ *
+ * Usa getSession() (leitura em memória/localStorage) em vez de getUser()
+ * (que faz uma requisição de rede para validar o JWT) — evita round-trips
+ * desnecessários ao Supabase Auth em cada chamada de função (Arch#7).
+ */
+export async function getUserId() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user?.id ?? null;
+}

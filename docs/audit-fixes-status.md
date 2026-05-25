@@ -1,10 +1,10 @@
 # OryAgro — Status dos Fixes das 3 Auditorias
 
-> Última atualização: 2026-05-24
+> Última atualização: 2026-05-24 (sessão 2)
 
 ---
 
-## ✅ Implementado (31 fixes)
+## ✅ Implementado (47 fixes)
 
 | ID | Descrição | Arquivo |
 |---|---|---|
@@ -37,6 +37,19 @@
 | Op#15 | Custo por planta exibido no breakdown do CustoProducaoCard | AnalysePage.jsx |
 | ToastContext | Sistema global de toasts criado e conectado | ToastContext.jsx (novo) |
 | **CRONOGRAMA** | Bug "HOJE" para lotes com plantio futuro corrigido; banner informativo | CronogramaTimeline.jsx, Dashboard.jsx |
+| **SYNC ESTOQUE** | Auto-match insumo ao confirmar etapa do cronograma; pre-fill stockDebit; badge "auto"; aviso de estoque insuficiente | CronogramaTimeline.jsx |
+| Op#2 | `mao_obra_registros` como fonte autoritativa; fallback para `mao_obra_total`; label "(registros)"/"(estimativa)" no AnalysePage | useGestao.js, AnalysePage.jsx, FinanceiroPage.jsx |
+| Arch#3 | deletePropriedade/deleteLoteCompleto com verificação de erro em cada passo + rollback logging | useSupabaseSync.js |
+| Arch#7 | getUserId() centralizado em lib/supabase.js (getSession, sem round-trip); 6 arquivos atualizados | supabase.js, todos os hooks |
+| BUG-06 | Validação JS para total_plantas = 0 adicionada ao handleSalvar | LotesPage.jsx |
+| BUG-18 | visualViewport.resize → scrollIntoView para teclado virtual Android | App.jsx |
+| BUG-19 | storage event listener — notifica ao detectar mudanças de outra aba (throttle 30s) | App.jsx |
+| Op#11 | IDs de custom activities agora usam hash(etapa+dia) estável; retrocompat com índice | CronogramaTimeline.jsx |
+| Op#5 | Fórmula de lucro idêntica em FinanceiroPage e AnalysePage via `calcLucroLote()` | lib/financeiro.js |
+| Arch#2 | `src/lib/financeiro.js` criado — mão de obra isolada; custo total reconciliado | lib/financeiro.js (novo) |
+| Op#6 | ProjecaoKgCard mostra produtividade real dos lotes colhidos; Embrapa como secundário | AnalysePage.jsx |
+| Arch#1 | LotePage.jsx: 2208 → 634 linhas; tabs extraídas para `src/components/lote/` | TabInsumos, TabDiario, TabDespesas, TabReceitas, shared.js |
+| Op#8 | Preços de insumos sincronizados via `simulador_configs` (sem migration); badge "☁ salvo"; Supabase ganha no merge cross-device | TabInsumos.jsx, useGestao.js |
 
 ---
 
@@ -46,34 +59,11 @@
 
 | ID | Arquivo | Descrição |
 |---|---|---|
-| Op#2 | Todo o app | Mão de obra contada em 3 fontes conflitantes — sem reconciliação (campo `mao_obra_total`, tabela `mao_obra_registros`, tabela `despesas`) |
-| Op#3 | EstoquePage / MovModal | Saída de estoque sem `plantio_id` — consumo não reflete no custo do lote |
-| Arch#3 | useSupabaseSync.js | `deletePropriedade`/`deleteLoteCompleto` sem transação — risco de estado inconsistente em falha |
+### ⚪ Baixo / Arquitetural — Requerem planejamento dedicado
 
-### 🟠 Alto
-
-| ID | Arquivo | Descrição |
+| ID | Arquivo | Motivo do adiamento |
 |---|---|---|
-| BUG-06 | LotesPage (formulário) | Validação JS faltante para `total_plantas = 0` — verificar se já cobre |
-| BUG-18 | Formulários na parte inferior | Teclado virtual Android cobre inputs — sem `scrollIntoView` |
-| Op#5 | FinanceiroPage / AnalysePage | DRE e Análise ainda podem divergir no lucro do mesmo lote |
-| Op#7 | EstoquePage MovModal | Saídas sem `plantio_id` — rastreabilidade quebrada |
-| Arch#7 | 12+ arquivos | `getUserId()` duplicado — round-trips desnecessários ao Supabase Auth |
+| Arch#6 | App.jsx | React Router — refactor grande; precisa de plano/worktree dedicado |
+| Arch#9 | 14 arquivos | 55 chamadas localStorage — migração gradual, requer testes |
+~~Op#8~~ | ✅ resolvido — ver seção implementado acima |
 
-### 🟡 Médio
-
-| ID | Arquivo | Descrição |
-|---|---|---|
-| BUG-19 | App global | Múltiplas abas divergem sem sincronização |
-| Op#6 | AnalysePage | Produtividade usa sempre benchmark Embrapa, nunca dados reais do histórico |
-
-### ⚪ Baixo / Arquitetural
-
-| ID | Arquivo | Descrição |
-|---|---|---|
-| Arch#1 | LotePage.jsx | ~2200 linhas — separar cada tab em arquivo próprio |
-| Arch#2 | src/lib/financeiro.js | 3 fontes de custo sem reconciliação central |
-| Arch#6 | App.jsx | Roteamento por estado — sem URL, histórico ou deep link |
-| Arch#9 | 14 arquivos | localStorage como banco paralelo — 55 ocorrências |
-| Op#11 | CronogramaTimeline | IDs de atividades customizadas baseados em índice de array — instáveis |
-| Op#8 | TabInsumos | Preços dos insumos salvos só no localStorage — perdidos ao trocar de dispositivo |

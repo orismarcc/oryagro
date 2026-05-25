@@ -20,7 +20,7 @@ export default function CulturaPicker({ onSelectCultura, onBack }) {
           <Sprout size={110} color="white" />
         </div>
 
-        <div className="relative z-10 px-5 pt-5 pb-6">
+        <div className="relative z-10 px-5 pb-6" style={{ paddingTop: 'var(--hero-pad-top-no-btns)' }}>
           <button
             onClick={onBack}
             className="flex items-center gap-1.5 text-white/60 text-[12px] font-medium mb-4 hover:text-white transition-colors"

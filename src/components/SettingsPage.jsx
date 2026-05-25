@@ -300,7 +300,7 @@ export default function SettingsPage({ onBack }) {
   return (
     <div className="min-h-screen bg-background">
       {/* ── Header ── */}
-      <div className="gradient-hero px-5 pt-5 pb-5">
+      <div className="gradient-hero px-5 pb-5" style={{ paddingTop: 'var(--hero-pad-top)' }}>
         <button
           onClick={onBack}
           className="flex items-center gap-1.5 text-white/60 text-[12px] font-medium mb-4 hover:text-white transition-colors"

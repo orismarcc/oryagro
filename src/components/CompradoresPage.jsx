@@ -440,7 +440,7 @@ function HistoricoPanel({ comprador, onClose }) {
       style={{ background: 'white' }}
     >
       {/* Header */}
-      <div className="sticky top-0 z-10 gradient-hero px-5 pt-6 pb-4">
+      <div className="sticky top-0 z-10 gradient-hero px-5 pt-4 pb-4">
         <button onClick={onClose}
           className="flex items-center gap-1.5 text-white/70 hover:text-white transition-colors mb-3">
           <ChevronLeft size={16} />
@@ -736,7 +736,7 @@ export default function CompradoresPage({ onBack }) {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero */}
-      <div className="gradient-hero px-5 pt-6 pb-5">
+      <div className="gradient-hero px-5 pb-5" style={{ paddingTop: 'var(--hero-pad-top)' }}>
         {onBack && (
           <button onClick={onBack}
             className="flex items-center gap-1.5 text-white/70 hover:text-white transition-colors mb-3">

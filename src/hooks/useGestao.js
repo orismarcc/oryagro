@@ -1,10 +1,5 @@
-import { supabase } from '../lib/supabase';
+import { supabase, getUserId } from '../lib/supabase';
 import { logDbError } from '../lib/logger';
-
-async function getUserId() {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.id ?? null;
-}
 
 // ── Diário de campo ──────────────────────────────────────────────────────────
 
@@ -190,6 +185,49 @@ export async function updateLoteMaoObra(plantioId, maoObraTotal) {
     .single();
   if (error) { logDbError('updateLoteMaoObra', error); return null; }
   return data;
+}
+
+// ── Mão de obra (registros) ───────────────────────────────────────────────────
+
+/**
+ * Load mao_obra_registros for a single plantio.
+ * Returns { registros, total } where total = sum(horas * valor_hora).
+ * Falls back gracefully when no records exist.
+ */
+export async function loadMaoObraByLote(plantioId) {
+  if (!plantioId) return { registros: [], total: 0 };
+  const userId = await getUserId();
+  if (!userId) return { registros: [], total: 0 };
+  const { data } = await supabase
+    .from('mao_obra_registros')
+    .select('*')
+    .eq('plantio_id', plantioId)
+    .eq('user_id', userId)
+    .order('data', { ascending: false });
+  const registros = data || [];
+  const total = registros.reduce((sum, r) => sum + (r.horas * r.valor_hora), 0);
+  return { registros, total };
+}
+
+/**
+ * Batch-load mao_obra_registros for multiple plantios.
+ * Returns a map { [plantioId]: registros[] }.
+ */
+export async function loadMaoObraBatch(plantioIds) {
+  if (!plantioIds?.length) return {};
+  const userId = await getUserId();
+  if (!userId) return {};
+  const { data } = await supabase
+    .from('mao_obra_registros')
+    .select('*')
+    .eq('user_id', userId)
+    .in('plantio_id', plantioIds);
+  const map = {};
+  plantioIds.forEach(id => { map[id] = []; });
+  (data || []).forEach(r => {
+    if (map[r.plantio_id]) map[r.plantio_id].push(r);
+  });
+  return map;
 }
 
 // ── Vendas ────────────────────────────────────────────────────────────────────
@@ -408,4 +446,45 @@ export async function loadCiclosHistorico() {
     .order('archived_at', { ascending: false });
   if (error) { logDbError('loadCiclosHistorico', error); return []; }
   return data || [];
+}
+
+// ── Op#8: Preços de insumos por lote — sincronizados via simulador_configs ──
+// Usa cultura_id = '__lote_precos__<loteId>' como chave — sem migration necessária.
+
+/**
+ * Salva preços de insumos de um lote no Supabase (debounced pelo chamador).
+ */
+export async function savePrecoInsumos(loteId, precos) {
+  if (!loteId) return;
+  const userId = await getUserId();
+  if (!userId) return;
+  await supabase
+    .from('simulador_configs')
+    .upsert(
+      {
+        user_id:    userId,
+        cultura_id: `__lote_precos__${loteId}`,
+        valores:    precos,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,cultura_id' },
+    );
+}
+
+/**
+ * Carrega preços de insumos de um lote do Supabase.
+ * Retorna o objeto de preços ou null se não encontrado / erro.
+ */
+export async function loadPrecoInsumos(loteId) {
+  if (!loteId) return null;
+  const userId = await getUserId();
+  if (!userId) return null;
+  const { data, error } = await supabase
+    .from('simulador_configs')
+    .select('valores')
+    .eq('user_id', userId)
+    .eq('cultura_id', `__lote_precos__${loteId}`)
+    .single();
+  if (error || !data) return null;
+  return data.valores ?? null;
 }

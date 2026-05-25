@@ -24,7 +24,7 @@ import { CULTURAS } from './data/culturas';
 import { useAuth } from './hooks/useAuth';
 import { loadPropriedades, loadTodosLotes } from './hooks/useSupabaseSync';
 import { FarmProvider, useFarm } from './context/FarmContext';
-import { ToastProvider } from './context/ToastContext';
+import { ToastProvider, useToast } from './context/ToastContext';
 import { can, FARM_ACTIONS } from './lib/permissions';
 import { Home, CalendarDays, Building2, Wallet, Activity, Loader2 } from 'lucide-react';
 
@@ -68,6 +68,63 @@ export default function App() {
 
 function AppInner({ session, displayName, signOut }) {
   const { getUserRole, isGlobalAdmin } = useFarm();
+  const toast = useToast();
+
+  // BUG-11: detecta expiração de sessão durante o uso e avisa o usuário
+  const prevSessionRef = useRef(session);
+  useEffect(() => {
+    // Se havia sessão antes e agora não há — sessão expirou em uso
+    if (prevSessionRef.current && !session) {
+      toast.warning('Sua sessão expirou. Faça login novamente.');
+    }
+    prevSessionRef.current = session;
+  }, [session]);
+
+  // BUG-19: Sincronização entre abas — detecta mudanças no localStorage feitas por outra aba
+  // e notifica o usuário para recarregar. Não faz reload automático para não interromper o usuário.
+  useEffect(() => {
+    // Prefixos de chaves que indicam dados do app alterados em outra aba
+    const DATA_PREFIXES = [
+      'cronograma_status', 'cronograma_custom',
+      'lote_mudas', 'lote_precos',
+      'propriedades_', 'estoque_',
+    ];
+    let lastNotified = 0;
+
+    const onStorage = (e) => {
+      if (!e.key) return;
+      const isAppKey = DATA_PREFIXES.some(p => e.key.startsWith(p));
+      if (!isAppKey) return;
+      // Limita a uma notificação por 30 s para não spammar
+      const now = Date.now();
+      if (now - lastNotified < 30_000) return;
+      lastNotified = now;
+      toast.info('Dados atualizados em outra aba — recarregue a página para sincronizar.');
+    };
+
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [toast]);
+
+  // BUG-18: Teclado virtual Android cobre inputs — rola o elemento focado para dentro da área visível
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return; // não disponível em navegadores antigos
+
+    const onResize = () => {
+      const focused = document.activeElement;
+      if (!focused) return;
+      const tag = focused.tagName;
+      if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') return;
+      // Aguarda o layout estabilizar antes de rolar
+      setTimeout(() => {
+        focused.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    };
+
+    vv.addEventListener('resize', onResize);
+    return () => vv.removeEventListener('resize', onResize);
+  }, []);
 
   // Ref para o contêiner de scroll principal — reseta scrollTop diretamente,
   // método mais confiável no WebView do Android vs. window.scrollTo.

@@ -822,7 +822,7 @@ export default function ComparacaoCulturas() {
   return (
     <div className="min-h-screen bg-background">
       {/* ── Header ── */}
-      <div className="gradient-hero px-5 pt-6 pb-5">
+      <div className="gradient-hero px-5 pb-5" style={{ paddingTop: 'var(--hero-pad-top)' }}>
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-white/55 text-xs font-semibold uppercase tracking-widest mb-1">Análise</p>

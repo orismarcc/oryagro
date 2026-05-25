@@ -79,6 +79,23 @@ function migrateLegacyStatus(stored, vivSteps, baseSteps) {
   return stored;
 }
 
+// Op#11: stable hash for custom activity IDs — avoids index-based IDs that shift on reorder/delete
+function hashStr(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
+  return (h >>> 0).toString(36);
+}
+function makeCustomId(etapa, dia) {
+  return 'custom_' + hashStr(String(etapa || '') + '_' + String(dia ?? 0));
+}
+
+// Extract the first numeric value from a dose string ("500 mL" → "500", "2,5 L" → "2.5")
+function parseNumericDose(doseStr) {
+  if (!doseStr || doseStr === '—') return '';
+  const match = doseStr.replace(',', '.').match(/(\d+(?:\.\d+)?)/);
+  return match ? match[1] : '';
+}
+
 // Scale numeric values in a dose string by a factor
 function scaleDose(doseStr, fator) {
   if (!doseStr || doseStr === '—' || Math.abs(fator - 1) < 0.02) return doseStr;
@@ -255,11 +272,15 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
           }
         });
 
-        // Status das atividades customizadas (indexado por posição no array)
+        // Status das atividades customizadas
+        // Op#11: usar stableId (hash de etapa+dia) E o índice para retrocompatibilidade
         const customDbRows = dbRows.filter(r => r.is_custom);
         customDbRows.forEach((row, i) => {
           if (row.status && row.status !== 'pendente') {
-            dbStatus[`custom_${i}`] = { status: row.status, data: row.data_execucao };
+            const stableId = makeCustomId(row.etapa, row.dia_previsto);
+            const val = { status: row.status, data: row.data_execucao };
+            dbStatus[stableId] = val;
+            dbStatus[`custom_${i}`] = val; // retrocompat para dados antigos
           }
         });
 
@@ -425,7 +446,8 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
         }
         return { ...e, ...override, dia: scaleBaseDia(e.dia), _id: makeStableId('default', e.etapa), _custom: false };
       }),
-    ...customRows.map((e, i) => ({ ...e, _id: `custom_${i}`, _custom: true, _noScaleDose: true })),
+    // Op#11: prefer stored _stableId; fall back to index for rows saved before this fix
+    ...customRows.map((e, i) => ({ ...e, _id: e._stableId || `custom_${i}`, _custom: true, _noScaleDose: true })),
   ]
   .filter(e => status[e._id]?.status !== 'removida')
   .sort((a, b) => a.dia - b.dia);
@@ -550,7 +572,13 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
     if (!newRow.etapa) return;
 
     const diaNum = parseInt(newRow.dia) || 0;
-    const rowToAdd = { ...newRow, dia: diaNum, insumo_id: newRow.insumo_id || null };
+    // Op#11: assign stable ID based on etapa+dia hash so ID survives reorders/deletions
+    const rowToAdd = {
+      ...newRow,
+      dia: diaNum,
+      insumo_id: newRow.insumo_id || null,
+      _stableId: makeCustomId(newRow.etapa, diaNum),
+    };
 
     // For colheita: if "já realizada" is on, register event
     if (newRow.tipo === 'colheita' && addHarvest.jaRealizada && selectedLote) {
@@ -571,8 +599,8 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
       } catch (err) {
         logDbError('handleAddRow:colheita', err);
       }
-      // Also auto-mark as done in status
-      const tempId = `custom_${customRows.length}`;
+      // Also auto-mark as done in status — use stable ID to match the row we're about to add
+      const tempId = makeCustomId(newRow.etapa, diaNum);
       setStatus(s => ({ ...s, [tempId]: { status: 'feito', data: isoDate } }));
     }
 
@@ -1080,57 +1108,95 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                             </div>
                           )}
 
-                          {/* ── Stock deduction (adubo/foliar) ── */}
-                          {(confirming?.tipo === 'adubo' || confirming?.tipo === 'foliar') && insumos.length > 0 && (
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-bold" style={{ color: meta.color }}>Debitar do estoque</span>
-                                <Toggle
-                                  enabled={stockDebit.enabled}
-                                  onToggle={() => setStockDebit(s => ({ ...s, enabled: !s.enabled }))}
-                                  color={meta.color}
-                                />
-                              </div>
+                          {/* ── Stock deduction — disponível para qualquer etapa com insumos ── */}
+                          {insumos.length > 0 && confirming?.tipo !== 'colheita' && (() => {
+                            const selectedInsumo = stockDebit.insumoId
+                              ? insumos.find(i => i.id === stockDebit.insumoId)
+                              : null;
+                            const isAutoMatched = stockDebit.enabled && !!selectedInsumo;
+                            return (
+                              <div
+                                className="rounded-xl p-3 space-y-2"
+                                style={{
+                                  background: stockDebit.enabled
+                                    ? `${meta.color}0d`
+                                    : 'hsl(214 20% 97%)',
+                                  border: `1px solid ${stockDebit.enabled ? `${meta.color}33` : 'hsl(214 20% 90%)'}`,
+                                  transition: 'background 0.2s, border-color 0.2s',
+                                }}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <span className="text-[11px] font-bold" style={{ color: meta.color }}>
+                                      Debitar do estoque
+                                    </span>
+                                    {isAutoMatched && (
+                                      <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
+                                        style={{ background: `${meta.color}20`, color: meta.color }}>
+                                        auto
+                                      </span>
+                                    )}
+                                    {selectedInsumo && (
+                                      <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                                        {selectedInsumo.nome} · disponível: {selectedInsumo.quantidade} {selectedInsumo.unidade}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <Toggle
+                                    enabled={stockDebit.enabled}
+                                    onToggle={() => setStockDebit(s => ({ ...s, enabled: !s.enabled }))}
+                                    color={meta.color}
+                                  />
+                                </div>
 
-                              {stockDebit.enabled && (
-                                <motion.div
-                                  initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                                  exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.18 }}
-                                  style={{ overflow: 'hidden' }}
-                                  className="space-y-2"
-                                >
-                                  <div>
-                                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Insumo</label>
-                                    <select
-                                      value={stockDebit.insumoId}
-                                      onChange={e => setStockDebit(s => ({ ...s, insumoId: e.target.value }))}
-                                      className="w-full mt-1 rounded-xl border px-3 py-2 text-[13px] outline-none"
-                                      style={{ background: 'white', borderColor: `${meta.color}40` }}
+                                <AnimatePresence>
+                                  {stockDebit.enabled && (
+                                    <motion.div
+                                      initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                                      exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.18 }}
+                                      style={{ overflow: 'hidden' }}
+                                      className="space-y-2"
                                     >
-                                      <option value="">Selecionar insumo…</option>
-                                      {insumos.map(i => (
-                                        <option key={i.id} value={i.id}>
-                                          {i.nome} ({i.quantidade} {i.unidade})
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                      Quantidade {stockDebit.insumoId ? `(${insumos.find(i => i.id === stockDebit.insumoId)?.unidade || ''})` : ''}
-                                    </label>
-                                    <input
-                                      type="number" min="0.01" step="0.01"
-                                      value={stockDebit.quantidade}
-                                      onChange={e => setStockDebit(s => ({ ...s, quantidade: e.target.value }))}
-                                      className="w-full mt-1 rounded-xl border px-3 py-2 text-[13px] font-semibold outline-none"
-                                      style={{ background: 'white', borderColor: `${meta.color}40` }}
-                                    />
-                                  </div>
-                                </motion.div>
-                              )}
-                            </div>
-                          )}
+                                      <div>
+                                        <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Insumo</label>
+                                        <select
+                                          value={stockDebit.insumoId}
+                                          onChange={e => setStockDebit(s => ({ ...s, insumoId: e.target.value }))}
+                                          className="w-full mt-1 rounded-xl border px-3 py-2 text-[13px] outline-none"
+                                          style={{ background: 'white', borderColor: `${meta.color}40` }}
+                                        >
+                                          <option value="">Selecionar insumo…</option>
+                                          {insumos.map(i => (
+                                            <option key={i.id} value={i.id}>
+                                              {i.nome} ({i.quantidade} {i.unidade})
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                          Quantidade {selectedInsumo ? `(${selectedInsumo.unidade})` : ''}
+                                        </label>
+                                        <input
+                                          type="number" min="0.01" step="0.01"
+                                          value={stockDebit.quantidade}
+                                          onChange={e => setStockDebit(s => ({ ...s, quantidade: e.target.value }))}
+                                          placeholder="0"
+                                          className="w-full mt-1 rounded-xl border px-3 py-2 text-[13px] font-semibold outline-none"
+                                          style={{ background: 'white', borderColor: `${meta.color}40` }}
+                                        />
+                                        {selectedInsumo && parseFloat(stockDebit.quantidade) > selectedInsumo.quantidade && (
+                                          <p className="text-[10px] mt-1 font-semibold" style={{ color: '#dc2626' }}>
+                                            ⚠ Quantidade maior que o disponível ({selectedInsumo.quantidade} {selectedInsumo.unidade})
+                                          </p>
+                                        )}
+                                      </div>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            );
+                          })()}
 
                           <div className="flex gap-2">
                             <button
@@ -1167,7 +1233,32 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                         // Spread the FULL event so confirmStep can read ev.dia, ev.produto,
                         // ev.dose, ev.forma, ev._custom — all required by syncCronogramaStatus.
                         setConfirming({ ...ev, id: ev._id });
-                        setStockDebit({ enabled: false, insumoId: '', quantidade: '' });
+
+                        // Auto-match insumo: prefer explicit insumo_id, then fuzzy match by produto name
+                        let autoDebit = { enabled: false, insumoId: '', quantidade: '' };
+                        if (insumos.length > 0 && ev.tipo !== 'colheita') {
+                          let matched = null;
+                          if (ev.insumo_id) {
+                            matched = insumos.find(i => i.id === ev.insumo_id) ?? null;
+                          }
+                          if (!matched && ev.produto) {
+                            const prodNorm = ev.produto.trim().toLowerCase();
+                            matched = insumos.find(i => {
+                              const n = i.nome.trim().toLowerCase();
+                              return n === prodNorm || n.includes(prodNorm) || prodNorm.includes(n);
+                            }) ?? null;
+                          }
+                          if (matched) {
+                            const scaledDose = ev._noScaleDose ? ev.dose : scaleDose(ev.dose, fator);
+                            autoDebit = {
+                              enabled: true,
+                              insumoId: matched.id,
+                              quantidade: parseNumericDose(scaledDose || ev.dose || ''),
+                            };
+                          }
+                        }
+                        setStockDebit(autoDebit);
+
                         setHarvestData({
                           enabled: ev.tipo === 'colheita',
                           qtd: '', unidade: 'kg',

@@ -3,11 +3,12 @@ import { motion } from 'framer-motion';
 import { CULTURAS } from '../data/culturas';
 import { exportarRelatorioPDF } from '../lib/pdfExport';
 import { loadTodosLotes, loadAllColheitaEventos } from '../hooks/useSupabaseSync';
-import { loadMovimentosByLote, loadTodasVendas } from '../hooks/useGestao';
+import { loadMovimentosByLote, loadTodasVendas, loadMaoObraByLote } from '../hooks/useGestao';
 import { loadTodasDespesas, loadDespesasByLote } from '../hooks/useDespesas';
 import { resolveLifecycle, fmtDateBR, parseCicloDias } from '../lib/lifecycle';
+import { calcLucroLote } from '../lib/financeiro';
 import { logDbError } from '../lib/logger';
-import { estimateKgAnual, getProductionBase } from '../constants/cropYields';
+import { estimateKgAnual, getProductionBase, getYieldConfig } from '../constants/cropYields';
 import { can, FARM_ACTIONS } from '../lib/permissions';
 import {
   BarChart2,
@@ -904,7 +905,7 @@ function ProjecaoReceitaCard({ lotes, eventosColheita }) {
 
 /* ─── Projeção de Produção Anual (kg) ────────────────────── */
 
-function ProjecaoKgCard({ lotes }) {
+function ProjecaoKgCard({ lotes, eventosColheita = [], allLotes = [] }) {
   const now = new Date();
   const currentYear = now.getFullYear();
 
@@ -967,6 +968,98 @@ function ProjecaoKgCard({ lotes }) {
   if (!hasCulturas || maxKg <= 0) return null;
 
   const fmtTon = (kg) => kg >= 1000 ? `${(kg / 1000).toFixed(1)}t` : `${Math.round(kg)}kg`;
+
+  // --- Real productivity from completed lotes' harvest events ---
+  // Build a map of plantio_id → total harvest kg from recorded events
+  const harvestKgByLote = {};
+  eventosColheita.forEach(ev => {
+    try {
+      const d = typeof ev.descricao === 'string' ? JSON.parse(ev.descricao) : (ev.descricao || {});
+      const qtd = parseFloat(d?.qtd) || 0;
+      const unidade = d?.unidade || 'kg';
+      const qtdKg = unidade === 't' ? qtd * 1000 : qtd;
+      if (qtdKg > 0 && ev.plantio_id) {
+        harvestKgByLote[String(ev.plantio_id)] = (harvestKgByLote[String(ev.plantio_id)] || 0) + qtdKg;
+      }
+    } catch { /* ignore parse errors */ }
+  });
+
+  // Find completed lotes that have recorded harvest data
+  const completedLotes = allLotes.filter(l =>
+    (l.status === 'colhido' || l.status === 'concluido' || l.status === 'arquivado') &&
+    (harvestKgByLote[String(l.id)] || 0) > 0
+  );
+
+  // Real kg/planta (for per_plant cultures with completed lotes)
+  let realKgPlantaInfo = null;
+  {
+    const completedPerPlant = completedLotes.filter(l => {
+      const c = getCultura(l.cultura_id);
+      if (!c) return false;
+      const base = getProductionBase(l, c.id);
+      return base.method === 'plants' && (l.total_plantas || 0) > 0;
+    });
+    if (completedPerPlant.length > 0) {
+      let totalPlantas = 0;
+      let totalKgReal = 0;
+      completedPerPlant.forEach(l => {
+        totalPlantas += l.total_plantas || 0;
+        totalKgReal += harvestKgByLote[String(l.id)] || 0;
+      });
+      if (totalPlantas > 0 && totalKgReal > 0) {
+        let embrapaHaTotal = 0;
+        let embrapaWeighted = 0;
+        completedPerPlant.forEach(l => {
+          const c = getCultura(l.cultura_id);
+          const cfg = c ? getYieldConfig(c.id) : null;
+          const plantas = l.total_plantas || 0;
+          if (cfg && plantas > 0) { embrapaWeighted += cfg.defaultYieldValue * plantas; embrapaHaTotal += plantas; }
+        });
+        realKgPlantaInfo = {
+          avg: totalKgReal / totalPlantas,
+          totalPlantas,
+          lotesCount: completedPerPlant.length,
+          embrapaAvg: embrapaHaTotal > 0 ? embrapaWeighted / embrapaHaTotal : null,
+        };
+      }
+    }
+  }
+
+  // Real kg/ha (for per_hectare cultures with completed lotes)
+  let realKgHaInfo = null;
+  {
+    const completedPerHa = completedLotes.filter(l => {
+      const c = getCultura(l.cultura_id);
+      if (!c) return false;
+      const base = getProductionBase(l, c.id);
+      return base.method === 'cultivated_area' && (parseFloat(l.area_plantada_ha) || parseFloat(l.area_ha) || 0) > 0;
+    });
+    if (completedPerHa.length > 0) {
+      let totalHa = 0;
+      let totalKgReal = 0;
+      completedPerHa.forEach(l => {
+        const ha = parseFloat(l.area_plantada_ha) || parseFloat(l.area_ha) || 0;
+        totalHa += ha;
+        totalKgReal += harvestKgByLote[String(l.id)] || 0;
+      });
+      if (totalHa > 0 && totalKgReal > 0) {
+        let embrapaHaTotal = 0;
+        let embrapaWeighted = 0;
+        completedPerHa.forEach(l => {
+          const c = getCultura(l.cultura_id);
+          const cfg = c ? getYieldConfig(c.id) : null;
+          const ha = parseFloat(l.area_plantada_ha) || parseFloat(l.area_ha) || 0;
+          if (cfg && ha > 0) { embrapaWeighted += cfg.defaultYieldValue * ha; embrapaHaTotal += ha; }
+        });
+        realKgHaInfo = {
+          avg: totalKgReal / totalHa,
+          totalHa,
+          lotesCount: completedPerHa.length,
+          embrapaAvg: embrapaHaTotal > 0 ? embrapaWeighted / embrapaHaTotal : null,
+        };
+      }
+    }
+  }
 
   // --- Item 1: kg/planta/ano for per_plant cultures ---
   // Collect per_plant lotes that have total_plantas > 0
@@ -1066,14 +1159,82 @@ function ProjecaoKgCard({ lotes }) {
         })}
       </div>
 
-      {/* Item 1: kg/planta/ano info row */}
-      {kgPorPlantaInfo && (
+      {/* Produtividade real (se houver dados de colheita registrados) */}
+      {realKgPlantaInfo && (
+        <div className="mx-4 mt-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-[11px] font-bold text-green-700">📊 Real (média dos seus lotes)</span>
+            <span className="text-[10px] text-green-600 bg-green-100 rounded-full px-1.5 py-0.5 font-semibold">
+              {realKgPlantaInfo.avg.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg/planta
+            </span>
+            {realKgPlantaInfo.embrapaAvg != null && (() => {
+              const pct = ((realKgPlantaInfo.avg - realKgPlantaInfo.embrapaAvg) / realKgPlantaInfo.embrapaAvg) * 100;
+              const sign = pct >= 0 ? '+' : '';
+              const color = pct >= 0 ? '#15803d' : '#b45309';
+              return (
+                <span className="text-[9px] font-bold rounded-full px-1.5 py-0.5" style={{ color, background: pct >= 0 ? '#dcfce7' : '#fef3c7' }}>
+                  {sign}{pct.toFixed(0)}% vs Embrapa
+                </span>
+              );
+            })()}
+          </div>
+          <p className="text-[9px] text-green-600/70">
+            {realKgPlantaInfo.lotesCount} {realKgPlantaInfo.lotesCount === 1 ? 'lote concluído' : 'lotes concluídos'} · {realKgPlantaInfo.totalPlantas.toLocaleString('pt-BR')} plantas
+          </p>
+          {realKgPlantaInfo.embrapaAvg != null && (
+            <p className="text-[9px] text-gray-400 mt-0.5">
+              📖 Ref. Embrapa: {realKgPlantaInfo.embrapaAvg.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg/planta/ano
+            </p>
+          )}
+        </div>
+      )}
+      {realKgHaInfo && (
+        <div className="mx-4 mt-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-[11px] font-bold text-green-700">📊 Real (média dos seus lotes)</span>
+            <span className="text-[10px] text-green-600 bg-green-100 rounded-full px-1.5 py-0.5 font-semibold">
+              {Math.round(realKgHaInfo.avg).toLocaleString('pt-BR')} kg/ha
+            </span>
+            {realKgHaInfo.embrapaAvg != null && (() => {
+              const pct = ((realKgHaInfo.avg - realKgHaInfo.embrapaAvg) / realKgHaInfo.embrapaAvg) * 100;
+              const sign = pct >= 0 ? '+' : '';
+              const color = pct >= 0 ? '#15803d' : '#b45309';
+              return (
+                <span className="text-[9px] font-bold rounded-full px-1.5 py-0.5" style={{ color, background: pct >= 0 ? '#dcfce7' : '#fef3c7' }}>
+                  {sign}{pct.toFixed(0)}% vs Embrapa
+                </span>
+              );
+            })()}
+          </div>
+          <p className="text-[9px] text-green-600/70">
+            {realKgHaInfo.lotesCount} {realKgHaInfo.lotesCount === 1 ? 'lote concluído' : 'lotes concluídos'} · {realKgHaInfo.totalHa.toFixed(2)} ha
+          </p>
+          {realKgHaInfo.embrapaAvg != null && (
+            <p className="text-[9px] text-gray-400 mt-0.5">
+              📖 Ref. Embrapa: {Math.round(realKgHaInfo.embrapaAvg).toLocaleString('pt-BR')} kg/ha/ano
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Item 1: kg/planta/ano estimado (Embrapa) para lotes ativos */}
+      {kgPorPlantaInfo && !realKgPlantaInfo && (
+        <div className="px-4 pt-1 pb-0">
+          <span className="text-[11px] font-bold text-green-700/80">
+            📖 Embrapa ~{kgPorPlantaInfo.avg.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg/planta/ano
+          </span>
+          <span className="text-[10px] text-gray-400 ml-1">
+            ({currentYear}, média ponderada · {kgPorPlantaInfo.totalPlantas.toLocaleString('pt-BR')} plantas · sem dados reais ainda)
+          </span>
+        </div>
+      )}
+      {kgPorPlantaInfo && realKgPlantaInfo && (
         <div className="px-4 pt-1 pb-0">
           <span className="text-[11px] font-bold text-green-700/80">
             🌱 ~{kgPorPlantaInfo.avg.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg/planta/ano
           </span>
           <span className="text-[10px] text-gray-400 ml-1">
-            ({currentYear}, média ponderada · {kgPorPlantaInfo.totalPlantas.toLocaleString('pt-BR')} plantas)
+            ({currentYear}, lotes ativos · {kgPorPlantaInfo.totalPlantas.toLocaleString('pt-BR')} plantas)
           </span>
         </div>
       )}
@@ -1171,7 +1332,9 @@ function ProjecaoKgCard({ lotes }) {
       </div>
 
       <p className="px-4 pb-3 text-[9px] text-gray-400 leading-relaxed">
-        * Estimativa baseada em benchmarks Embrapa por cultura. Manejo, clima e variedade afetam o resultado real.
+        {(realKgPlantaInfo || realKgHaInfo)
+          ? '* Projeção baseada em estimativas Embrapa. Produtividade real calculada a partir dos seus registros de colheita.'
+          : '* Estimativa baseada em benchmarks Embrapa por cultura. Registre colheitas para ver sua produtividade real aqui.'}
       </p>
     </Card>
   );
@@ -1266,6 +1429,7 @@ function ProjecaoProducaoCard({ lotes }) {
 function CustoProducaoCard({ lotes, todasVendas }) {
   const [movimentosPorLote, setMovimentosPorLote] = useState({});
   const [despesasPorLote, setDespesasPorLote] = useState({});
+  const [maoObraPorLote, setMaoObraPorLote] = useState({});
   const [loadingCustos, setLoadingCustos] = useState(true);
 
   useEffect(() => {
@@ -1275,17 +1439,21 @@ function CustoProducaoCard({ lotes, todasVendas }) {
       lotes.map(l => Promise.all([
         loadMovimentosByLote(l.id).then(movs => movs),
         loadDespesasByLote(l.id).catch(() => []),
-      ]).then(([movs, despesas]) => ({ id: l.id, movs, despesas })))
+        loadMaoObraByLote(l.id).catch(() => ({ registros: [], total: 0 })),
+      ]).then(([movs, despesas, maoObra]) => ({ id: l.id, movs, despesas, maoObra })))
     ).then(results => {
       if (cancelled) return;
       const movMap = {};
       const despMap = {};
-      results.forEach(({ id, movs, despesas }) => {
+      const moMap = {};
+      results.forEach(({ id, movs, despesas, maoObra }) => {
         movMap[id] = movs;
         despMap[id] = despesas;
+        moMap[id] = maoObra;
       });
       setMovimentosPorLote(movMap);
       setDespesasPorLote(despMap);
+      setMaoObraPorLote(moMap);
       setLoadingCustos(false);
     }).catch(() => { if (!cancelled) setLoadingCustos(false); });
     return () => { cancelled = true; };
@@ -1313,15 +1481,12 @@ function CustoProducaoCard({ lotes, todasVendas }) {
       return sum + (m.quantidade * preco);
     }, 0);
 
-    // Labor cost: from mao_obra_total field on lote
-    const maoObra = parseFloat(lote.mao_obra_total) || 0;
+    // Labor cost data: use mao_obra_registros when records exist, fall back to mao_obra_total
+    const maoObraData = maoObraPorLote[lote.id] || { registros: [], total: 0 };
 
     // Expenses cost: from despesas table
     const despesas = despesasPorLote[lote.id] || [];
     const custoDespesas = despesas.reduce((s, d) => s + (d.valor ?? 0), 0);
-
-    // Total cost
-    const custoTotal = custoInsumos + maoObra + custoDespesas;
 
     // Revenue: from vendas (actual) or projected
     const vendasLote = todasVendas.filter(v => String(v.plantio_id) === String(lote.id));
@@ -1329,11 +1494,19 @@ function CustoProducaoCard({ lotes, todasVendas }) {
     const { receita: receitaProjetada } = calcProducaoLote(lote, cultura);
 
     const hasReal = receitaReal > 0;
-    const receita = hasReal ? receitaReal : receitaProjetada;
-    const margem = receita - custoTotal;
-    const pctMargem = receita > 0 ? Math.round((margem / receita) * 100) : null;
+    const receitaParaCalculo = hasReal ? receitaReal : receitaProjetada;
 
-    return { lote, cultura, custoInsumos, maoObra, custoDespesas, custoTotal, receitaReal, receitaProjetada, receita, margem, pctMargem, hasReal };
+    // Shared formula — identical to FinanceiroPage
+    const result = calcLucroLote({
+      lote,
+      custoInsumos,
+      custoDespesas,
+      maoObraData,
+      receitaVendas: receitaParaCalculo,
+    });
+    const { maoObra, maoObraSource, custoTotal, lucro: margem, margemPct: pctMargem, receita } = result;
+
+    return { lote, cultura, custoInsumos, maoObra, maoObraSource, custoDespesas, custoTotal, receitaReal, receitaProjetada, receita, margem, pctMargem, hasReal };
   }).filter(Boolean);
 
   const lotesComCusto = rows.filter(r => r.custoTotal > 0 || r.receita > 0);
@@ -1388,7 +1561,7 @@ function CustoProducaoCard({ lotes, todasVendas }) {
 
       {/* Per-lote breakdown */}
       <div className="divide-y divide-gray-50">
-        {lotesComCusto.map(({ lote, cultura, custoInsumos, maoObra, custoDespesas, custoTotal, receita, margem, pctMargem, hasReal }) => {
+        {lotesComCusto.map(({ lote, cultura, custoInsumos, maoObra, maoObraSource, custoDespesas, custoTotal, receita, margem, pctMargem, hasReal }) => {
           const cor = cultura.cor;
           const isPositive = margem >= 0;
           return (
@@ -1409,7 +1582,10 @@ function CustoProducaoCard({ lotes, todasVendas }) {
                   <span className="font-semibold text-gray-600">{fmtBRL(custoInsumos)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Mão de obra</span>
+                  <span className="text-gray-400">
+                    Mão de obra
+                    <span className="text-[10px] text-muted-foreground ml-1">({maoObraSource})</span>
+                  </span>
                   <span className="font-semibold text-gray-600">{fmtBRL(maoObra)}</span>
                 </div>
                 {custoDespesas > 0 && (
@@ -1735,7 +1911,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
               transition={{ duration: 0.4, delay: 0.04 }}
             >
               <SectionLabel>Produção em kg/ano</SectionLabel>
-              <ProjecaoKgCard lotes={lotesFiltrados} />
+              <ProjecaoKgCard lotes={lotesFiltrados} eventosColheita={eventosColheita} allLotes={lotes} />
             </motion.div>
 
             {/* Produção Estimada por Lote */}

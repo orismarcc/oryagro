@@ -61,7 +61,7 @@ export default function CulturaPage({ cultura, onBack, autoOpenLoteForm = false,
           {cultura.nome}
         </div>
 
-        <div className="relative z-10 px-5 pt-4 pb-5">
+        <div className="relative z-10 px-5 pb-5" style={{ paddingTop: 'var(--hero-pad-top-no-btns)' }}>
           <button onClick={onBack} className="flex items-center gap-1.5 text-white/60 text-[12px] font-medium mb-4 hover:text-white transition-colors">
             <ArrowLeft size={14} /> Culturas
           </button>

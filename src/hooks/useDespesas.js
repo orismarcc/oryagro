@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, getUserId } from '../lib/supabase';
 import { logDbError } from '../lib/logger';
 
 // ── Category definitions ─────────────────────────────────────────────────────
@@ -169,12 +169,6 @@ export function getUnidade(categoria, subcategoria) {
   return catMap.default ?? 'un';
 }
 
-// ── Auth helper ──────────────────────────────────────────────────────────────
-
-async function getUserId() {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.id ?? null;
-}
 
 // ── Despesas CRUD ────────────────────────────────────────────────────────────
 

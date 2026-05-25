@@ -424,7 +424,7 @@ export default function CalculadoraPage({ onBack }) {
           <Calculator size={110} color="white" />
         </div>
 
-        <div className="relative z-10 px-5 pt-4 pb-5">
+        <div className="relative z-10 px-5 pb-5" style={{ paddingTop: 'var(--hero-pad-top)' }}>
           <div className="flex items-center justify-between mb-4">
             <button
               onClick={onBack}
