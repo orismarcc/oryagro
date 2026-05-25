@@ -1,10 +1,49 @@
-# OryAgro — Status dos Fixes das 3 Auditorias
+# OryAgro — Status dos Fixes das Auditorias
 
-> Última atualização: 2026-05-24 (sessão 2)
+> Última atualização: 2026-05-25 (Auditoria nº 4 — Sistema completo)
 
 ---
 
-## ✅ Implementado (47 fixes)
+## 🧭 Auditoria nº 4 (2026-05-25) — Integridade, sincronização, cálculos
+
+### 13 achados corrigidos
+
+| # | Área | Problema | Correção |
+|---|---|---|---|
+| A4-01 | Cálculo DRE | Totais consolidados, TabComparativo e TabRanking **omitiam mão de obra** no lucro (5–15% inflado) | Nova função `aggregateDreEntry()` em `lib/financeiro.js`; aplicada em todas as 3 visões de FinanceiroPage |
+| A4-02 | Cálculo DRE | Dupla contagem: lotes com `mao_obra_registros` + despesas categoria='Mão de Obra' | `buildDreMap` e AnalysePage agora ignoram despesas categoria='Mão de Obra' quando há registros |
+| A4-03 | Estoque ↔ Despesa | Excluir despesa de insumo deixava o movimento de entrada órfão (saldo inflado) | Migration adiciona FK `estoque_movimentos.despesa_id`; `deleteMovimentosByDespesa()` reverte saldo via RPC |
+| A4-04 | Estoque ↔ Cronograma | Desfazer ou remover etapa do cronograma não revertia movimento de saída | FK `estoque_movimentos.cronograma_atividade_id`; `undoStep` e `removeStep` chamam `deleteMovimentoByCronogramaAtividade` |
+| A4-05 | DB | `estoque_movimentos.insumo_id` sem índice (FK frequente) | `idx_estoque_movimentos_insumo_id` |
+| A4-06 | DB | 6 CHECK constraints ausentes (quantidades e valores ≥ 0) | Adicionadas via `NOT VALID → VALIDATE`; pre-existing rows toleradas |
+| A4-07 | DB | `plantios.user_id` e `simulador_configs.user_id` permitiam NULL | Backfill + `SET NOT NULL` |
+| A4-08 | Atomicidade | `addMovimento` retornava `true` em vez do id criado — sem rastreabilidade | Retorna o id; novo RPC `delete_movimento_with_balance` (SECURITY DEFINER) |
+| A4-09 | Exclusão de lote | `deleteLoteCompleto` deixava órfãos: despesas, receitas, movimentos, ciclos_historico | Cascata estendida para 8 tabelas filhas |
+| A4-10 | Exclusão propriedade | Mesmo problema em `deletePropriedade` | Cascata estendida; trata despesas/receitas vinculadas só à propriedade |
+| A4-11 | Atomicidade vendas | Se `addParcelas` falha após `addVenda`, venda fica órfã sem parcelamento | `TabReceitas.handleAdd` faz rollback (deleteVenda) se addParcelas retornar falsy |
+| A4-12 | Conclusão de lote | `arquivarCicloLote` gravava em localStorage + Supabase (fire-and-forget) | localStorage removido; lote só vai a 'concluido' se Supabase salvou |
+| A4-13 | `syncCronogramaStatus` | Não retornava id da atividade, impedindo vincular movimentos | Retorna `data.id` para uso em `addMovimento` |
+
+### Arquivos modificados
+- `supabase/migrations/20260525_audit_round4.sql` (novo, 206 linhas)
+- `src/lib/financeiro.js` (`aggregateDreEntry`)
+- `src/hooks/useGestao.js` (`addMovimento`, `deleteMovimento`, `deleteMovimentosByDespesa`, `deleteMovimentoByCronogramaAtividade`, `arquivarCicloLote`)
+- `src/hooks/useSupabaseSync.js` (`syncCronogramaStatus`, cascade deletes)
+- `src/components/FinanceiroPage.jsx` (3 views + display mão de obra)
+- `src/components/AnalysePage.jsx` (anti-double-counting)
+- `src/components/CronogramaTimeline.jsx` (await sync + reversão)
+- `src/components/lote/TabDespesas.jsx` (vinculação + reversão)
+- `src/components/lote/TabReceitas.jsx` (rollback)
+- `src/components/LotePage.jsx` (handle null arquivar)
+
+### Achados sem correção (decisão consciente)
+- **`mao_obra_registros` legada não foi removida** — código já desambigua via filtro de categoria
+- **`movimentos_plantio`** — tabela criada por migration mas sem INSERT no código; risco mínimo
+- **Curvas de rampa hard-coded** em `AnalysePage.getRampFactor()` — fora do escopo
+
+---
+
+## ✅ Implementado (60 fixes — 47 sessão anterior + 13 A4)
 
 | ID | Descrição | Arquivo |
 |---|---|---|

@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
 import { Plus, Printer, Trash2, CheckCircle2, Circle, ChevronRight, CalendarDays, X, Layers, AlertCircle, Leaf } from 'lucide-react';
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
-import { loadEstoque, addMovimento } from '../hooks/useGestao';
+import { loadEstoque, addMovimento, deleteMovimentoByCronogramaAtividade } from '../hooks/useGestao';
 import { addEvento, syncCronogramaStatus, loadCronogramaAtividades } from '../hooks/useSupabaseSync';
 import { buildStatusFromDbRows, useCronogramaRealtime, makeStableId } from '../hooks/useCronogramaSync';
 import { logDbError } from '../lib/logger';
@@ -458,8 +458,10 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
   const confirmStep = async (id) => {
     setStatus(s => ({ ...s, [id]: { status: 'feito', data: confirmDate } }));
     // I-04 / Sugestão 1: persist step status to Supabase for multi-device sync
+    // A4-13: aguarda e captura o id da atividade para vincular ao movimento
+    let atividadeId = null;
     if (selectedLote?.id && confirming) {
-      syncCronogramaStatus(selectedLote.id, cultura.id, {
+      atividadeId = await syncCronogramaStatus(selectedLote.id, cultura.id, {
         dia:      confirming.dia,
         etapa:    confirming.etapa,
         produto:  confirming.produto  || '',
@@ -472,7 +474,8 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
       });
     }
 
-    // Debitar estoque (adubo/foliar)
+    // A4-04: Debitar estoque — vincula movimento à atividade do cronograma
+    // para permitir reversão ao desfazer a etapa.
     if (
       stockDebit.enabled &&
       stockDebit.insumoId &&
@@ -486,6 +489,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
         observacao: `Uso — ${confirming?.etapa || 'etapa cronograma'}`,
         data: confirmDate,
         plantioId: selectedLote.id,
+        cronogramaAtividadeId: atividadeId,
       });
       if (propriedadeId) loadEstoque(propriedadeId).then(setInsumos);
     }
@@ -515,13 +519,13 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
     setHarvestData({ enabled: false, qtd: '', unidade: 'kg', polpa: false, qtdPolpa: '', unidadePolpa: 'kg' });
   };
 
-  const undoStep = (id) => {
+  const undoStep = async (id) => {
     setStatus(s => { const n = { ...s }; delete n[id]; return n; });
     // I-04 / Sugestão 1: reflect undo in Supabase — find the step data from allEvents
     if (selectedLote?.id) {
       const step = allEvents.find(e => e._id === id);
       if (step) {
-        syncCronogramaStatus(selectedLote.id, cultura.id, {
+        const atividadeId = await syncCronogramaStatus(selectedLote.id, cultura.id, {
           dia:      step.dia,
           etapa:    step.etapa,
           produto:  step.produto  || '',
@@ -532,17 +536,25 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
           data:     null,
           isCustom: step._custom  || false,
         });
+        // A4-04: Reverter movimento de estoque que tenha sido criado ao confirmar esta etapa
+        if (atividadeId) {
+          const reverted = await deleteMovimentoByCronogramaAtividade(atividadeId);
+          if (reverted > 0 && propriedadeId) {
+            loadEstoque(propriedadeId).then(setInsumos);
+          }
+        }
       }
     }
   };
-  // Feature 1: permanent step removal
+  // Feature 1: permanent step removal — A4-04: também reverte movimento de estoque
   const removeStep = async (step) => {
+    const previouslyDone = status[step._id]?.status === 'feito';
     // 1. Update local state immediately
     setStatus(s => ({ ...s, [step._id]: { status: 'removida' } }));
 
     // 2. Sync to Supabase
     if (selectedLote?.id) {
-      syncCronogramaStatus(selectedLote.id, cultura.id, {
+      const atividadeId = await syncCronogramaStatus(selectedLote.id, cultura.id, {
         dia: step.dia,
         etapa: step.etapa,
         produto: step.produto || '',
@@ -553,6 +565,14 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
         data: null,
         isCustom: step._custom || false,
       });
+      // A4-04: Se a etapa já estava confirmada, reverte o movimento de estoque
+      // gerado por ela para manter o saldo do insumo coerente.
+      if (previouslyDone && atividadeId) {
+        const reverted = await deleteMovimentoByCronogramaAtividade(atividadeId);
+        if (reverted > 0 && propriedadeId) {
+          loadEstoque(propriedadeId).then(setInsumos);
+        }
+      }
     }
 
     // 3. If custom row, also remove from customRows array

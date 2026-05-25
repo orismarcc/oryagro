@@ -74,12 +74,13 @@ export async function deleteInsumo(id) {
   return !error;
 }
 
-export async function addMovimento({ insumoId, tipo, quantidade, observacao, data, plantioId }) {
+export async function addMovimento({ insumoId, tipo, quantidade, observacao, data, plantioId, despesaId, cronogramaAtividadeId }) {
   const userId = await getUserId();
   if (!userId) return null;
 
-  // 1. Inserir movimento
-  const { error: mErr } = await supabase
+  // 1. Inserir movimento — retorna a linha para que o chamador conheça o id
+  // (A4-08: rastreabilidade; A4-03/04: vinculação a despesa / atividade do cronograma)
+  const { data: movRow, error: mErr } = await supabase
     .from('estoque_movimentos')
     .insert({
       user_id: userId,
@@ -89,7 +90,11 @@ export async function addMovimento({ insumoId, tipo, quantidade, observacao, dat
       observacao: observacao || null,
       data,
       plantio_id: plantioId || null,
-    });
+      despesa_id: despesaId || null,
+      cronograma_atividade_id: cronogramaAtividadeId || null,
+    })
+    .select('id')
+    .single();
   if (mErr) { logDbError('addMovimento', mErr); return null; }
 
   // 2. Atualizar quantidade no estoque via RPC atômico (I-08: evita race condition)
@@ -116,7 +121,87 @@ export async function addMovimento({ insumoId, tipo, quantidade, observacao, dat
         .eq('id', insumoId);
     }
   }
-  return true;
+  return movRow?.id ?? true;
+}
+
+/**
+ * A4-08: Exclui um movimento e ajusta o saldo do insumo atomicamente via RPC.
+ * Fallback: read-then-update + delete (não atômico) caso a RPC não esteja disponível.
+ */
+export async function deleteMovimento(movimentoId) {
+  if (!movimentoId) return false;
+  const { data, error } = await supabase.rpc('delete_movimento_with_balance', {
+    p_movimento_id: movimentoId,
+  });
+  if (!error) return data === true;
+
+  // Fallback caso a RPC não esteja disponível (migration ainda não aplicada)
+  logDbError('deleteMovimento:rpc_fallback', error);
+  const { data: mov } = await supabase
+    .from('estoque_movimentos')
+    .select('insumo_id, tipo, quantidade')
+    .eq('id', movimentoId)
+    .single();
+  if (!mov) return false;
+  const delta = mov.tipo === 'entrada' ? -mov.quantidade : mov.quantidade;
+  const { data: current } = await supabase
+    .from('estoque_insumos')
+    .select('quantidade')
+    .eq('id', mov.insumo_id)
+    .single();
+  if (current) {
+    await supabase
+      .from('estoque_insumos')
+      .update({
+        quantidade: Math.max(0, current.quantidade + delta),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', mov.insumo_id);
+  }
+  const { error: delErr } = await supabase.from('estoque_movimentos').delete().eq('id', movimentoId);
+  return !delErr;
+}
+
+/**
+ * A4-03: Exclui todos os movimentos vinculados a uma despesa, restaurando o saldo.
+ * Usado quando a despesa correspondente é deletada.
+ */
+export async function deleteMovimentosByDespesa(despesaId) {
+  if (!despesaId) return 0;
+  const userId = await getUserId();
+  if (!userId) return 0;
+  const { data: rows } = await supabase
+    .from('estoque_movimentos')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('despesa_id', despesaId);
+  if (!rows?.length) return 0;
+  let n = 0;
+  for (const row of rows) {
+    if (await deleteMovimento(row.id)) n += 1;
+  }
+  return n;
+}
+
+/**
+ * A4-04: Exclui o movimento vinculado a uma etapa do cronograma, restaurando saldo.
+ * Usado quando o usuário desfaz a confirmação da etapa ou remove a etapa.
+ */
+export async function deleteMovimentoByCronogramaAtividade(cronogramaAtividadeId) {
+  if (!cronogramaAtividadeId) return 0;
+  const userId = await getUserId();
+  if (!userId) return 0;
+  const { data: rows } = await supabase
+    .from('estoque_movimentos')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('cronograma_atividade_id', cronogramaAtividadeId);
+  if (!rows?.length) return 0;
+  let n = 0;
+  for (const row of rows) {
+    if (await deleteMovimento(row.id)) n += 1;
+  }
+  return n;
 }
 
 export async function loadMovimentos(insumoId) {
@@ -312,8 +397,12 @@ export async function updateLoteStatus(id, status) {
 }
 
 /**
- * Archive a summary of the completed lote cycle to localStorage AND Supabase.
- * Key: ciclo_historico_${lote.id}
+ * A4-12: Archive a summary of the completed lote cycle to Supabase (ciclos_historico).
+ * Returns the in-memory cycle object on success, or null on failure.
+ *
+ * Antes era fire-and-forget + write em localStorage — a UI marcava o lote como
+ * "concluído" mesmo se o Supabase tivesse falhado. Agora propaga erro para o
+ * chamador via valor de retorno.
  */
 export async function arquivarCicloLote(lote, vendas = [], _eventos = [], movimentos = [], maoObraRegistros = []) {
   try {
@@ -342,11 +431,10 @@ export async function arquivarCicloLote(lote, vendas = [], _eventos = [], movime
       archivedAt:    new Date().toISOString(),
     };
 
-    // Persist to localStorage as fallback
-    localStorage.setItem(`ciclo_historico_${lote.id}`, JSON.stringify(ciclo));
-
-    // Also persist to Supabase (fire-and-forget; errors are logged but don't block)
-    saveCicloHistorico({
+    // Persiste no Supabase (fonte da verdade). Erro é logado e propagado para
+    // o chamador via valor de retorno — não silenciamos para evitar estado
+    // inconsistente em que UI mostra "arquivado" mas o BD não tem o registro.
+    const saved = await saveCicloHistorico({
       loteId:        lote.id,
       loteNome:      lote.nome,
       culturaId:     lote.cultura_id,
@@ -357,7 +445,11 @@ export async function arquivarCicloLote(lote, vendas = [], _eventos = [], movime
       custoInsumos,
       custoMaoObra,
       diasCicloReal,
-    }).catch(err => logDbError('arquivarCicloLote:saveCicloHistorico', err));
+    });
+    if (!saved) {
+      logDbError('arquivarCicloLote:saveCicloHistorico', new Error('saveCicloHistorico returned null'));
+      return null;
+    }
 
     return ciclo;
   } catch {

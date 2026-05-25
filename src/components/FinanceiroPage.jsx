@@ -13,7 +13,7 @@ import { CULTURAS } from '../data/culturas';
 import { loadDreRawData } from '../hooks/useFinanceiro';
 import { loadMaoObraBatch } from '../hooks/useGestao';
 import { logDbError } from '../lib/logger';
-import { calcLucroLote } from '../lib/financeiro';
+import { calcLucroLote, aggregateDreEntry } from '../lib/financeiro';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
 
 /* ─── Formatadores ────────────────────────────────────────────── */
@@ -104,12 +104,22 @@ function buildDreMap(rawData) {
     entry.movimentos.push({ ...m, custo });
   });
 
-  // Processar despesas (nova tabela centralizada)
+  // A4-02: Processar despesas (nova tabela centralizada).
+  // Evita dupla contagem: despesas com categoria='Mão de Obra' em lotes que
+  // já possuem registros em mao_obra_registros são ignoradas (a migration
+  // 20260507_despesas fez um backfill que pode coexistir com a tabela origem).
+  const lotesComMaoObraRegistros = new Set(
+    Object.entries(maoObraMap)
+      .filter(([, regs]) => Array.isArray(regs) && regs.length > 0)
+      .map(([pid]) => String(pid)),
+  );
   despesas.forEach((d) => {
     if (!d.plantio_id || !d.data) return;
     const ano = anoFromDate(d.data);
     if (!ano) return;
-    const entry = ensureEntry(String(d.plantio_id), ano);
+    const pid = String(d.plantio_id);
+    if (d.categoria === 'Mão de Obra' && lotesComMaoObraRegistros.has(pid)) return;
+    const entry = ensureEntry(pid, ano);
     entry.custo_despesas += d.valor ?? 0;
     entry.despesas.push(d);
   });
@@ -539,20 +549,24 @@ function TabDRE({ rawData, loading, propriedades }) {
       }, []);
   }, [plantios, dreMap]);
 
-  // Total consolidado do ano filtrado (ou todos)
+  // A4-01: Total consolidado do ano filtrado (ou todos) — inclui mão de obra
+  // para bater com TabDRE por-lote. Antes omitia, inflando lucro 5-15%.
   const totais = useMemo(() => {
-    let receita = 0, custo_insumos = 0, custo_despesas = 0;
+    let receita = 0, custo_insumos = 0, custo_despesas = 0, custo_mao_obra = 0;
     Object.entries(dreMap).forEach(([, byAno]) => {
       Object.entries(byAno).forEach(([ano, entry]) => {
         if (anoFiltro && Number(ano) !== Number(anoFiltro)) return;
-        receita += entry.receita;
-        custo_insumos += entry.custo_insumos;
-        custo_despesas += entry.custo_despesas;
+        const agg = aggregateDreEntry(entry);
+        receita        += agg.receita;
+        custo_insumos  += agg.custoInsumos;
+        custo_despesas += agg.custoDespesas;
+        custo_mao_obra += agg.custoMaoObra;
       });
     });
-    const lucro = receita - custo_insumos - custo_despesas;
+    const custo_total = custo_insumos + custo_despesas + custo_mao_obra;
+    const lucro = receita - custo_total;
     const margem = receita > 0 ? (lucro / receita) * 100 : null;
-    return { receita, custo_insumos, custo_despesas, lucro, margem };
+    return { receita, custo_insumos, custo_despesas, custo_mao_obra, custo_total, lucro, margem };
   }, [dreMap, anoFiltro]);
 
   // Total de despesas indiretas filtrado pelo ano selecionado
@@ -678,6 +692,12 @@ function TabDRE({ rawData, loading, propriedades }) {
               <p className="text-[10px] text-orange-600/60 font-medium">Despesas lotes</p>
               <p className="text-[15px] font-bold text-orange-600">{fmtBRL(totais.custo_despesas)}</p>
             </div>
+            {totais.custo_mao_obra > 0 && (
+              <div className="bg-amber-50 rounded-xl px-3 py-2">
+                <p className="text-[10px] text-amber-700/60 font-medium">Mão de obra</p>
+                <p className="text-[15px] font-bold text-amber-700">{fmtBRL(totais.custo_mao_obra)}</p>
+              </div>
+            )}
             <div className={`rounded-xl px-3 py-2 ${lucroLiquido >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
               <p className={`text-[10px] font-medium ${lucroLiquido >= 0 ? 'text-emerald-700/60' : 'text-red-600/60'}`}>
                 Lucro líquido
@@ -796,12 +816,19 @@ function TabComparativo({ rawData, loading, propriedades = [] }) {
       .filter((ano) => byAno[ano] && (!anoFiltroComp || ano === Number(anoFiltroComp)))
       .map((ano) => {
         const e = byAno[ano];
-        const lucro = e.receita - e.custo_insumos - e.custo_despesas;
-        const custo = e.custo_insumos + e.custo_despesas;
+        // A4-01: aggregateDreEntry inclui mão de obra (antes omitida)
+        const agg = aggregateDreEntry(e);
         const kgColhido = e.vendas.reduce((s, v) => s + (v.quantidade ?? 0), 0);
-        const custoKg = kgColhido > 0 ? custo / kgColhido : null;
-        const margem = e.receita > 0 ? (lucro / e.receita) * 100 : null;
-        return { lote, ano, receita: e.receita, custo, lucro, kgColhido, custoKg, margem };
+        const custoKg = kgColhido > 0 ? agg.custo / kgColhido : null;
+        return {
+          lote, ano,
+          receita: agg.receita,
+          custo: agg.custo,
+          lucro: agg.lucro,
+          kgColhido,
+          custoKg,
+          margem: agg.margemPct,
+        };
       });
   });
 
@@ -1013,14 +1040,14 @@ function TabRanking({ rawData, loading }) {
 
       Object.values(byAno).forEach((e) => {
         if (e.receita === 0) return; // ignorar anos sem venda
-        const custo = e.custo_insumos + e.custo_despesas;
-        const lucro = e.receita - custo;
-        entry.receita += e.receita;
-        entry.custo += custo;
-        entry.lucro += lucro;
+        // A4-01: aggregateDreEntry inclui mão de obra (antes TabRanking omitia)
+        const agg = aggregateDreEntry(e);
+        entry.receita += agg.receita;
+        entry.custo   += agg.custo;
+        entry.lucro   += agg.lucro;
         const kg = e.vendas.reduce((s, v) => s + (v.quantidade ?? 0), 0);
         entry.kgTotal += kg;
-        if (e.receita > 0) entry.margemValues.push((lucro / e.receita) * 100);
+        if (agg.receita > 0) entry.margemValues.push((agg.lucro / agg.receita) * 100);
       });
     });
 

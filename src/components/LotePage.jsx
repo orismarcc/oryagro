@@ -451,7 +451,14 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
           return;
         }
       }
-      await arquivarCicloLote(lote, vendas, despesas, movimentos, maoObraRegistros);
+      // A4-12: arquivarCicloLote agora retorna null em falha; não marcar como
+      // concluído se o histórico não foi salvo no Supabase.
+      const arquivado = await arquivarCicloLote(lote, vendas, despesas, movimentos, maoObraRegistros);
+      if (!arquivado) {
+        toast.error('Não foi possível arquivar o ciclo no histórico. O lote NÃO foi marcado como concluído. Tente novamente.');
+        setConcluindo(false);
+        return;
+      }
       await updateLoteStatus(lote.id, 'concluido');
       setConcluido(true);
     } catch {

@@ -142,29 +142,35 @@ function TabReceitas({ cultura, lote, canDelete }) {
       if (novaVenda) {
         const totalVenda = (parseFloat(form.quantidade) || 0) * (parseFloat(form.precoUnitario) || 0);
 
+        let parcelasPayload;
         if (tipoPagamento === 'parcelado') {
-          // Use editáveis (user may have changed individual values/dates)
-          const parcelas = parcelasEditaveis.map((p, i) => ({
+          parcelasPayload = parcelasEditaveis.map((p, i) => ({
             numeroParcela:  i + 1,
             valor:          parseFloat(p.valor) || 0,
             dataVencimento: p.dataVencimento,
           }));
-          await addParcelas(novaVenda.id, parcelas);
         } else if (tipoPagamento === 'avista' && avistaStatus === 'pago') {
-          await addParcelas(novaVenda.id, [{
+          parcelasPayload = [{
             numeroParcela:  1,
             valor:          totalVenda,
             dataVencimento: avistaData,
             status:         'pago',
             dataPagamento:  avistaData,
-          }]);
+          }];
         } else {
-          // à vista pendente
-          await addParcelas(novaVenda.id, [{
+          parcelasPayload = [{
             numeroParcela:  1,
             valor:          totalVenda,
             dataVencimento: avistaData,
-          }]);
+          }];
+        }
+
+        const parcelasOk = await addParcelas(novaVenda.id, parcelasPayload);
+        if (!parcelasOk) {
+          // A4-11: Rollback — parcelas não puderam ser criadas; remove a venda
+          // para não deixar um registro sem parcelamento (estado inconsistente).
+          await deleteVenda(novaVenda.id);
+          throw new Error('parcelas_failed');
         }
       }
 

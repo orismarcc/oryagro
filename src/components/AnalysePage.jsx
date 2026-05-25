@@ -1483,10 +1483,15 @@ function CustoProducaoCard({ lotes, todasVendas }) {
 
     // Labor cost data: use mao_obra_registros when records exist, fall back to mao_obra_total
     const maoObraData = maoObraPorLote[lote.id] || { registros: [], total: 0 };
+    const temMaoObraRegistros = (maoObraData.registros?.length ?? 0) > 0;
 
-    // Expenses cost: from despesas table
+    // A4-02: Expenses cost — evita dupla contagem de mão de obra (a migration
+    // 20260507 fez backfill de mao_obra_registros → despesas).
     const despesas = despesasPorLote[lote.id] || [];
-    const custoDespesas = despesas.reduce((s, d) => s + (d.valor ?? 0), 0);
+    const custoDespesas = despesas.reduce((s, d) => {
+      if (temMaoObraRegistros && d.categoria === 'Mão de Obra') return s;
+      return s + (d.valor ?? 0);
+    }, 0);
 
     // Revenue: from vendas (actual) or projected
     const vendasLote = todasVendas.filter(v => String(v.plantio_id) === String(lote.id));

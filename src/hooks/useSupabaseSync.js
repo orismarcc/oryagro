@@ -216,7 +216,9 @@ export async function loadCronogramaAtividades(plantioId) {
  * Used when the user marks a step as done.
  */
 export async function syncCronogramaStatus(plantioId, culturaId, atividade) {
-  const { error } = await supabase
+  // A4-13: retorna o id da atividade upserted para permitir vinculação com
+  // estoque_movimentos (necessário para reverter saídas ao desfazer etapas).
+  const { data, error } = await supabase
     .from('cronograma_atividades')
     .upsert(
       {
@@ -237,8 +239,11 @@ export async function syncCronogramaStatus(plantioId, culturaId, atividade) {
       // True upsert: update the existing row if one already exists for this
       // (plantio_id, etapa, is_custom) triplet instead of inserting a duplicate.
       { onConflict: 'plantio_id,etapa,is_custom' },
-    );
-  if (error) logDbError('syncCronogramaStatus', error);
+    )
+    .select('id')
+    .single();
+  if (error) { logDbError('syncCronogramaStatus', error); return null; }
+  return data?.id ?? null;
 }
 
 // ── Propriedades ──────────────────────────────────────────────────────────────
@@ -334,12 +339,17 @@ export async function deletePropriedade(id) {
     const plantioIds = (plantiosRows || []).map(r => r.id);
 
     if (plantioIds.length > 0) {
-      // 2. Delete all child data for each plantio — collect errors
+      // 2. Delete all child data for each plantio — collect errors.
+      // A4-10: cascata estendida para evitar órfãos (FKs eram SET NULL)
       const childDeletes = [
         supabase.from('cronograma_atividades').delete().in('plantio_id', plantioIds),
         supabase.from('plantio_eventos').delete().in('plantio_id', plantioIds),
         supabase.from('mao_obra_registros').delete().in('plantio_id', plantioIds),
         supabase.from('diario_campo').delete().in('plantio_id', plantioIds),
+        supabase.from('despesas').delete().in('plantio_id', plantioIds),
+        supabase.from('receitas').delete().in('plantio_id', plantioIds),
+        supabase.from('estoque_movimentos').delete().in('plantio_id', plantioIds),
+        supabase.from('ciclos_historico').delete().in('lote_id', plantioIds),
       ];
       const results = await Promise.all(childDeletes);
       const childErrors = results.filter(r => r.error).map(r => r.error);
@@ -347,7 +357,8 @@ export async function deletePropriedade(id) {
         childErrors.forEach(e => logDbError('deletePropriedade:childDelete', e));
         return false;
       }
-      steps.push('cronograma_atividades', 'plantio_eventos', 'mao_obra_registros', 'diario_campo');
+      steps.push('cronograma_atividades', 'plantio_eventos', 'mao_obra_registros',
+                 'diario_campo', 'despesas', 'receitas', 'estoque_movimentos', 'ciclos_historico');
 
       // Delete venda_parcelas via vendas (FK: venda_parcelas → vendas, not covered by ON DELETE CASCADE)
       const { data: vendasRows, error: vendasErr } = await supabase
@@ -370,6 +381,12 @@ export async function deletePropriedade(id) {
       steps.push('vendas', 'plantios');
     }
 
+    // A4-10: Despesas/receitas registradas diretamente na propriedade (sem lote)
+    await Promise.all([
+      supabase.from('despesas').delete().eq('propriedade_id', id),
+      supabase.from('receitas').delete().eq('propriedade_id', id),
+    ]);
+
     // 4. Delete property (estoque cascade-deleted by FK)
     const { error } = await supabase.from('propriedades').delete().eq('id', id);
     if (error) { logDbError('deletePropriedade:propriedade', error); return false; }
@@ -387,12 +404,17 @@ export async function deletePropriedade(id) {
 export async function deleteLoteCompleto(id) {
   const steps = [];
   try {
-    // Delete all child tables in parallel (safe: none depend on each other)
+    // Delete all child tables in parallel (safe: none depend on each other).
+    // A4-09: cascata estendida para evitar órfãos (FKs eram SET NULL)
     const childDeletes = [
       supabase.from('cronograma_atividades').delete().eq('plantio_id', id),
       supabase.from('plantio_eventos').delete().eq('plantio_id', id),
       supabase.from('mao_obra_registros').delete().eq('plantio_id', id),
       supabase.from('diario_campo').delete().eq('plantio_id', id),
+      supabase.from('despesas').delete().eq('plantio_id', id),
+      supabase.from('receitas').delete().eq('plantio_id', id),
+      supabase.from('estoque_movimentos').delete().eq('plantio_id', id),
+      supabase.from('ciclos_historico').delete().eq('lote_id', id),
     ];
     const results = await Promise.all(childDeletes);
     const childErrors = results.filter(r => r.error).map(r => r.error);
@@ -400,7 +422,8 @@ export async function deleteLoteCompleto(id) {
       childErrors.forEach(e => logDbError('deleteLoteCompleto:childDelete', e));
       return false;
     }
-    steps.push('cronograma_atividades', 'plantio_eventos', 'mao_obra_registros', 'diario_campo');
+    steps.push('cronograma_atividades', 'plantio_eventos', 'mao_obra_registros',
+               'diario_campo', 'despesas', 'receitas', 'estoque_movimentos', 'ciclos_historico');
 
     // Delete venda_parcelas antes das vendas (FK cascade não cobre esse caso)
     const { data: vendasRows, error: vendasErr } = await supabase

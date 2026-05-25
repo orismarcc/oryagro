@@ -10,7 +10,7 @@ import {
   getUnidade,
 } from '../../hooks/useDespesas';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
-import { upsertInsumo, addMovimento } from '../../hooks/useGestao';
+import { upsertInsumo, addMovimento, deleteMovimentosByDespesa } from '../../hooks/useGestao';
 import { today, formatDatePtBR, fmtBRL, fmtNumber } from './shared';
 
 function TabDespesas({ lote, cor, canDelete }) {
@@ -87,7 +87,7 @@ function TabDespesas({ lote, cor, canDelete }) {
     if (!form.data || !form.valor || parseFloat(form.valor) <= 0) return;
     setSaving(true);
     try {
-      await addDespesa({
+      const despesaRow = await addDespesa({
         plantioId:     lote.id,
         propriedadeId: lote.propriedade_id || null,
         categoria:     form.categoria,
@@ -101,8 +101,8 @@ function TabDespesas({ lote, cor, canDelete }) {
         observacao:    form.observacao   || null,
       });
 
-      // ── Estoque integration ─────────────────────────────────────────────────
-      if (estoqueForm.enabled && estoqueForm.nomeInsumo.trim() && lote.propriedade_id) {
+      // A4-03: Estoque integration — movimento fica vinculado à despesa via despesa_id
+      if (estoqueForm.enabled && estoqueForm.nomeInsumo.trim() && lote.propriedade_id && despesaRow?.id) {
         const qtd = parseFloat(form.quantidade) || 0;
         const insumo = await upsertInsumo({
           nome:              estoqueForm.nomeInsumo.trim(),
@@ -120,6 +120,7 @@ function TabDespesas({ lote, cor, canDelete }) {
             observacao:  `Despesa: ${form.descricao || form.subcategoria || form.categoria}`,
             data:        form.data,
             plantioId:   lote.id,
+            despesaId:   despesaRow.id,
           });
         }
       }
@@ -147,9 +148,14 @@ function TabDespesas({ lote, cor, canDelete }) {
 
   const handleDelete = async (id) => {
     try {
+      // A4-03: Reverte primeiro o estoque (a FK é ON DELETE SET NULL, então
+      // depois da despesa sumir não saberíamos mais a vinculação)
+      await deleteMovimentosByDespesa(id);
       await deleteDespesa(id);
       setRegistros(prev => prev.filter(r => r.id !== id));
-    } catch {}
+    } catch {
+      toast.error('Erro ao excluir despesa.');
+    }
     setConfirmDeleteId(null);
   };
 

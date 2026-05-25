@@ -35,3 +35,22 @@ export function calcLucroLote({ lote, custoInsumos, custoDespesas, maoObraData, 
 
   return { custoInsumos, custoDespesas, maoObra, maoObraSource, custoTotal, receita, lucro, margemPct };
 }
+
+/**
+ * Soma os componentes de custo de uma entry do dreMap (FinanceiroPage),
+ * incluindo mão de obra (que estava sendo omitida em TabComparativo/TabRanking).
+ * Uso: const { custo, lucro, margemPct } = aggregateDreEntry(entry).
+ *
+ * A4-01: garante que TabDRE totais, TabComparativo e TabRanking usem
+ * a mesma fórmula que TabDRE por-lote (que já incluía mão de obra).
+ */
+export function aggregateDreEntry(entry) {
+  const custoInsumos  = entry?.custo_insumos  ?? 0;
+  const custoDespesas = entry?.custo_despesas ?? 0;
+  const custoMaoObra  = entry?.custo_mao_obra ?? 0;
+  const receita       = entry?.receita        ?? 0;
+  const custo         = custoInsumos + custoDespesas + custoMaoObra;
+  const lucro         = receita - custo;
+  const margemPct     = receita > 0 ? (lucro / receita) * 100 : null;
+  return { custoInsumos, custoDespesas, custoMaoObra, custo, receita, lucro, margemPct };
+}
