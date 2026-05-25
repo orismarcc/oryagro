@@ -1013,11 +1013,11 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                         {ev._custom && removingId !== ev._id && (
                           <motion.button
                             whileTap={{ scale: 0.9 }}
-                            className="p-1 rounded-lg text-muted-foreground hover:text-blue-500 transition-all opacity-0 group-hover:opacity-100"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-500 active:text-blue-600 transition-colors"
                             onClick={e => { e.stopPropagation(); openEdit(ev); }}
                             aria-label="Editar etapa"
                           >
-                            <Pencil size={12} />
+                            <Pencil size={13} />
                           </motion.button>
                         )}
                         {/* Feature 1: inline remove confirm (shown for ALL steps) */}
@@ -1052,10 +1052,11 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                             <motion.button
                               key="trash-btn"
                               whileTap={{ scale: 0.9 }}
-                              className="p-1 rounded-lg text-muted-foreground hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 active:text-red-600 transition-colors"
                               onClick={e => { e.stopPropagation(); setRemovingId(ev._id); }}
+                              aria-label="Excluir etapa"
                             >
-                              <Trash2 size={12} />
+                              <Trash2 size={13} />
                             </motion.button>
                           )}
                         </AnimatePresence>

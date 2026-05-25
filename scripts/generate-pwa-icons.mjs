@@ -95,15 +95,4 @@ console.log('→ Gerando "maskable"…');
 await makeMaskable({ size: 192, name: 'icon-192-maskable.png' });
 await makeMaskable({ size: 512, name: 'icon-512-maskable.png' });
 
-// Também gera um SVG favicon de fallback simples (caso o navegador prefira SVG sobre PNG)
-console.log('→ Atualizando favicon.svg…');
-const faviconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="18" fill="#0e4b1c"/>
-  <text x="50" y="64" font-family="DM Sans, Arial, sans-serif" font-size="42" font-weight="800" fill="#ffffff" text-anchor="middle">O</text>
-  <circle cx="68" cy="38" r="6" fill="#65d040"/>
-</svg>`;
-const { writeFile } = await import('node:fs/promises');
-await writeFile(path.join(ROOT, 'public/favicon.svg'), faviconSvg);
-console.log(`  ✓ public/favicon.svg`);
-
-console.log('✓ Pronto.');
+console.log('✓ Pronto. (favicon usa /icons/favicon-32.png — mesma logo)');
