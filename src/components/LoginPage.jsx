@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
-import { Sprout, Mail, Lock, AlertCircle, CheckCircle2, UserPlus, LogIn, Eye, EyeOff, User } from 'lucide-react';
+import { Mail, Lock, AlertCircle, CheckCircle2, UserPlus, LogIn, Eye, EyeOff, User } from 'lucide-react';
+import Logo from './Logo';
 
 export default function LoginPage() {
   const [mode, setMode]           = useState('login'); // 'login' | 'signup'
@@ -98,9 +99,8 @@ export default function LoginPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           >
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 border"
-              style={{ background: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.28)' }}>
-              <Sprout size={28} color="white" />
+            <div className="inline-flex mb-4">
+              <Logo size={72} style={{ borderRadius: 16, boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }} />
             </div>
             <h1 className="font-display text-white text-3xl font-extrabold leading-tight">OryAgro</h1>
             <p className="text-white/55 text-sm mt-1">Guia Hortícola — Mato Grosso</p>

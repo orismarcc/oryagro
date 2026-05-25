@@ -6,6 +6,7 @@ import { loadEstoque } from '../hooks/useGestao';
 import { useCronogramaStatusBatch, makeStableId } from '../hooks/useCronogramaSync';
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
 import { Plus, CalendarDays, Sprout, CheckCircle2, Layers, AlertCircle, Clock, ArrowRight, Leaf, Building2, ChevronRight, AlertTriangle } from 'lucide-react';
+import Logo from './Logo';
 
 
 
@@ -464,10 +465,7 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
         <div className="relative z-10 px-5 pb-6" style={{ paddingTop: 'var(--hero-pad-top)' }}>
           <div className="flex items-center gap-3 mb-4 pr-24">
             {/* pr-24 reserva espaço à direita para os botões flutuantes */}
-            <div className="h-10 w-10 rounded-xl flex items-center justify-center border flex-shrink-0"
-              style={{ background: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.28)' }}>
-              <Sprout size={18} color="white" />
-            </div>
+            <Logo size={40} className="flex-shrink-0" style={{ borderRadius: 10 }} />
             <div className="min-w-0">
               <p className="text-white/60 text-xs font-medium truncate">
                 {userName ? `Olá, ${userName}` : 'Guia Hortícola'}

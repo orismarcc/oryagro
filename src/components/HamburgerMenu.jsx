@@ -4,6 +4,7 @@ import {
   Menu, X, Home, CalendarDays, BarChart2, Building2,
   Package2, Calculator, Settings, DollarSign, Users,
 } from 'lucide-react';
+import Logo from './Logo';
 
 const MENU_ITEMS = [
   { id: 'dashboard',     label: 'Dashboard',              icon: Home },
@@ -89,12 +90,7 @@ export default function HamburgerMenu({ currentView, onNavigate, hasPropriedade 
                 style={{ borderBottom: '1px solid hsl(214 20% 92%)' }}
               >
                 <div className="flex items-center gap-2.5">
-                  <div
-                    className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-[13px] font-black"
-                    style={{ background: GREEN }}
-                  >
-                    🌱
-                  </div>
+                  <Logo size={32} style={{ borderRadius: 8 }} />
                   <span className="font-display text-[16px] font-extrabold text-foreground">OryAgro</span>
                 </div>
                 <motion.button
