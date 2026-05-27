@@ -16,7 +16,7 @@ const securityHeaders = [
   // Controla informações de referrer
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   // Desabilita funcionalidades desnecessárias do browser
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(self), payment=()' },
   // Content Security Policy
   // - default-src 'self': bloqueia tudo por padrão
   // - connect-src: permite chamadas ao Supabase e OpenWeather API
@@ -28,10 +28,10 @@ const securityHeaders = [
     key: 'Content-Security-Policy',
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.open-meteo.com https://geocoding-api.open-meteo.com",
-      "img-src 'self' data: blob:",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.open-meteo.com https://geocoding-api.open-meteo.com https://fonts.googleapis.com",
+      "img-src 'self' data: blob: https://*.supabase.co",
       "font-src 'self' https://fonts.gstatic.com data:",
       "worker-src 'self' blob:",
       "manifest-src 'self'",

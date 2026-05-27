@@ -41,11 +41,21 @@ export function weatherAlert(forecast) {
   return null;
 }
 
+// Polyfill para AbortSignal.timeout (Chrome < 103, Safari < 15.4, Android WebView antigo)
+function timeoutSignal(ms) {
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(ms);
+  }
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
+
 // ── Geocodifica "Cidade, UF" → { lat, lon } usando Open-Meteo Geocoding ──────
 async function geocodeCity(cidade, estado) {
   const query = estado ? `${cidade}, ${estado}` : cidade;
   const url   = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cidade)}&count=5&language=pt&format=json`;
-  const res   = await fetch(url, { signal: AbortSignal.timeout(5000) });
+  const res   = await fetch(url, { signal: timeoutSignal(5000) });
   if (!res.ok) throw new Error('geocode failed');
   const json = await res.json();
   if (!json.results?.length) throw new Error('city not found');
@@ -68,7 +78,7 @@ async function fetchForecast(lat, lon, locName) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
     `&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum` +
     `&timezone=America%2FSao_Paulo&forecast_days=5`;
-  const res  = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  const res  = await fetch(url, { signal: timeoutSignal(8000) });
   if (!res.ok) throw new Error('weather fetch failed');
   const json = await res.json();
   const d    = json.daily;
