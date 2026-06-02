@@ -10,7 +10,7 @@ import { Plus, Printer, Trash2, Pencil, CheckCircle2, Circle, ChevronRight, Cale
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
 import { loadEstoque, addMovimento, deleteMovimentoByCronogramaAtividade } from '../hooks/useGestao';
 import { addEvento, syncCronogramaStatus, loadCronogramaAtividades } from '../hooks/useSupabaseSync';
-import { buildStatusFromDbRows, useCronogramaRealtime, makeStableId } from '../hooks/useCronogramaSync';
+import { buildStatusFromDbRows, useCronogramaRealtime, makeStableId, makeCustomId } from '../hooks/useCronogramaSync';
 import { logDbError } from '../lib/logger';
 
 const TIPO_META = {
@@ -79,15 +79,7 @@ function migrateLegacyStatus(stored, vivSteps, baseSteps) {
   return stored;
 }
 
-// Op#11: stable hash for custom activity IDs — avoids index-based IDs that shift on reorder/delete
-function hashStr(s) {
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
-  return (h >>> 0).toString(36);
-}
-function makeCustomId(etapa, dia) {
-  return 'custom_' + hashStr(String(etapa || '') + '_' + String(dia ?? 0));
-}
+// makeCustomId is now imported from useCronogramaSync (shared with buildStatusFromDbRows)
 
 // Extract the first numeric value from a dose string ("500 mL" → "500", "2,5 L" → "2.5")
 function parseNumericDose(doseStr) {
@@ -576,10 +568,13 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
       }
     }
 
-    // 3. If custom row, also remove from customRows array
+    // 3. If custom row, also remove from customRows array (match by stable ID)
     if (step._custom) {
-      const idx = parseInt(step._id.replace('custom_', ''));
-      setCustomRows(rows => rows.filter((_, i) => i !== idx));
+      const targetId = step._id;
+      setCustomRows(rows => rows.filter(r => {
+        const rId = r._stableId || makeCustomId(r.etapa, r.dia);
+        return rId !== targetId;
+      }));
     }
 
     setRemovingId(null);

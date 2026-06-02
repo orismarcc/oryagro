@@ -17,7 +17,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { logDbError } from '../lib/logger';
 
-// ── Shared ID builder ────────────────────────────────────────────────────────
+// ── Shared ID builders ───────────────────────────────────────────────────────
 /** MUST stay in sync with CronogramaTimeline's makeStableId. */
 export function makeStableId(prefix, etapa) {
   const slug = etapa
@@ -26,6 +26,19 @@ export function makeStableId(prefix, etapa) {
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_|_$/g, '');
   return `${prefix}_${slug}`;
+}
+
+/**
+ * Stable ID for custom rows — hash of etapa+dia.
+ * MUST stay in sync with CronogramaTimeline's makeCustomId.
+ */
+function _hashStr(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
+  return (h >>> 0).toString(36);
+}
+export function makeCustomId(etapa, dia) {
+  return 'custom_' + _hashStr(String(etapa || '') + '_' + String(dia ?? 0));
 }
 
 // ── Row → state converter ─────────────────────────────────────────────────────
@@ -50,15 +63,18 @@ export function buildStatusFromDbRows(rows = [], vivSteps = []) {
     statusMap[_id] = { status: row.status, data: row.data_execucao };
   });
 
-  customDbRows.forEach((row, i) => {
-    statusMap[`custom_${i}`] = { status: row.status, data: row.data_execucao };
+  customDbRows.forEach((row) => {
+    // Use stable hash-based ID so indices don't shift when new rows are inserted
+    const stableId = makeCustomId(row.etapa, row.dia_previsto);
+    statusMap[stableId] = { status: row.status, data: row.data_execucao };
     customRows.push({
-      dia:     row.dia_previsto,
-      etapa:   row.etapa,
-      produto: row.produto || '',
-      dose:    row.dose    || '',
-      forma:   row.forma_aplicacao || '',
-      tipo:    row.tipo    || 'manejo',
+      dia:       row.dia_previsto,
+      etapa:     row.etapa,
+      produto:   row.produto || '',
+      dose:      row.dose    || '',
+      forma:     row.forma_aplicacao || '',
+      tipo:      row.tipo    || 'manejo',
+      _stableId: stableId,           // carry the ID so CronogramaTimeline uses it directly
     });
   });
 

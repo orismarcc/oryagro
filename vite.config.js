@@ -60,6 +60,11 @@ export default defineConfig({
         'icons/*.png',
       ],
       workbox: {
+        // Garante que o novo SW assuma controle imediatamente sem esperar
+        // o usuário fechar todas as abas — essencial para forçar atualização
+        // de versões quebradas que estejam em cache.
+        clientsClaim: true,
+        skipWaiting: true,
         // Permite navegação SPA estando offline (fallback para index.html)
         navigateFallback: '/index.html',
         // Ignora rotas internas do Supabase / API externas — não devem ser cacheadas
