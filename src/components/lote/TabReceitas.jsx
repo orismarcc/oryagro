@@ -10,6 +10,7 @@ import {
 } from '../../hooks/useGestao';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { loadCompradores, addParcelas } from '../../hooks/useCompradores';
+import { supabase } from '../../lib/supabase';
 import { today, formatDatePtBR, fmtBRL, fmtNumber } from './shared';
 
 const DESTINO_OPTIONS = [
@@ -200,6 +201,8 @@ function TabReceitas({ cultura, lote, canDelete }) {
     if (confirmDeleteId === id) {
       // Second click — confirm
       try {
+        // Delete parcelas first to avoid orphaned payment records
+        await supabase.from('venda_parcelas').delete().eq('venda_id', id);
         await deleteVenda(id);
         setVendas(prev => prev.filter(v => v.id !== id));
       } catch {}

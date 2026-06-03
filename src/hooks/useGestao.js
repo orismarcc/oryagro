@@ -415,7 +415,7 @@ export async function arquivarCicloLote(lote, vendas = [], _eventos = [], movime
       : null;
 
     const custoInsumos  = movimentos.reduce((s, m) => s + (m.quantidade * (m.insumo?.preco_unitario ?? 0)), 0);
-    const custoMaoObra  = maoObraRegistros.reduce((s, r) => s + (r.valor ?? 0), 0);
+    const custoMaoObra  = maoObraRegistros.reduce((s, r) => s + ((r.horas ?? 0) * (r.valor_hora ?? 0)), 0);
 
     const ciclo = {
       loteId:        lote.id,

@@ -533,7 +533,7 @@ function TabDRE({ rawData, loading, propriedades }) {
         }
         return acc;
       }, []);
-  }, [plantios, dreMap]);
+  }, [plantios, dreMap, propriedades]);
 
   const culturasDisponiveis = useMemo(() => {
     const seen = new Set();

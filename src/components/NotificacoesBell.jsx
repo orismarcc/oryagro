@@ -118,15 +118,33 @@ export default function NotificacoesBell({
 
         const dataBase = new Date(lote.data_plantio + 'T12:00:00');
 
+        // Aplica a mesma escala de dias que o CronogramaTimeline usa
+        // para que as datas de notificação batam com o cronograma exibido
+        const metodoObj = (lote.metodo_propagacao && cultura.metodosPropagacao)
+          ? (cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao) ?? null)
+          : null;
+        const diasViveiroAtual = metodoObj ? (metodoObj.diasViveiro || 0) : 0;
+        const diasPrimeiraProducaoAtual = metodoObj?.lifecycle?.diasPrimeiraProducao ?? null;
+        const maxBaseDia = cultura.cronograma.length > 0
+          ? Math.max(...cultura.cronograma.map(e => e.dia))
+          : 0;
+        const scaleBaseDia = (originalDia) => {
+          if (!diasPrimeiraProducaoAtual || maxBaseDia === 0) return originalDia + diasViveiroAtual;
+          return Math.round(
+            diasViveiroAtual + (originalDia / maxBaseDia) * (diasPrimeiraProducaoAtual - diasViveiroAtual)
+          );
+        };
+
         for (const etapa of cultura.cronograma) {
           const _id = makeStableId('default', etapa.etapa);
           if (concluidas.has(_id) || removidas.has(_id)) continue;
 
-          const dataEtapa = addDays(dataBase, etapa.dia);
+          const diaEscalado = scaleBaseDia(etapa.dia);
+          const dataEtapa = addDays(dataBase, diaEscalado);
           const diasRestantes = diffDays(dataEtapa, hoje);
 
           if (diasRestantes >= 0 && diasRestantes <= 7) {
-            resultado.push({ lote, etapa, dataEtapa, diasRestantes });
+            resultado.push({ lote, etapa: { ...etapa, dia: diaEscalado }, dataEtapa, diasRestantes });
           }
         }
       }));

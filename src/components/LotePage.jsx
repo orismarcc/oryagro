@@ -665,7 +665,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
           style={{ willChange: 'opacity, transform' }}
         >
           {tab === 'cronograma' && (
-            <CronogramaTimeline cultura={cultura} lotes={[lote]} />
+            <CronogramaTimeline cultura={cultura} lotes={[lote]} propriedadeId={lote.propriedade_id ?? null} />
           )}
           {tab === 'colheita' && (
             <TabColheita cultura={cultura} lote={lote} />

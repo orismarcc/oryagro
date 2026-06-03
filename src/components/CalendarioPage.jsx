@@ -6,7 +6,7 @@ import { loadTodosLotes } from '../hooks/useSupabaseSync';
 import { cacheGet, cacheSet } from '../hooks/useOfflineCache';
 import { supabase } from '../lib/supabase';
 import { updateParcela } from '../hooks/useCompradores';
-import { useCronogramaStatusBatch, makeStableId } from '../hooks/useCronogramaSync';
+import { useCronogramaStatusBatch, makeStableId, makeCustomId } from '../hooks/useCronogramaSync';
 
 const DIAS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -179,7 +179,8 @@ function getAtividadesLote(lote, cultura, statusMap = {}, customRowsForLote = []
   // 3. Custom rows — from Supabase (passed in), NOT from localStorage
   const customRows = customRowsForLote || [];
   customRows.forEach((row, i) => {
-    const stepKeyCustom = `custom_${i}`;
+    // Use hash-based ID (matches CronogramaTimeline and buildStatusFromDbRows)
+    const stepKeyCustom = row._stableId || makeCustomId(row.etapa, row.dia);
     const stepStatus = resolveStepStatus(statusMap, stepKeyCustom);
     if (stepStatus?.status === 'removida') return;
 
@@ -195,7 +196,7 @@ function getAtividadesLote(lote, cultura, statusMap = {}, customRowsForLote = []
     if (!dataStr) return;
     const doneData = (stepStatus?.status === 'feito' && stepStatus?.data) ? stepStatus.data : null;
     activities.push({
-      id: `${lote.id}_custom_${i}`,
+      id: `${lote.id}_${stepKeyCustom}`,
       loteId: lote.id,
       loteNome: lote.nome,
       culturaId: cultura.id,

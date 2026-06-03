@@ -53,7 +53,9 @@ function LoteCard({ lote, onSelect, index, doneStatus = {} }) {
   if (!cultura) return null;
 
   const cor = cultura.cor;
-  const lc  = resolveLifecycle(lote, cultura);
+  let lc;
+  try { lc = resolveLifecycle(lote, cultura); }
+  catch { return null; } // lote com data_plantio inválida não quebra o Dashboard
   const { diasDecorridos, progresso, prontoParaColheita, diasParaColheita,
           faseAtual, faseIndex, dataPrimeiraProducao } = lc;
 

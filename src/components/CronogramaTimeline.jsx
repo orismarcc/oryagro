@@ -334,13 +334,13 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
   // ── Dose scaling factor ──
   const baseArea = isCampo
     ? (cultura.area?.padrao || 1)
-    : (cultura.canteiro.comprimento * cultura.canteiro.largura);
+    : ((cultura.canteiro?.comprimento ?? 1) * (cultura.canteiro?.largura ?? 1));
 
   const loteArea = selectedLote
     ? (isCampo
         ? parseFloat(selectedLote.area_ha) || 1
-        : (parseFloat(selectedLote.comprimento_m) || cultura.canteiro.comprimento) *
-          (parseFloat(selectedLote.largura_m) || cultura.canteiro.largura))
+        : (parseFloat(selectedLote.comprimento_m) || (cultura.canteiro?.comprimento ?? 1)) *
+          (parseFloat(selectedLote.largura_m) || (cultura.canteiro?.largura ?? 1)))
     : baseArea;
 
   const fator = loteArea / baseArea;

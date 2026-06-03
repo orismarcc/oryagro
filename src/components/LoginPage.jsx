@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
-import { Mail, Lock, AlertCircle, CheckCircle2, UserPlus, LogIn, Eye, EyeOff, User } from 'lucide-react';
+import { Mail, Lock, AlertCircle, CheckCircle2, UserPlus, LogIn, Eye, EyeOff, User, Sprout } from 'lucide-react';
 import Logo from './Logo';
 
 export default function LoginPage() {
