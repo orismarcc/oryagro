@@ -19,7 +19,7 @@ import {
 } from '../hooks/useGestao';
 import { loadDespesasByLote } from '../hooks/useDespesas';
 import { can, FARM_ACTIONS } from '../lib/permissions';
-import { makeStableId } from '../hooks/useCronogramaSync';
+import { makeStableId, makeCustomId } from '../hooks/useCronogramaSync';
 import { formatDatePtBR, fmtNumber, today, safeLS } from './lote/shared';
 import TabInsumos from './lote/TabInsumos';
 import TabDiario from './lote/TabDiario';
@@ -141,10 +141,13 @@ function TabColheita({ cultura, lote }) {
           statusMap[makeStableId(isViveiro ? 'viveiro' : 'default', row.etapa)] =
             { status: row.status, data: row.data_execucao };
         });
-        customDb.forEach((row, i) => {
-          statusMap[`custom_${i}`] = { status: row.status, data: row.data_execucao };
+        customDb.forEach((row) => {
+          // Use hash-based ID (must match CronogramaTimeline / buildStatusFromDbRows)
+          const cid = makeCustomId(row.etapa, row.dia_previsto);
+          statusMap[cid] = { status: row.status, data: row.data_execucao };
           custom.push({ dia: row.dia_previsto, etapa: row.etapa, produto: row.produto || '',
-            dose: row.dose || '', forma: row.forma_aplicacao || '', tipo: row.tipo || 'manejo' });
+            dose: row.dose || '', forma: row.forma_aplicacao || '', tipo: row.tipo || 'manejo',
+            _stableId: cid });
         });
         setDoneStatus(statusMap);
         if (custom.length) setCustomRows(custom);
@@ -190,9 +193,10 @@ function TabColheita({ cultura, lote }) {
       if (!isNaN(diaNum)) dataPlanned = isoLocal(addDaysLocal(plantioDate, diaNum + shift));
     }
     if (!dataPlanned) return;
-    const st = doneStatus[`custom_${i}`];
+    const cid = row._stableId || makeCustomId(row.etapa, row.dia);
+    const st = doneStatus[cid];
     colheitas.push({
-      id:         `custom_${i}`,
+      id:         cid,
       etapa:      row.etapa || 'Colheita',
       dia:        row.dia,
       dataPlanned,
@@ -446,26 +450,22 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
         const ok = window.confirm(
           'Este lote não possui receitas registradas. Deseja concluir mesmo assim?'
         );
-        if (!ok) {
-          setConcluindo(false);
-          return;
-        }
+        if (!ok) return; // finally will reset setConcluindo
       }
-      // A4-12: arquivarCicloLote agora retorna null em falha; não marcar como
-      // concluído se o histórico não foi salvo no Supabase.
+      // A4-12: arquivarCicloLote retorna null em falha; não marcar como concluído
+      // se o histórico não foi salvo no Supabase.
       const arquivado = await arquivarCicloLote(lote, vendas, despesas, movimentos, maoObraRegistros);
       if (!arquivado) {
         toast.error('Não foi possível arquivar o ciclo no histórico. O lote NÃO foi marcado como concluído. Tente novamente.');
-        setConcluindo(false);
-        return;
+        return; // finally resets setConcluindo
       }
+      // updateLoteStatus inside try so any throw is caught
       await updateLoteStatus(lote.id, 'concluido');
       setConcluido(true);
     } catch {
       toast.error('Erro ao concluir lote. O ciclo pode não ter sido arquivado. Tente novamente.');
-      setConcluindo(false);
-      return;
     } finally {
+      // Always reset spinner, whether success, early return, or error
       setConcluindo(false);
     }
   };

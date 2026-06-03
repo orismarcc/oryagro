@@ -54,7 +54,7 @@ function PropriedadeForm({ initial, onSave, onCancel, saving }) {
   );
 }
 
-export default function PropriedadesPage({ onBack, onSelectPropriedade }) {
+export default function PropriedadesPage({ onBack, onSelectPropriedade, onRefreshNeeded }) {
   const { getUserRole, refreshMemberships } = useFarm();
 
   const [propriedades, setPropriedades] = useState([]);
@@ -84,6 +84,7 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade }) {
       setLoteCounts(prev => ({ ...prev, [row.id]: 0 }));
       setShowForm(false);
       await refreshMemberships();
+      onRefreshNeeded?.();
     } else {
       setCreateError('Não foi possível criar a propriedade. Tente novamente.');
     }
@@ -104,6 +105,7 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade }) {
     if (ok) {
       setPropriedades(prev => prev.filter(p => p.id !== id));
       await refreshMemberships();
+      onRefreshNeeded?.();
     }
     setDeletingId(null);
   };

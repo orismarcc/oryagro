@@ -63,8 +63,9 @@ function BottomSheet({ onClose, children, maxHeight = '92vh' }) {
 
 // ── Modal: movimentação ──────────────────────────────────────────────────────
 
-function MovModal({ insumo, propriedadeId, onClose, onMoved }) {
-  const [tipo, setTipo]     = useState('entrada');
+function MovModal({ insumo, propriedadeId, onClose, onMoved, canEdit = false }) {
+  // Técnicos só podem registrar saídas (uso); entradas são exclusivas de admin/dono
+  const [tipo, setTipo]     = useState(canEdit ? 'entrada' : 'saida');
   const [qty, setQty]       = useState('');
   const [obs, setObs]       = useState('');
   const [data, setData]     = useState(() => new Date().toISOString().split('T')[0]);
@@ -123,12 +124,12 @@ function MovModal({ insumo, propriedadeId, onClose, onMoved }) {
 
       <div className="px-5 py-4 space-y-4" style={{ paddingBottom: SAFE_BOTTOM }}>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {/* Tipo */}
-          <div className="grid grid-cols-2 gap-2">
+          {/* Tipo — entrada apenas para admin/dono */}
+          <div className={canEdit ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1 gap-2'}>
             {[
-              { k: 'entrada', l: 'Entrada (compra)', Icon: TrendingUp  },
+              canEdit ? { k: 'entrada', l: 'Entrada (compra)', Icon: TrendingUp  } : null,
               { k: 'saida',   l: 'Saída (uso)',      Icon: TrendingDown },
-            ].map(({ k, l, Icon }) => (
+            ].filter(Boolean).map(({ k, l, Icon }) => (
               <button key={k} type="button" onClick={() => setTipo(k)}
                 className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-[12px] font-bold transition-all"
                 style={tipo === k
@@ -611,6 +612,7 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
             propriedadeId={propriedadeId}
             onClose={() => setMovModal(null)}
             onMoved={reload}
+            canEdit={canEdit}
           />
         )}
         {addModal && (

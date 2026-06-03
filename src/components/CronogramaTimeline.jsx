@@ -305,8 +305,11 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
   }, [confirming]);
 
   // ── Realtime: merge remote changes from other devices/users ─────────────────
+  // Use a ref so the callback always captures the latest storageKey/customKey
+  // without requiring the subscription to be recreated on every render.
   const vivStepsForRealtime = (metodoObj?.etapasViveiro ?? []);
-  useCronogramaRealtime(selectedLote?.id, (dbRows) => {
+  const realtimeCallbackRef = React.useRef(null);
+  realtimeCallbackRef.current = (dbRows) => {
     const { statusMap: dbStatus, customRows: dbCustomRows } = buildStatusFromDbRows(dbRows, vivStepsForRealtime);
     // Merge: DB wins. Preserves local-only keys (e.g. _migrated flag).
     setStatus(prev => {
@@ -318,7 +321,10 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
       setCustomRows(dbCustomRows);
       localStorage.setItem(customKey, JSON.stringify(dbCustomRows));
     }
-  });
+  };
+  useCronogramaRealtime(selectedLote?.id, React.useCallback((dbRows) => {
+    realtimeCallbackRef.current?.(dbRows);
+  }, []));
 
   useEffect(() => {
     if (!propriedadeId) { setInsumos([]); return; }

@@ -141,6 +141,8 @@ function AppInner({ session, displayName, signOut }) {
   const [showMigrationWizard, setShowMigrationWizard] = useState(false);
   const [propriedades, setPropriedades] = useState([]);
   const [allLotes, setAllLotes] = useState([]);
+  // Ref to trigger a full reload of propriedades+lotes from child pages after CRUD
+  const refreshPropriedadesRef = useRef(null);
   // Track where lote/picker was opened from so back goes to the right place
   const [loteOpenedFrom, setLoteOpenedFrom] = useState('dashboard');
   const [pickerOpenedFrom, setPickerOpenedFrom] = useState('dashboard');
@@ -161,11 +163,15 @@ function AppInner({ session, displayName, signOut }) {
   // Check on mount if migration is needed; also load propriedades for AnalysePage
   useEffect(() => {
     if (!session) return;
-    Promise.all([loadPropriedades(), loadTodosLotes(100)]).then(([props, ls]) => {
-      setPropriedades(props);
-      setAllLotes(ls);
-      if (props.length === 0 && ls.length > 0) setShowMigrationWizard(true);
-    });
+    const refresh = () =>
+      Promise.all([loadPropriedades(), loadTodosLotes()]).then(([props, ls]) => {
+        setPropriedades(props);
+        setAllLotes(ls);
+        if (props.length === 0 && ls.length > 0) setShowMigrationWizard(true);
+      });
+    refresh();
+    // Expose refresh so child pages can trigger a reload after CRUD
+    refreshPropriedadesRef.current = refresh;
   }, [session]);
 
   // ── Navigation handlers ──
@@ -437,6 +443,7 @@ function AppInner({ session, displayName, signOut }) {
               <PropriedadesPage
                 onBack={handleBackFromPropriedades}
                 onSelectPropriedade={handleSelectPropriedadeFromList}
+                onRefreshNeeded={() => refreshPropriedadesRef.current?.()}
               />
             )}
             {mainView === 'propriedade' && selectedPropriedade && (

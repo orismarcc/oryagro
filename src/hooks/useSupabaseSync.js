@@ -237,8 +237,12 @@ export async function syncCronogramaStatus(plantioId, culturaId, atividade) {
         updated_at:      new Date().toISOString(),
       },
       // True upsert: update the existing row if one already exists for this
-      // (plantio_id, etapa, is_custom) triplet instead of inserting a duplicate.
-      { onConflict: 'plantio_id,etapa,is_custom' },
+      // (plantio_id, etapa, dia_previsto, is_custom) tuple.
+      // dia_previsto is part of the key so two custom rows with the same etapa
+      // name on different days are treated as distinct rows (not overwritten).
+      // NOTE: requires UNIQUE constraint on (plantio_id, etapa, dia_previsto, is_custom)
+      //       in the DB. Run migration: see docs/migrations/add_dia_to_cron_unique.sql
+      { onConflict: 'plantio_id,etapa,dia_previsto,is_custom' },
     )
     .select('id')
     .single();

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database } from 'lucide-react';
 import { loadLotesByPropriedade, deleteLoteCompleto } from '../hooks/useSupabaseSync';
-import { useCronogramaStatusBatch } from '../hooks/useCronogramaSync';
+import { useCronogramaStatusBatch, makeStableId } from '../hooks/useCronogramaSync';
 import { loadEstoque } from '../hooks/useGestao';
 import { CULTURAS } from '../data/culturas';
 import { resolveLifecycle, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
@@ -94,9 +94,13 @@ function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete, doneS
       className="card w-full p-4 relative"
       style={{ borderLeft: `3px solid ${cor}` }}
     >
-      <button
+      {/* Using div instead of button to avoid nested-button HTML violation (delete buttons are inside) */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => onSelect(lote)}
-        className="w-full text-left"
+        onKeyDown={(e) => e.key === 'Enter' && onSelect(lote)}
+        className="w-full text-left cursor-pointer"
       >
       {/* Header row */}
       <div className="flex items-start gap-3 mb-3">
@@ -205,7 +209,7 @@ function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete, doneS
           </div>
         );
       })()}
-      </button>
+      </div>
 
       {/* Delete control */}
       {canDelete && (
