@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1a5c35"/>
+      <stop offset="100%" stop-color="#0c2d18"/>
+    </linearGradient>
+    <linearGradient id="g1" x1="100" y1="170" x2="100" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#86efac"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="40" y1="100" x2="160" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#16a34a"/>
+      <stop offset="100%" stop-color="#4ade80"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect width="200" height="200" rx="38" fill="url(#bg)"/>
+
+  <!-- Subtle inner glow ring -->
+  <rect x="4" y="4" width="192" height="192" rx="35" fill="none"
+        stroke="#ffffff" stroke-width="1" opacity="0.06"/>
+
+  <!-- === MARK: stylized OA formed by crop-row arc + rising sprout === -->
+
+  <!-- Arc (the "O" — represents the land boundary / crop field curve) -->
+  <path d="M 44 148 C 44 82, 90 38, 100 38 C 110 38, 156 82, 156 148"
+        fill="none" stroke="url(#g1)" stroke-width="13" stroke-linecap="round"/>
+
+  <!-- Ground line -->
+  <line x1="38" y1="148" x2="162" y2="148"
+        stroke="url(#g2)" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- Stem (rising from ground, center) -->
+  <line x1="100" y1="148" x2="100" y2="100"
+        stroke="url(#g1)" stroke-width="9" stroke-linecap="round"/>
+
+  <!-- Left leaf (branch at ~115) -->
+  <path d="M 100 118 C 88 112, 72 114, 66 104 C 60 94, 70 84, 84 90 C 96 95, 100 108, 100 118 Z"
+        fill="url(#g2)"/>
+
+  <!-- Right leaf (branch at ~105) -->
+  <path d="M 100 105 C 112 99, 128 101, 134 91 C 140 81, 130 71, 116 77 C 104 82, 100 95, 100 105 Z"
+        fill="url(#g1)"/>
+
+  <!-- Sprout tip (top bud) -->
+  <circle cx="100" cy="91" r="8" fill="#86efac"/>
+  <circle cx="100" cy="91" r="4" fill="#dcfce7"/>
+
+  <!-- Three small crop dots along ground line (data / precision farming) -->
+  <circle cx="62"  cy="148" r="4" fill="#4ade80" opacity="0.7"/>
+  <circle cx="100" cy="148" r="4" fill="#4ade80" opacity="0.9"/>
+  <circle cx="138" cy="148" r="4" fill="#4ade80" opacity="0.7"/>
+</svg>
