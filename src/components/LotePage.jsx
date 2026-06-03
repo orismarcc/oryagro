@@ -8,6 +8,8 @@ import {
   Receipt, DollarSign,
 } from 'lucide-react';
 import CronogramaTimeline from './CronogramaTimeline';
+import CurvaProducaoChart from './CurvaProducaoChart';
+import { useCurvasProducao } from '../hooks/useCurvasProducao';
 import { useWeather } from '../hooks/useWeather';
 import { resolveLifecycle } from '../lib/lifecycle';
 import {
@@ -435,6 +437,23 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
   const { diasDecorridos, progresso: cycleProgressPct, diasPrimeiraProducao: cicloDias, prontoParaColheita } = lc;
   const cycleProgress = cycleProgressPct / 100;
 
+  // Curva de produção
+  const { curves: curvasProducao } = useCurvasProducao();
+  const anoRelativo = lote.data_plantio
+    ? Math.floor((Date.now() - new Date(lote.data_plantio + 'T12:00:00').getTime()) / (365.25 * 24 * 3600 * 1000))
+    : null;
+  // Producao plena estimada: usa dados da cultura (campo = kg/ha * area, canteiro = kg/m²)
+  const producaoPlena = (() => {
+    const area = cultura.tipo === 'campo'
+      ? (parseFloat(lote.area_ha) || cultura.area?.padrao || 1)
+      : ((parseFloat(lote.comprimento_m) || cultura.canteiro?.comprimento || 1) *
+         (parseFloat(lote.largura_m)     || cultura.canteiro?.largura    || 1));
+    if (cultura.venda?.producaoKgPorHa)  return Math.round(cultura.venda.producaoKgPorHa * area);
+    if (cultura.venda?.producaoKgPorM2)  return Math.round(cultura.venda.producaoKgPorM2 * area);
+    if (cultura.venda?.producaoBase)     return cultura.venda.producaoBase;
+    return null;
+  })();
+
   const handleConcluir = async () => {
     if (!window.confirm('Marcar este lote como concluído? Isso arquivará o ciclo no histórico.')) return;
     setConcluindo(true);
@@ -665,7 +684,18 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
           style={{ willChange: 'opacity, transform' }}
         >
           {tab === 'cronograma' && (
-            <CronogramaTimeline cultura={cultura} lotes={[lote]} propriedadeId={lote.propriedade_id ?? null} />
+            <div className="flex flex-col gap-4">
+              {/* Curva de produção — mostra a maturação da cultura ao longo dos anos */}
+              <CurvaProducaoChart
+                culturaId={cultura.id}
+                culturaNome={cultura.nome}
+                culturaCor={cultura.cor}
+                curves={curvasProducao}
+                anoAtual={anoRelativo}
+                producaoPlena={producaoPlena}
+              />
+              <CronogramaTimeline cultura={cultura} lotes={[lote]} propriedadeId={lote.propriedade_id ?? null} />
+            </div>
           )}
           {tab === 'colheita' && (
             <TabColheita cultura={cultura} lote={lote} />
