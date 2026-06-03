@@ -26,7 +26,7 @@ import TabDiario from './lote/TabDiario';
 import TabDespesas from './lote/TabDespesas';
 import TabReceitas from './lote/TabReceitas';
 
-// â”€â”€â”€ WeatherWidget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── WeatherWidget ──────────────────────────────────────────────────────────
 
 function WeatherWidget({ cor, cidade, estado }) {
   const { data, loading, location, alert } = useWeather({ cidade, estado });
@@ -82,11 +82,11 @@ function WeatherWidget({ cor, cidade, estado }) {
             </span>
             <span className="text-lg leading-none">{day.emoji}</span>
             <span className="text-[10px] font-bold text-white leading-none">
-              {day.max}Â°
+              {day.max}°
             </span>
-            <span className="text-[9px] text-white/55 leading-none">{day.min}Â°</span>
+            <span className="text-[9px] text-white/55 leading-none">{day.min}°</span>
             {parseFloat(day.rain) > 0 && (
-              <span className="text-[9px] text-blue-300 leading-none">ðŸ’§</span>
+              <span className="text-[9px] text-blue-300 leading-none">💧</span>
             )}
           </div>
         ))}
@@ -95,7 +95,7 @@ function WeatherWidget({ cor, cidade, estado }) {
   );
 }
 
-// â”€â”€â”€ Tab: Colheita â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Tab: Colheita ───────────────────────────────────────────────────────────
 // Reads colheita-type steps from the cronograma (static + custom rows added by user)
 // and shows a summary: upcoming harvests, done harvests, next date.
 
@@ -104,7 +104,7 @@ const COLHEITA_COR = '#7c3aed';
 function TabColheita({ cultura, lote }) {
   const cor = cultura.cor;
 
-  // â”€â”€ helpers (inline to avoid import dependency) â”€â”€
+  // ── helpers (inline to avoid import dependency) ──
   function addDaysLocal(d, n) {
     const r = new Date(d); r.setDate(r.getDate() + n); return r;
   }
@@ -123,7 +123,7 @@ function TabColheita({ cultura, lote }) {
   const plantioDate = new Date(lote.data_plantio + 'T12:00:00');
   const todayStr    = today();
 
-  // Load from Supabase on mount â€” then merge with localStorage fallback
+  // Load from Supabase on mount — then merge with localStorage fallback
   const [doneStatus, setDoneStatus]   = useState(() => safeLS(`cronograma_status_lote_${lote.id}`, {}));
   const [customRows, setCustomRows]   = useState(() => safeLS(`cronograma_custom_lote_${lote.id}`, []));
 
@@ -233,7 +233,7 @@ function TabColheita({ cultura, lote }) {
   return (
     <div className="px-4 pt-5 pb-8 max-w-2xl mx-auto">
 
-      {/* â”€â”€ Summary banner â”€â”€ */}
+      {/* ── Summary banner ── */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -271,7 +271,7 @@ function TabColheita({ cultura, lote }) {
             style={{ background: `${COLHEITA_COR}0d`, border: `1px solid ${COLHEITA_COR}25` }}
           >
             <div>
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">PrÃ³xima colheita</p>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Próxima colheita</p>
               <p className="text-[13px] font-bold text-foreground mt-0.5">{nextColheita.etapa}</p>
             </div>
             <div className="text-right">
@@ -280,7 +280,7 @@ function TabColheita({ cultura, lote }) {
               </p>
               {diasAteProxima !== null && (
                 <p className="text-[10px] text-muted-foreground">
-                  {diasAteProxima === 0 ? 'Hoje!' : diasAteProxima < 0 ? `${Math.abs(diasAteProxima)}d atrÃ¡s` : `em ${diasAteProxima}d`}
+                  {diasAteProxima === 0 ? 'Hoje!' : diasAteProxima < 0 ? `${Math.abs(diasAteProxima)}d atrás` : `em ${diasAteProxima}d`}
                 </p>
               )}
             </div>
@@ -288,8 +288,8 @@ function TabColheita({ cultura, lote }) {
         )}
       </motion.div>
 
-      {/* â”€â”€ Colheita list â”€â”€ */}
-      <p className="section-label mb-3">CalendÃ¡rio de Colheitas</p>
+      {/* ── Colheita list ── */}
+      <p className="section-label mb-3">Calendário de Colheitas</p>
       <div className="flex flex-col gap-2.5">
         {colheitas.map((c, i) => {
           const isPast    = c.dataPlanned < todayStr;
@@ -322,7 +322,7 @@ function TabColheita({ cultura, lote }) {
                   className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
                   style={{ background: statusBg }}
                 >
-                  {c.done ? 'âœ“' : 'ðŸŒ¾'}
+                  {c.done ? '✓' : '🌾'}
                 </div>
 
                 <div className="flex-1 min-w-0">
@@ -334,7 +334,7 @@ function TabColheita({ cultura, lote }) {
                     {c.done && (
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
                         style={{ background: '#dcfce7', color: '#16a34a' }}>
-                        âœ“ realizada
+                        ✓ realizada
                       </span>
                     )}
                     {!c.done && isToday && (
@@ -360,7 +360,7 @@ function TabColheita({ cultura, lote }) {
                   {/* Dates */}
                   <div className="flex items-center gap-3 flex-wrap">
                     <span className="text-[11px] font-semibold" style={{ color: statusColor }}>
-                      ðŸ“… Prevista: {formatDatePtBR(c.dataPlanned)}
+                      📅 Prevista: {formatDatePtBR(c.dataPlanned)}
                       {c.dia !== undefined && c.dia !== null && c.dia !== '' && (
                         <span className="text-muted-foreground font-normal"> (Dia {c.dia})</span>
                       )}
@@ -398,10 +398,10 @@ function TabColheita({ cultura, lote }) {
         className="mt-5 flex items-start gap-2.5 px-4 py-3 rounded-2xl"
         style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 90%)' }}
       >
-        <span className="text-base flex-shrink-0">ðŸ’¡</span>
+        <span className="text-base flex-shrink-0">💡</span>
         <p className="text-[12px] text-muted-foreground leading-relaxed">
-          Para adicionar ou registrar colheitas, vÃ¡ atÃ© a aba{' '}
-          <strong className="text-foreground">Cronograma</strong> e adicione ou marque como concluÃ­da uma atividade do tipo{' '}
+          Para adicionar ou registrar colheitas, vá até a aba{' '}
+          <strong className="text-foreground">Cronograma</strong> e adicione ou marque como concluída uma atividade do tipo{' '}
           <strong style={{ color: COLHEITA_COR }}>Colheita</strong>.
         </p>
       </div>
@@ -409,14 +409,14 @@ function TabColheita({ cultura, lote }) {
   );
 }
 
-// â”€â”€â”€ Main LotePage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Main LotePage ──────────────────────────────────────────────────────────
 
 const TABS = [
   { value: 'cronograma', label: 'Cronograma', Icon: CalendarDays },
   { value: 'colheita',   label: 'Colheita',   Icon: TrendingUp },
   { value: 'receitas',   label: 'Receitas',   Icon: DollarSign },
   { value: 'despesas',   label: 'Despesas',   Icon: Receipt },
-  { value: 'diario',     label: 'DiÃ¡rio',     Icon: BookOpen },
+  { value: 'diario',     label: 'Diário',     Icon: BookOpen },
 ];
 
 export default function LotePage({ lote, cultura, onBack, userRole = null, propriedade = null }) {
@@ -432,7 +432,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
   const cycleProgress = cycleProgressPct / 100;
 
   const handleConcluir = async () => {
-    if (!window.confirm('Marcar este lote como concluÃ­do? Isso arquivarÃ¡ o ciclo no histÃ³rico.')) return;
+    if (!window.confirm('Marcar este lote como concluído? Isso arquivará o ciclo no histórico.')) return;
     setConcluindo(true);
     try {
       // Load all data needed for the archive summary in parallel
@@ -444,7 +444,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
       ]);
       if (vendas.length === 0) {
         const ok = window.confirm(
-          'Este lote nÃ£o possui receitas registradas. Deseja concluir mesmo assim?'
+          'Este lote não possui receitas registradas. Deseja concluir mesmo assim?'
         );
         if (!ok) {
           setConcluindo(false);
@@ -462,7 +462,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
       await updateLoteStatus(lote.id, 'concluido');
       setConcluido(true);
     } catch {
-      toast.error('Erro ao concluir lote. O ciclo pode nÃ£o ter sido arquivado. Tente novamente.');
+      toast.error('Erro ao concluir lote. O ciclo pode não ter sido arquivado. Tente novamente.');
       setConcluindo(false);
       return;
     } finally {
@@ -473,7 +473,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
   return (
     <div className="min-h-screen bg-background">
 
-      {/* â”€â”€ Hero â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Hero ────────────────────────────────────────────────────────── */}
       <div className="gradient-hero relative overflow-hidden">
         {/* Background glow blobs */}
         <div
@@ -523,13 +523,13 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
                 style={{ background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.25)' }}
               >
                 <CheckCircle2 size={12} />
-                {concluindo ? 'Concluindoâ€¦' : 'Concluir Lote'}
+                {concluindo ? 'Concluindo…' : 'Concluir Lote'}
               </button>
             )}
             {concluido && (
               <span className="flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-xl"
                 style={{ background: 'rgba(22,163,74,0.25)', color: '#86efac', border: '1px solid rgba(22,163,74,0.35)' }}>
-                <CheckCircle2 size={12} /> ConcluÃ­do
+                <CheckCircle2 size={12} /> Concluído
               </span>
             )}
           </div>
@@ -570,14 +570,14 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
               <CalendarDays size={11} />
               {formatDatePtBR(lote.data_plantio)}
             </span>
-            <span className="text-white/30">Â·</span>
+            <span className="text-white/30">·</span>
             <span className="flex items-center gap-1">
               <Sprout size={11} />
               Dia <strong className="text-white font-bold ml-0.5">{diasDecorridos}</strong> do ciclo
             </span>
             {lote.total_plantas > 0 && (
               <>
-                <span className="text-white/30">Â·</span>
+                <span className="text-white/30">·</span>
                 <span>{fmtNumber(lote.total_plantas)} plantas</span>
               </>
             )}
@@ -614,7 +614,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
         </div>
       </div>
 
-      {/* â”€â”€ Sticky tab bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Sticky tab bar ──────────────────────────────────────────────── */}
       <div
         className="sticky top-0 z-20 px-4 py-2.5"
         style={{
@@ -654,7 +654,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
         </div>
       </div>
 
-      {/* â”€â”€ Tab content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Tab content ─────────────────────────────────────────────────── */}
       <AnimatePresence mode="wait">
         <motion.div
           key={`${lote.id}-${tab}`}
