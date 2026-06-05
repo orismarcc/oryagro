@@ -3,8 +3,9 @@ import { getProductionFactorSync, useCurvasProducao } from '../hooks/useCurvasPr
 import { motion } from 'framer-motion';
 import { CULTURAS } from '../data/culturas';
 import { exportarRelatorioPDF } from '../lib/pdfExport';
+import { gerarPdfCreditoAgricola } from '../lib/pdfCreditoAgricola';
 import { loadTodosLotes, loadAllColheitaEventos } from '../hooks/useSupabaseSync';
-import { loadMovimentosByLote, loadTodasVendas, loadMaoObraByLote } from '../hooks/useGestao';
+import { loadMovimentosByLote, loadTodasVendas, loadMaoObraByLote, loadCiclosHistorico } from '../hooks/useGestao';
 import { loadTodasDespesas, loadDespesasByLote } from '../hooks/useDespesas';
 import { resolveLifecycle, fmtDateBR, parseCicloDias } from '../lib/lifecycle';
 import { calcLucroLote } from '../lib/financeiro';
@@ -25,6 +26,8 @@ import {
   DollarSign,
   Wrench,
   FileDown,
+  Award,
+  X,
 } from 'lucide-react';
 
 /* ─── helpers ─────────────────────────────────────────────── */
@@ -1868,6 +1871,325 @@ function DespesasPorCategoriaCard({ despesas }) {
   );
 }
 
+/* ─── Benchmarking de Ciclos ──────────────────────────────── */
+
+function BenchmarkingCiclosCard({ ciclosHistorico, lotesAtivos }) {
+  if (!ciclosHistorico || ciclosHistorico.length === 0) {
+    // Find lote closest to completion
+    let maisProximo = null;
+    let menorDiasRestantes = Infinity;
+    lotesAtivos.forEach((lote) => {
+      const cultura = getCultura(lote.cultura_id);
+      if (!cultura) return;
+      const lc = safeResolveLifecycle(lote, cultura);
+      if (!lc) return;
+      const dias = lc.diasParaColheita ?? Infinity;
+      if (dias < menorDiasRestantes) {
+        menorDiasRestantes = dias;
+        maisProximo = lote;
+      }
+    });
+
+    return (
+      <Card>
+        <div className="px-4 pt-4 pb-1 flex items-center gap-2 border-b border-gray-50">
+          <Award size={14} className="text-purple-500" />
+          <span className="text-[13px] font-bold text-gray-700">Benchmarking de Ciclos</span>
+        </div>
+        <div className="px-4 py-6 flex flex-col items-center gap-3 text-center">
+          <div className="w-12 h-12 rounded-full bg-purple-50 flex items-center justify-center">
+            <Award size={22} className="text-purple-300" />
+          </div>
+          <p className="text-[13px] font-bold text-gray-600">Nenhum ciclo concluído ainda</p>
+          <p className="text-[11px] text-gray-400 leading-relaxed max-w-[240px]">
+            Conclua um ciclo para ver comparativos de desempenho entre lotes e culturas.
+          </p>
+          {maisProximo && (() => {
+            const cultura = getCultura(maisProximo.cultura_id);
+            const lc = safeResolveLifecycle(maisProximo, cultura);
+            return (
+              <div className="mt-1 bg-purple-50 rounded-xl px-4 py-2.5 flex items-center gap-2">
+                <span className="text-[16px]">{cultura?.emoji}</span>
+                <div className="text-left">
+                  <p className="text-[11px] font-bold text-purple-700">{maisProximo.nome}</p>
+                  <p className="text-[10px] text-purple-500">
+                    {lc?.prontoParaColheita
+                      ? 'Pronto para colheita'
+                      : menorDiasRestantes < Infinity
+                        ? `Colheita em ~${menorDiasRestantes}d`
+                        : 'Mais próximo de concluir'}
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      </Card>
+    );
+  }
+
+  // ── Build enriched ciclo rows ────────────────────────────────────────────────
+  const ciclos = ciclosHistorico.map((c) => {
+    const diasCiclo = c.dias_ciclo_real || 1;
+    const kg = c.total_vendas_kg || 0;
+    const receitaTotal = c.receita_total || 0;
+    const custoInsumos = c.custo_insumos || 0;
+    const custoMaoObra = c.custo_mao_obra || 0;
+    const kgDia = diasCiclo > 0 ? kg / diasCiclo : 0;
+    const receitaLiquida = receitaTotal - custoInsumos - custoMaoObra;
+    const margemPct = receitaTotal > 0 ? (receitaLiquida / receitaTotal) * 100 : 0;
+    const cultura = getCultura(c.cultura_id);
+    return { ...c, kgDia, receitaLiquida, margemPct, cultura, diasCiclo, kg, receitaTotal };
+  }).filter((c) => c.cultura !== null);
+
+  // ── Group by cultura to show trend ──────────────────────────────────────────
+  const porCultura = {};
+  ciclos.forEach((c) => {
+    if (!porCultura[c.cultura_id]) porCultura[c.cultura_id] = [];
+    porCultura[c.cultura_id].push(c);
+  });
+  // Sort each group by data_conclusao asc (oldest first) to calc trend
+  Object.values(porCultura).forEach((arr) =>
+    arr.sort((a, b) => new Date(a.data_conclusao) - new Date(b.data_conclusao))
+  );
+
+  // ── Bar chart data: ciclos sorted by data_conclusao desc (newest first) ─────
+  const sortedCiclos = [...ciclos].sort(
+    (a, b) => new Date(b.data_conclusao) - new Date(a.data_conclusao)
+  );
+
+  const maxKgDia = Math.max(...ciclos.map((c) => c.kgDia), 0.001);
+  const BAR_MAX_H = 80; // px
+
+  // Trend computation per cultura: compare last ciclo vs previous
+  const trends = {};
+  Object.entries(porCultura).forEach(([culturaId, arr]) => {
+    if (arr.length < 2) return;
+    const last = arr[arr.length - 1];
+    const prev = arr[arr.length - 2];
+    if (prev.kgDia === 0) return;
+    const pct = ((last.kgDia - prev.kgDia) / prev.kgDia) * 100;
+    trends[culturaId] = pct;
+  });
+
+  const [activeIdx, setActiveIdx] = useState(null);
+
+  return (
+    <Card>
+      <div className="px-4 pt-4 pb-1 flex items-center gap-2 border-b border-gray-50">
+        <Award size={14} className="text-purple-500" />
+        <span className="text-[13px] font-bold text-gray-700">Benchmarking de Ciclos</span>
+        <span className="ml-auto text-[10px] text-gray-400">
+          {ciclos.length} ciclo{ciclos.length !== 1 ? 's' : ''} concluído{ciclos.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {/* ── Trend chips per cultura ───────────────────────────────────────────── */}
+      {Object.entries(trends).length > 0 && (
+        <div className="px-4 pt-3 flex flex-wrap gap-2">
+          {Object.entries(trends).map(([culturaId, pct]) => {
+            const cultura = getCultura(culturaId);
+            if (!cultura) return null;
+            const isUp = pct >= 0;
+            return (
+              <div
+                key={culturaId}
+                className="flex items-center gap-1.5 rounded-full px-3 py-1"
+                style={{ background: isUp ? '#f0fdf4' : '#fff7ed' }}
+              >
+                <span className="text-[12px]">{cultura.emoji}</span>
+                <span className="text-[10px] font-semibold" style={{ color: isUp ? '#15803d' : '#b45309' }}>
+                  {isUp ? '↑' : '↓'} {Math.abs(pct).toFixed(0)}% kg/dia vs ciclo anterior
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Bar chart: kg/dia por ciclo ─────────────────────────────────────── */}
+      <div className="px-3 pt-3 pb-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex items-end gap-2" style={{ minWidth: sortedCiclos.length * 52 }}>
+          {sortedCiclos.map((ciclo, idx) => {
+            const barH = Math.max(2, Math.round((ciclo.kgDia / maxKgDia) * BAR_MAX_H));
+            const isActive = activeIdx === idx;
+            return (
+              <div
+                key={ciclo.id ?? idx}
+                className="flex flex-col items-center flex-shrink-0 cursor-pointer"
+                style={{ width: 44 }}
+                onClick={() => setActiveIdx(isActive ? null : idx)}
+              >
+                {ciclo.kgDia > 0 && (
+                  <span className="text-[8px] text-gray-400 font-medium mb-0.5 text-center leading-none">
+                    {ciclo.kgDia.toFixed(1)}
+                  </span>
+                )}
+                <div style={{ height: BAR_MAX_H + 4 }} className="flex items-end">
+                  <motion.div
+                    className="rounded-t"
+                    style={{
+                      width: 28,
+                      backgroundColor: ciclo.cultura?.cor || '#a78bfa',
+                      opacity: isActive ? 1 : 0.75,
+                      outline: isActive ? `2px solid ${ciclo.cultura?.cor || '#a78bfa'}` : 'none',
+                      outlineOffset: 1,
+                    }}
+                    initial={{ height: 0 }}
+                    animate={{ height: barH }}
+                    transition={{ duration: 0.6, ease: 'easeOut', delay: idx * 0.04 }}
+                  />
+                </div>
+                <span className="text-[8px] text-gray-400 font-medium mt-1 text-center leading-tight truncate w-full text-center">
+                  {ciclo.lote_nome
+                    ? ciclo.lote_nome.length > 6
+                      ? ciclo.lote_nome.slice(0, 5) + '…'
+                      : ciclo.lote_nome
+                    : '—'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-[9px] text-gray-400 mt-1 px-1">kg/dia — toque na barra para detalhes</p>
+      </div>
+
+      {/* ── Tooltip/detail panel on bar tap ────────────────────────────────── */}
+      {activeIdx !== null && sortedCiclos[activeIdx] && (() => {
+        const c = sortedCiclos[activeIdx];
+        const cultura = c.cultura;
+        const trend = trends[c.cultura_id];
+        return (
+          <motion.div
+            className="mx-3 mb-3 rounded-xl border px-3 py-2.5 flex flex-col gap-1.5"
+            style={{ background: '#faf5ff', borderColor: '#e9d5ff' }}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-[16px]">{cultura?.emoji}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-bold text-purple-800 truncate">{c.lote_nome}</p>
+                <p className="text-[10px] text-purple-500">{cultura?.nome}</p>
+              </div>
+              {trend !== undefined && (
+                <span
+                  className="text-[10px] font-bold rounded-full px-2 py-0.5 flex-shrink-0"
+                  style={{
+                    background: trend >= 0 ? '#dcfce7' : '#fef3c7',
+                    color: trend >= 0 ? '#15803d' : '#b45309',
+                  }}
+                >
+                  {trend >= 0 ? '↑' : '↓'} {Math.abs(trend).toFixed(0)}%
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+              <div className="flex justify-between gap-1">
+                <span className="text-purple-400">Plantio</span>
+                <span className="font-semibold text-purple-700">{formatDate(c.data_plantio)}</span>
+              </div>
+              <div className="flex justify-between gap-1">
+                <span className="text-purple-400">Conclusão</span>
+                <span className="font-semibold text-purple-700">{formatDate(c.data_conclusao)}</span>
+              </div>
+              <div className="flex justify-between gap-1">
+                <span className="text-purple-400">Duração</span>
+                <span className="font-semibold text-purple-700">{c.diasCiclo}d</span>
+              </div>
+              <div className="flex justify-between gap-1">
+                <span className="text-purple-400">Total kg</span>
+                <span className="font-semibold text-purple-700">
+                  {c.kg.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kg
+                </span>
+              </div>
+              <div className="flex justify-between gap-1">
+                <span className="text-purple-400">kg/dia</span>
+                <span className="font-bold text-purple-700">{c.kgDia.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between gap-1">
+                <span className="text-purple-400">Receita bruta</span>
+                <span className="font-semibold text-purple-700">{fmtBRL(c.receitaTotal)}</span>
+              </div>
+              <div className="flex justify-between gap-1">
+                <span className="text-purple-400">Receita líquida</span>
+                <span className={`font-bold ${c.receitaLiquida >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {fmtBRL(c.receitaLiquida)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-1">
+                <span className="text-purple-400">Margem</span>
+                <span className={`font-bold ${c.margemPct >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {c.margemPct >= 0 ? '+' : ''}{c.margemPct.toFixed(1)}%
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        );
+      })()}
+
+      {/* ── Per-cultura comparison table ─────────────────────────────────────── */}
+      {Object.entries(porCultura).length > 0 && (
+        <div className="px-4 pb-4 flex flex-col gap-3 mt-1">
+          {Object.entries(porCultura).map(([culturaId, arr]) => {
+            const cultura = getCultura(culturaId);
+            if (!cultura) return null;
+            const sorted = [...arr].sort(
+              (a, b) => new Date(b.data_conclusao) - new Date(a.data_conclusao)
+            );
+            return (
+              <div key={culturaId}>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <span className="text-[14px]">{cultura.emoji}</span>
+                  <span className="text-[11px] font-bold text-gray-700">{cultura.nome}</span>
+                  <span className="text-[9px] text-gray-400 ml-auto">
+                    {arr.length} ciclo{arr.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  {sorted.map((ciclo, i) => (
+                    <div
+                      key={ciclo.id ?? i}
+                      className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2"
+                    >
+                      <div
+                        className="w-1.5 h-10 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: cultura.cor }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-bold text-gray-700 truncate">{ciclo.lote_nome}</p>
+                        <p className="text-[9px] text-gray-400">
+                          {formatDate(ciclo.data_plantio)} → {formatDate(ciclo.data_conclusao)} · {ciclo.diasCiclo}d
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end flex-shrink-0">
+                        <span className="text-[11px] font-bold text-gray-700">
+                          {ciclo.kgDia.toFixed(2)} kg/d
+                        </span>
+                        <span
+                          className="text-[9px] font-semibold"
+                          style={{ color: ciclo.margemPct >= 0 ? '#15803d' : '#b45309' }}
+                        >
+                          {ciclo.margemPct >= 0 ? '+' : ''}{ciclo.margemPct.toFixed(0)}% mg
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <p className="px-4 pb-3 text-[9px] text-gray-400 leading-relaxed">
+        * kg/dia = total vendido ÷ dias do ciclo. Receita líquida = receita − insumos − mão de obra.
+      </p>
+    </Card>
+  );
+}
+
 /* ─── Empty state ─────────────────────────────────────────── */
 
 function EmptyState() {
@@ -1905,20 +2227,25 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
   const [eventosColheita, setEventosColheita] = useState([]);
   const [todasVendas, setTodasVendas] = useState([]);
   const [despesas, setDespesas] = useState([]);
+  const [ciclosHistorico, setCiclosHistorico] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exportingPDF, setExportingPDF] = useState(false);
   const [selectedLoteId, setSelectedLoteId] = useState(null); // null = all
+  const [showCreditoModal, setShowCreditoModal] = useState(false);
+  const [produtorForm, setProdutorForm] = useState({ nome: '', cpf: '', telefone: '', municipio: '', estado: 'MT' });
+  const [gerandoCredito, setGerandoCredito] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([loadTodosLotes(500), loadAllColheitaEventos(), loadTodasVendas(), loadTodasDespesas()])
-      .then(([data, eventos, vendas, desp]) => {
+    Promise.all([loadTodosLotes(500), loadAllColheitaEventos(), loadTodasVendas(), loadTodasDespesas(), loadCiclosHistorico()])
+      .then(([data, eventos, vendas, desp, ciclos]) => {
         if (!cancelled) {
           setLotes(Array.isArray(data) ? data : []);
           setEventosColheita(Array.isArray(eventos) ? eventos : []);
           setTodasVendas(Array.isArray(vendas) ? vendas : []);
           setDespesas(Array.isArray(desp) ? desp : []);
+          setCiclosHistorico(Array.isArray(ciclos) ? ciclos : []);
           setLoading(false);
         }
       })
@@ -1935,6 +2262,25 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
       await exportarRelatorioPDF(lotes, eventosColheita, todasVendas, propriedades);
     } finally {
       setExportingPDF(false);
+    }
+  };
+
+  const handleGerarCreditoPDF = async () => {
+    setGerandoCredito(true);
+    try {
+      gerarPdfCreditoAgricola({
+        produtor: produtorForm,
+        ciclos: ciclosHistorico,
+        lotes,
+        vendas: todasVendas,
+        despesas,
+        propriedades,
+      });
+      setShowCreditoModal(false);
+    } catch (e) {
+      logDbError('gerarCreditoPDF', e);
+    } finally {
+      setGerandoCredito(false);
     }
   };
 
@@ -1977,16 +2323,27 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
               )}
             </div>
           </div>
-          {can(userRole ?? 'admin', FARM_ACTIONS.EXPORT_PDF) && (
+          <div className="flex items-center gap-2">
+            {can(userRole ?? 'admin', FARM_ACTIONS.EXPORT_PDF) && (
+              <button
+                onClick={handleExportPDF}
+                disabled={exportingPDF || lotes.length === 0}
+                className="flex items-center gap-1.5 text-[11px] text-white/70 hover:text-white transition-colors bg-white/10 rounded-lg px-3 py-1.5 disabled:opacity-40"
+              >
+                <FileDown size={12} />
+                {exportingPDF ? 'Gerando…' : 'PDF'}
+              </button>
+            )}
             <button
-              onClick={handleExportPDF}
-              disabled={exportingPDF || lotes.length === 0}
-              className="flex items-center gap-1.5 text-[11px] text-white/70 hover:text-white transition-colors bg-white/10 rounded-lg px-3 py-1.5 disabled:opacity-40 flex-shrink-0"
+              onClick={() => setShowCreditoModal(true)}
+              disabled={lotes.length === 0}
+              className="flex items-center gap-1.5 text-[11px] text-white/70 hover:text-white transition-colors bg-white/10 rounded-lg px-3 py-1.5 disabled:opacity-40"
+              title="Gerar comprovante para crédito rural"
             >
               <FileDown size={12} />
-              {exportingPDF ? 'Gerando…' : 'PDF'}
+              Crédito
             </button>
-          )}
+          </div>
         </div>
 
         {/* KPI cards — 4 in a 2×2 grid */}
@@ -2112,6 +2469,16 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
               <CustoProducaoCard lotes={lotesFiltrados} todasVendas={todasVendas} />
             </motion.div>
 
+            {/* Benchmarking de Ciclos */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.14 }}
+            >
+              <SectionLabel>Desempenho por Ciclo</SectionLabel>
+              <BenchmarkingCiclosCard ciclosHistorico={ciclosHistorico} lotesAtivos={lotesAtivos} />
+            </motion.div>
+
             {/* Distribuição por Cultura */}
             <motion.div
               initial={{ opacity: 0, y: 12 }}
@@ -2196,6 +2563,103 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
           </>
         )}
       </div>
+
+      {/* ── Modal: Relatório de Crédito Agrícola ─────────────────────────── */}
+      <AnimatePresence>
+        {showCreditoModal && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          >
+            <div className="absolute inset-0 bg-black/50" onClick={() => setShowCreditoModal(false)} />
+            <motion.div
+              className="relative bg-background rounded-t-3xl sm:rounded-2xl w-full max-w-lg max-h-[92svh] flex flex-col overflow-hidden shadow-2xl"
+              initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
+              transition={{ type: 'spring', damping: 22, stiffness: 280 }}
+            >
+              {/* Header */}
+              <div className="px-6 pt-6 pb-4 border-b border-border flex-shrink-0">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-[16px] font-bold text-foreground">Relatório para Crédito Rural</h2>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Gera PDF profissional para financeiras (PRONAF, BB, Sicredi etc.)
+                    </p>
+                  </div>
+                  <button onClick={() => setShowCreditoModal(false)} className="p-2 rounded-xl hover:bg-muted">
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Form */}
+              <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-3">
+                <p className="text-[11px] text-muted-foreground bg-green-50 rounded-xl px-3 py-2 border border-green-200">
+                  📋 O PDF incluirá: identificação do produtor, propriedades cadastradas, histórico de {ciclosHistorico.length} ciclo(s) concluído(s), análise de capacidade de pagamento e declaração assinável.
+                </p>
+
+                {[
+                  { key: 'nome', label: 'Nome completo', placeholder: 'João da Silva', required: true },
+                  { key: 'cpf', label: 'CPF', placeholder: '000.000.000-00', required: true },
+                  { key: 'telefone', label: 'Telefone', placeholder: '(66) 99999-9999' },
+                  { key: 'municipio', label: 'Município', placeholder: 'Confresa' },
+                ].map(({ key, label, placeholder, required }) => (
+                  <div key={key}>
+                    <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                      {label}{required && ' *'}
+                    </label>
+                    <input
+                      type="text"
+                      value={produtorForm[key]}
+                      onChange={e => setProdutorForm(f => ({ ...f, [key]: e.target.value }))}
+                      placeholder={placeholder}
+                      className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-[13px] bg-background outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                ))}
+
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Estado</label>
+                  <select
+                    value={produtorForm.estado}
+                    onChange={e => setProdutorForm(f => ({ ...f, estado: e.target.value }))}
+                    className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-[13px] bg-background outline-none"
+                  >
+                    {['MT','PA','GO','MS','TO','AM','RO','AC','AP','RR','MA','PI','CE','RN','PB','PE','AL','SE','BA','MG','ES','RJ','SP','PR','SC','RS','DF'].map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {ciclosHistorico.length === 0 && (
+                  <div className="rounded-xl bg-yellow-50 border border-yellow-200 px-3 py-2.5 text-[11px] text-yellow-800">
+                    ⚠️ Você ainda não possui ciclos concluídos. O PDF terá menos informações financeiras, mas ainda é válido para apresentação inicial.
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-border flex gap-3 flex-shrink-0">
+                <button
+                  onClick={() => setShowCreditoModal(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-input text-[13px] font-medium text-muted-foreground"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleGerarCreditoPDF}
+                  disabled={gerandoCredito || !produtorForm.nome || !produtorForm.cpf}
+                  className="flex-1 py-2.5 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50"
+                  style={{ background: '#166534' }}
+                >
+                  <FileDown size={14} />
+                  {gerandoCredito ? 'Gerando PDF…' : 'Gerar PDF'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

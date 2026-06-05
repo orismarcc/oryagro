@@ -122,6 +122,65 @@ export async function updateParcela(id, { status, dataPagamento }) {
   return data;
 }
 
+/**
+ * Carrega parcelas pagas de todos os compradores do usuário (para cálculo de
+ * histórico de pagamento em batch — evita N+1 queries na lista de compradores).
+ * Retorna array de { comprador_id, data_vencimento, data_pagamento }.
+ */
+export async function loadParcelasPagasBatch() {
+  const userId = await getUserId();
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from('venda_parcelas')
+    .select(`
+      id,
+      data_vencimento,
+      data_pagamento,
+      status,
+      vendas!inner (
+        comprador_id
+      )
+    `)
+    .eq('user_id', userId)
+    .eq('status', 'pago')
+    .not('data_pagamento', 'is', null)
+    .order('data_pagamento', { ascending: false });
+  if (error) { logDbError('loadParcelasPagasBatch', error); return []; }
+  return (data || []).map(p => ({
+    comprador_id: p.vendas?.comprador_id,
+    data_vencimento: p.data_vencimento,
+    data_pagamento: p.data_pagamento,
+  })).filter(p => p.comprador_id);
+}
+
+/**
+ * Carrega parcelas pendentes em aberto há mais de 30 dias, por comprador.
+ * Usado para o cálculo de risco.
+ */
+export async function loadParcelasAbertas30Dias() {
+  const userId = await getUserId();
+  if (!userId) return [];
+  const limite = new Date();
+  limite.setDate(limite.getDate() - 30);
+  const { data, error } = await supabase
+    .from('venda_parcelas')
+    .select(`
+      id,
+      data_vencimento,
+      vendas!inner (
+        comprador_id
+      )
+    `)
+    .eq('user_id', userId)
+    .eq('status', 'pendente')
+    .lt('data_vencimento', limite.toISOString().split('T')[0]);
+  if (error) { logDbError('loadParcelasAbertas30Dias', error); return []; }
+  return (data || []).map(p => ({
+    comprador_id: p.vendas?.comprador_id,
+    data_vencimento: p.data_vencimento,
+  })).filter(p => p.comprador_id);
+}
+
 export async function addParcelas(vendaId, parcelas) {
   const userId = await getUserId();
   if (!userId) return null;

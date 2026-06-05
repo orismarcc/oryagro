@@ -314,6 +314,219 @@ function EmptyLotes({ onAdd }) {
   );
 }
 
+// ── AlertasUrgencias ──────────────────────────────────────────────────────────
+
+const DISMISS_PREFIX = 'alerta_dismiss_';
+
+function isDismissed(id) {
+  try {
+    const val = localStorage.getItem(DISMISS_PREFIX + id);
+    if (!val) return false;
+    return Date.now() - Number(val) < 24 * 60 * 60 * 1000; // 24h
+  } catch { return false; }
+}
+
+function dismissAlerta(id) {
+  try { localStorage.setItem(DISMISS_PREFIX + id, String(Date.now())); } catch {}
+}
+
+/**
+ * Compute alertas from lotes + statusByLote without any extra queries.
+ * Returns array of { id, level, text, emoji, lote }
+ */
+function computeAlertas(lotes, statusByLote) {
+  const alertas = [];
+  const now = Date.now();
+
+  lotes.forEach(lote => {
+    if (lote.status !== 'ativo') return;
+    const cultura = CULTURAS[lote.cultura_id];
+    if (!cultura) return;
+
+    let lc;
+    try { lc = resolveLifecycle(lote, cultura); } catch { return; }
+
+    const { diasDecorridos, prontoParaColheita } = lc;
+    const doneStatus = statusByLote[lote.id] || {};
+
+    // ── 1. Lotes com etapas atrasadas ──────────────────────────────────────
+    if (!prontoParaColheita && diasDecorridos >= 0) {
+      const metodoObj = lote.metodo_propagacao && cultura.metodosPropagacao
+        ? cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao) ?? null
+        : null;
+      const shift = metodoObj?.diasViveiro ?? 0;
+
+      const steps = [
+        ...(metodoObj?.etapasViveiro?.map(e => ({
+          ...e,
+          _id: makeStableId('viveiro', e.etapa),
+        })) ?? []),
+        ...cultura.cronograma.map(e => ({
+          ...e,
+          dia: e.dia + shift,
+          _id: makeStableId('default', e.etapa),
+        })),
+      ].filter(s => doneStatus[s._id]?.status !== 'removida');
+
+      const atrasadas = steps.filter(s => {
+        const st = doneStatus[s._id]?.status;
+        return !st || (st !== 'feito' && st !== 'removida' && s.dia < diasDecorridos);
+      });
+
+      atrasadas.forEach(step => {
+        const diasAtraso = diasDecorridos - step.dia;
+        const id = `etapa_atrasada_${lote.id}_${step._id}`;
+        if (isDismissed(id)) return;
+        alertas.push({
+          id,
+          level: diasAtraso > 3 ? 'vermelho' : 'amarelo',
+          text: `${cultura.emoji} ${lote.nome} — etapa "${step.etapa}" atrasada ${diasAtraso} dia${diasAtraso !== 1 ? 's' : ''}`,
+          emoji: cultura.emoji,
+          lote,
+          diasAtraso,
+        });
+      });
+    }
+
+    // ── 2. Colheita pronta sem venda ────────────────────────────────────────
+    if (prontoParaColheita) {
+      // Estimate how many days the lote has been ready by checking diasDecorridos vs expected harvest day
+      // Use the last cronograma step's dia as reference for readiness
+      const colheitaStep = cultura.cronograma.find(e =>
+        e.tipo === 'colheita' || e.etapa?.toLowerCase().includes('colheita')
+      );
+      const metodoObj = lote.metodo_propagacao && cultura.metodosPropagacao
+        ? cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao) ?? null
+        : null;
+      const shift = metodoObj?.diasViveiro ?? 0;
+      const diasColheita = colheitaStep ? (colheitaStep.dia + shift) : (lc.diasPrimeiraProducao ?? diasDecorridos);
+      const diasPronto = Math.max(0, diasDecorridos - diasColheita);
+
+      const id = `colheita_pronta_${lote.id}`;
+      if (!isDismissed(id)) {
+        alertas.push({
+          id,
+          level: diasPronto > 5 ? 'vermelho' : 'amarelo',
+          text: `${cultura.emoji} ${lote.nome} pronto para colheita${diasPronto > 0 ? ` há ${diasPronto} dia${diasPronto !== 1 ? 's' : ''}` : ' hoje'}`,
+          emoji: cultura.emoji,
+          lote,
+          diasPronto,
+        });
+      }
+    }
+  });
+
+  // Sort: vermelho first, then by severity within each group
+  alertas.sort((a, b) => {
+    if (a.level !== b.level) return a.level === 'vermelho' ? -1 : 1;
+    const aNum = a.diasAtraso ?? a.diasPronto ?? 0;
+    const bNum = b.diasAtraso ?? b.diasPronto ?? 0;
+    return bNum - aNum;
+  });
+
+  return alertas;
+}
+
+function AlertasUrgencias({ lotes, statusByLote, onSelectLote }) {
+  const [dismissed, setDismissed] = useState(0); // counter to force re-render on dismiss
+
+  const alertas = useMemo(
+    () => computeAlertas(lotes, statusByLote),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lotes, statusByLote, dismissed]
+  );
+
+  if (alertas.length === 0) return null;
+
+  const temVermelho = alertas.some(a => a.level === 'vermelho');
+
+  const handleDismiss = (e, id) => {
+    e.stopPropagation();
+    dismissAlerta(id);
+    setDismissed(d => d + 1);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      className="mb-5"
+    >
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-3 px-1">
+        <p className="section-label flex-1">⚠️ Alertas</p>
+        <span
+          className="text-[11px] font-bold px-2 py-0.5 rounded-full text-white"
+          style={{ background: temVermelho ? '#dc2626' : '#d97706' }}
+        >
+          {alertas.length}
+        </span>
+      </div>
+
+      {/* Card */}
+      <div
+        className="rounded-2xl overflow-hidden divide-y"
+        style={{
+          background: temVermelho ? '#fff5f5' : '#fffbeb',
+          border: `1px solid ${temVermelho ? '#fecaca' : '#fde68a'}`,
+        }}
+      >
+        <AnimatePresence initial={false}>
+          {alertas.map((alerta) => (
+            <motion.div
+              key={alerta.id}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.22 }}
+              className="flex items-center gap-3 px-4 py-3"
+              style={{ borderBottom: '1px solid transparent' }}
+            >
+              {/* Level indicator dot */}
+              <span
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ background: alerta.level === 'vermelho' ? '#dc2626' : '#d97706' }}
+              />
+
+              {/* Text */}
+              <p className="flex-1 text-[12px] font-medium leading-snug"
+                style={{ color: alerta.level === 'vermelho' ? '#7f1d1d' : '#78350f' }}>
+                {alerta.text}
+              </p>
+
+              {/* Action buttons */}
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button
+                  onClick={() => onSelectLote(alerta.lote)}
+                  className="text-[11px] font-bold px-2.5 py-1 rounded-xl transition-all active:scale-[0.95]"
+                  style={{
+                    background: alerta.level === 'vermelho' ? '#dc2626' : '#d97706',
+                    color: '#fff',
+                  }}
+                >
+                  Ver →
+                </button>
+                <button
+                  onClick={(e) => handleDismiss(e, alerta.id)}
+                  className="text-[10px] font-semibold px-2 py-1 rounded-xl transition-all active:scale-[0.95]"
+                  style={{
+                    background: alerta.level === 'vermelho' ? '#fecaca' : '#fde68a',
+                    color: alerta.level === 'vermelho' ? '#991b1b' : '#92400e',
+                  }}
+                  title="Dispensar por 24h"
+                >
+                  ✕
+                </button>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    </motion.div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 // ── EstaSemanaSection ─────────────────────────────────────────────────────────
@@ -522,6 +735,7 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
           <EmptyLotes onAdd={onManagePropriedades} />
         ) : (
           <>
+            <AlertasUrgencias lotes={lotes} statusByLote={statusByLote} onSelectLote={onSelectLote} />
             <EstaSemanaSection lotes={lotes} statusByLote={statusByLote} />
 
             {propriedades.length > 0 && (

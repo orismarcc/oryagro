@@ -20,6 +20,8 @@ import {
   loadParcelasByComprador,
   loadTodasParcelasPendentes,
   updateParcela,
+  loadParcelasPagasBatch,
+  loadParcelasAbertas30Dias,
 } from '../hooks/useCompradores';
 
 // ── Constante de segurança para padding acima da navbar ──────────────────────
@@ -81,6 +83,61 @@ const TIPO_COLORS = {
   pnae:    { bg: '#dcfce7', color: '#15803d' },
   outros:  { bg: '#f3e8ff', color: '#7e22ce' },
 };
+
+// ── Cálculo de histórico de pagamento ────────────────────────────────────────
+
+/**
+ * Dado um array de parcelas pagas (com data_vencimento e data_pagamento),
+ * calcula a média de dias de atraso (pode ser negativo = pago antes).
+ * Usa as últimas `n` parcelas pagas.
+ */
+function calcMediaAtraso(parcelasPagas, n = 5) {
+  const ultimas = [...parcelasPagas]
+    .sort((a, b) => (b.data_pagamento || '').localeCompare(a.data_pagamento || ''))
+    .slice(0, n);
+  if (ultimas.length === 0) return null;
+  const totalDias = ultimas.reduce((soma, p) => {
+    const venc = new Date(p.data_vencimento + 'T00:00:00');
+    const pago = new Date(p.data_pagamento + 'T00:00:00');
+    return soma + Math.round((pago - venc) / 86_400_000);
+  }, 0);
+  return Math.round(totalDias / ultimas.length);
+}
+
+/**
+ * Retorna nível de risco: 'verde' | 'amarelo' | 'vermelho' | null (sem dados).
+ * - verde: média ≤ 3 dias de atraso
+ * - amarelo: 4–15 dias
+ * - vermelho: > 15 dias OU tem parcelas abertas há > 30 dias
+ */
+function calcRisco(mediaAtraso, temAberta30) {
+  if (temAberta30) return 'vermelho';
+  if (mediaAtraso === null) return null;
+  if (mediaAtraso <= 3) return 'verde';
+  if (mediaAtraso <= 15) return 'amarelo';
+  return 'vermelho';
+}
+
+const RISCO_STYLE = {
+  verde:    { bg: '#dcfce7', color: '#15803d', label: 'Bom pagador' },
+  amarelo:  { bg: '#fef9c3', color: '#a16207', label: 'Atraso moderado' },
+  vermelho: { bg: '#fee2e2', color: '#dc2626', label: 'Risco alto' },
+};
+
+function RiscoBadge({ risco }) {
+  if (!risco) return null;
+  const style = RISCO_STYLE[risco];
+  if (!style) return null;
+  return (
+    <span
+      className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+      style={{ background: style.bg, color: style.color }}
+      title={style.label}
+    >
+      ●
+    </span>
+  );
+}
 
 // ── Bottom Sheet wrapper ──────────────────────────────────────────────────────
 
@@ -519,7 +576,7 @@ function HistoricoPanel({ comprador, onClose }) {
 
 // ── Seção Cobranças Pendentes ─────────────────────────────────────────────────
 
-function CobrancasPendentes() {
+function CobrancasPendentes({ riscoMap = {} }) {
   const [pendentes, setPendentes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagarModal, setPagarModal] = useState(null); // parcela | null
@@ -630,6 +687,25 @@ function CobrancasPendentes() {
                             style={{ color: isVencida ? '#dc2626' : '#374151' }}>
                             {currencyBR(p.valor)}
                           </p>
+                          {/* UX 5: info de prazo e média do comprador */}
+                          {(() => {
+                            const info = p.comprador_id ? riscoMap[p.comprador_id] : null;
+                            if (!info || info.qtdPagas === 0) return null;
+                            const diasStr = days >= 0
+                              ? `Vence em ${days === 0 ? 'hoje' : `${days}d`}`
+                              : `Venceu há ${Math.abs(days)}d`;
+                            const mediaStr = info.mediaAtraso != null
+                              ? info.mediaAtraso <= 0
+                                ? `paga ${Math.abs(info.mediaAtraso)}d antes`
+                                : `paga em média ${info.mediaAtraso}d após`
+                              : null;
+                            if (!mediaStr) return null;
+                            return (
+                              <p className="text-[9px] text-gray-400 mt-0.5">
+                                {diasStr} · Comprador {mediaStr}
+                              </p>
+                            );
+                          })()}
                         </div>
 
                         <button
@@ -689,11 +765,17 @@ export default function CompradoresPage({ onBack }) {
   const [editModal, setEditModal]     = useState(null);   // comprador | null
   const [historicoFor, setHistoricoFor] = useState(null); // comprador | null
 
+  // UX 5: histórico de pagamento por comprador
+  const [parcelasPagas, setParcelasPagas] = useState([]); // todas as parcelas pagas (batch)
+  const [abertos30, setAbertos30]         = useState([]); // parcelas abertas há > 30 dias
+
   const reload = useCallback(() => {
     loadCompradores().then(data => {
       setCompradores(data);
       setLoading(false);
     });
+    loadParcelasPagasBatch().then(setParcelasPagas).catch(() => {});
+    loadParcelasAbertas30Dias().then(setAbertos30).catch(() => {});
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
@@ -732,6 +814,19 @@ export default function CompradoresPage({ onBack }) {
     if (filtro === 'ativo' || filtro === 'inativo') return c.status === filtro;
     return c.tipo === filtro;
   });
+
+  // UX 5: mapa comprador_id → { mediaAtraso, risco, qtdPagas }
+  const riscoMap = React.useMemo(() => {
+    const map = {};
+    compradores.forEach(c => {
+      const pagas = parcelasPagas.filter(p => String(p.comprador_id) === String(c.id));
+      const mediaAtraso = calcMediaAtraso(pagas, 5);
+      const temAberta30 = abertos30.some(p => String(p.comprador_id) === String(c.id));
+      const risco = pagas.length === 0 ? null : calcRisco(mediaAtraso, temAberta30);
+      map[c.id] = { mediaAtraso, risco, qtdPagas: pagas.length };
+    });
+    return map;
+  }, [compradores, parcelasPagas, abertos30]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -842,6 +937,15 @@ export default function CompradoresPage({ onBack }) {
                           <p className="text-[14px] font-extrabold text-foreground leading-none">
                             {c.nome}
                           </p>
+                          {/* UX 5: badge de risco ao lado do nome */}
+                          {riscoMap[c.id]?.qtdPagas > 0
+                            ? <RiscoBadge risco={riscoMap[c.id]?.risco} />
+                            : (
+                              <span className="text-[9px] text-gray-400 font-medium">
+                                Novo comprador
+                              </span>
+                            )
+                          }
                           <span
                             className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                             style={{ background: tipoColors.bg, color: tipoColors.color }}
@@ -879,6 +983,23 @@ export default function CompradoresPage({ onBack }) {
                             </p>
                           )}
                         </div>
+
+                        {/* UX 5: linha de histórico de pagamento */}
+                        {riscoMap[c.id]?.qtdPagas > 0 && (
+                          <p className="text-[10px] mt-1" style={{
+                            color: riscoMap[c.id]?.risco === 'verde' ? '#15803d'
+                              : riscoMap[c.id]?.risco === 'amarelo' ? '#a16207'
+                              : '#dc2626'
+                          }}>
+                            Paga em média {
+                              riscoMap[c.id]?.mediaAtraso != null
+                                ? riscoMap[c.id].mediaAtraso <= 0
+                                  ? `${Math.abs(riscoMap[c.id].mediaAtraso)}d antes do prazo`
+                                  : `${riscoMap[c.id].mediaAtraso}d após o vencimento`
+                                : '—'
+                            }
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -923,7 +1044,7 @@ export default function CompradoresPage({ onBack }) {
               Cobranças pendentes
             </p>
           </div>
-          <CobrancasPendentes />
+          <CobrancasPendentes riscoMap={riscoMap} />
         </div>
       </div>
 

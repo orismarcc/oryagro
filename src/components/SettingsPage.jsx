@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, User, Lock, Bell, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, User, Lock, Bell, CheckCircle2, AlertCircle, Eye, EyeOff, MessageCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useWhatsAppConfig } from '../hooks/useWhatsApp';
 
 // ── Toggle (disabled placeholder) ────────────────────────────────────────────
 
@@ -254,33 +255,198 @@ function PerfilSection() {
 
 // ── NotificacoesSection ───────────────────────────────────────────────────────
 
+const PROVIDERS = [
+  { key: 'z-api',          label: 'Z-API',              desc: 'Conecta ao WhatsApp do seu número pessoal (recomendado)',      badge: '🇧🇷 Popular no Brasil' },
+  { key: 'twilio',         label: 'Twilio',             desc: 'Plataforma empresarial global, alta confiabilidade',           badge: '🌍 Empresarial' },
+  { key: 'whatsapp-cloud', label: 'WhatsApp Cloud API', desc: 'API oficial do Meta/WhatsApp, requer conta Business',         badge: '✅ Oficial Meta' },
+  { key: 'evolution',      label: 'Evolution API',      desc: 'Solução open-source self-hosted (técnico)',                    badge: '🔧 Self-hosted' },
+];
+
 function NotificacoesSection() {
-  const toggles = [
-    { label: 'Notificações por e-mail',           description: 'Receba atualizações importantes por e-mail' },
-    { label: 'Alertas de cronograma',             description: 'Avisos sobre etapas pendentes ou atrasadas' },
-    { label: 'Resumo semanal da propriedade',     description: 'Relatório automático toda segunda-feira' },
-  ];
+  const { config, loading, saving, save } = useWhatsAppConfig();
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  if (loading || !config) return (
+    <div className="flex justify-center py-8"><Loader2 size={18} className="animate-spin" style={{ color: 'hsl(160 84% 27%)' }} /></div>
+  );
+
+  const handleTest = async () => {
+    setTesting(true); setTestResult(null);
+    try {
+      const { sendWhatsApp, gerarMensagemCronograma } = await import('../hooks/useWhatsApp');
+      const msg = '🌱 *OryAgro — Teste de notificação*\n\nSe você recebeu esta mensagem, a configuração está funcionando! ✅';
+      const result = await sendWhatsApp({ config, mensagem: msg, tipo: 'teste' });
+      setTestResult(result);
+    } catch (e) {
+      setTestResult({ ok: false, error: String(e?.message || e) });
+    }
+    setTesting(false);
+  };
+
+  const toggle = (field) => save({ [field]: !config[field] });
 
   return (
     <div className="space-y-4">
+      {/* ── Provider ── */}
       <div className="card p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <Bell size={15} style={{ color: 'hsl(160 84% 27%)' }} />
-          <p className="text-[14px] font-bold text-foreground">Notificações</p>
+        <div className="flex items-center gap-2 mb-3">
+          <MessageCircle size={15} style={{ color: 'hsl(160 84% 27%)' }} />
+          <p className="text-[14px] font-bold text-foreground">Notificações via WhatsApp</p>
+          {config.enabled && (
+            <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#16a34a' }}>
+              ATIVO
+            </span>
+          )}
         </div>
-        <div className="divide-y" style={{ borderColor: 'hsl(214 20% 92%)' }}>
-          {toggles.map(t => <Toggle key={t.label} {...t} />)}
+
+        {/* Provider selector */}
+        <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Provider</label>
+        <div className="mt-1 space-y-1.5">
+          {PROVIDERS.map(p => (
+            <button
+              key={p.key}
+              onClick={() => save({ provider: p.key })}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all text-left"
+              style={config.provider === p.key
+                ? { background: '#f0fdf4', borderColor: '#86efac' }
+                : { background: 'transparent', borderColor: 'hsl(214 20% 91%)' }}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] font-bold text-foreground">{p.label}</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+                    style={{ background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }}>
+                    {p.badge}
+                  </span>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{p.desc}</p>
+              </div>
+              <div className="w-4 h-4 rounded-full border-2 flex-shrink-0"
+                style={config.provider === p.key
+                  ? { borderColor: '#16a34a', background: '#16a34a' }
+                  : { borderColor: 'hsl(214 20% 78%)' }} />
+            </button>
+          ))}
         </div>
+
+        {/* Credentials */}
+        <div className="mt-4 space-y-2.5">
+          {[
+            { field: 'api_key',    label: config.provider === 'evolution' ? 'URL do servidor' : config.provider === 'z-api' ? 'Instance ID' : 'Account SID / Phone Number ID', ph: config.provider === 'evolution' ? 'https://meu-servidor.com' : 'Instance ID ou SID...' },
+            { field: 'api_secret', label: config.provider === 'z-api' ? 'Token' : 'Auth Token / Access Token', ph: 'Token...' },
+            { field: 'from_number', label: config.provider === 'evolution' ? 'Nome da instância' : 'Número de envio (FROM)', ph: config.provider === 'z-api' ? '(não necessário)' : '+55...' },
+          ].map(({ field, label, ph }) => (
+            <div key={field}>
+              <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</label>
+              <input
+                type={field === 'api_secret' ? 'password' : 'text'}
+                value={config[field] || ''}
+                onChange={e => save({ [field]: e.target.value })}
+                placeholder={ph}
+                className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-[12px] bg-background outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+          ))}
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Número de destino (quem recebe)</label>
+            <input
+              type="tel"
+              value={config.to_number || ''}
+              onChange={e => save({ to_number: e.target.value })}
+              placeholder="5566999999999 (sem símbolos)"
+              className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-[12px] bg-background outline-none focus:ring-1 focus:ring-ring"
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">Formato: código do país + DDD + número. Ex: 5566999999999</p>
+          </div>
+        </div>
+
+        {/* Antecedência */}
+        <div className="mt-3">
+          <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            Antecedência para alertas (dias)
+          </label>
+          <input
+            type="number" min="0" max="7"
+            value={config.antecedencia_dias ?? 1}
+            onChange={e => save({ antecedencia_dias: parseInt(e.target.value) || 1 })}
+            className="w-20 mt-1 rounded-xl border border-input px-3 py-2 text-[12px] bg-background outline-none"
+          />
+        </div>
+
+        {/* Ativar/desativar + teste */}
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={() => save({ enabled: !config.enabled })}
+            disabled={saving}
+            className="flex-1 py-2.5 rounded-xl text-[12px] font-bold transition-all"
+            style={config.enabled
+              ? { background: '#fee2e2', color: '#dc2626' }
+              : { background: '#16a34a', color: 'white' }}
+          >
+            {config.enabled ? 'Desativar WhatsApp' : 'Ativar WhatsApp'}
+          </button>
+          {config.enabled && config.to_number && (
+            <button
+              onClick={handleTest}
+              disabled={testing}
+              className="px-4 py-2.5 rounded-xl text-[12px] font-medium border border-input flex items-center gap-1.5"
+            >
+              {testing ? <Loader2 size={12} className="animate-spin" /> : '🧪'}
+              Testar
+            </button>
+          )}
+        </div>
+
+        {testResult && (
+          <div className={`mt-2 px-3 py-2 rounded-xl text-[11px] font-medium ${testResult.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+            {testResult.ok ? '✅ Mensagem enviada com sucesso!' : `❌ Erro: ${testResult.error}`}
+          </div>
+        )}
       </div>
 
-      {/* Info banner */}
-      <div
-        className="flex items-start gap-3 px-4 py-3.5 rounded-2xl"
-        style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 90%)' }}
-      >
-        <span className="text-base leading-none flex-shrink-0 mt-0.5">🔔</span>
-        <p className="text-[12px] text-muted-foreground leading-relaxed">
-          As notificações serão disponibilizadas em breve.
+      {/* ── Tipos de alerta ── */}
+      {config.enabled && (
+        <div className="card p-5">
+          <p className="text-[13px] font-bold text-foreground mb-3">Tipos de Alerta</p>
+          <div className="divide-y" style={{ borderColor: 'hsl(214 20% 92%)' }}>
+            {[
+              { field: 'notif_cronograma', label: '🌱 Cronograma',  desc: 'Etapas previstas nos próximos dias' },
+              { field: 'notif_colheita',   label: '🌾 Colheita',    desc: 'Lotes prontos para colheita' },
+              { field: 'notif_cobranças',  label: '💰 Cobranças',   desc: 'Parcelas vencendo ou em atraso' },
+              { field: 'notif_estoque',    label: '📦 Estoque',     desc: 'Insumos em quantidade crítica' },
+            ].map(({ field, label, desc }) => (
+              <div key={field} className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-[12px] font-semibold text-foreground">{label}</p>
+                  <p className="text-[11px] text-muted-foreground">{desc}</p>
+                </div>
+                <button
+                  onClick={() => toggle(field)}
+                  className="w-10 h-5.5 rounded-full relative transition-colors flex-shrink-0"
+                  style={{
+                    background: config[field] ? '#16a34a' : 'hsl(214 20% 78%)',
+                    minWidth: 40, minHeight: 22,
+                  }}
+                >
+                  <span
+                    className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all"
+                    style={{ left: config[field] ? '50%' : '2px' }}
+                  />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Info / guia */}
+      <div className="flex items-start gap-3 px-4 py-3.5 rounded-2xl"
+        style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 90%)' }}>
+        <span className="text-base flex-shrink-0 mt-0.5">📘</span>
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          Para instruções detalhadas de configuração de cada provider, consulte o arquivo
+          <strong className="text-foreground"> docs/whatsapp-setup-guide.md</strong> no projeto.
         </p>
       </div>
     </div>

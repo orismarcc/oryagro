@@ -197,6 +197,75 @@ export async function updateLotePlantado(id, area_plantada_ha) {
 }
 
 /**
+ * Pre-load default schedule steps when a new lot is created.
+ * Inserts one row per step from cultura.cronograma (and etapasViveiro if applicable),
+ * with is_custom=false and status='pendente'. Safe to call after registrarPlantio.
+ *
+ * @param {object} plantio    — the row returned by registrarPlantio (must have .id, .cultura_id)
+ * @param {object} cultura    — the cultura object from CULTURAS[culturaId]
+ * @param {number} diasViveiro — shift in days for the propagation method (0 if none)
+ */
+export async function preCarregarEtapasPadrao(plantio, cultura, diasViveiro = 0) {
+  if (!plantio?.id || !cultura) return;
+  const userId = await getUserId();
+  if (!userId) return;
+
+  const rows = [];
+
+  // 1. Viveiro steps (from metodo_propagacao's etapasViveiro)
+  const metodoObj = plantio.metodo_propagacao && cultura.metodosPropagacao
+    ? cultura.metodosPropagacao.find(m => m.key === plantio.metodo_propagacao) || null
+    : null;
+
+  if (metodoObj?.etapasViveiro) {
+    metodoObj.etapasViveiro.forEach(etapa => {
+      rows.push({
+        user_id:         userId,
+        plantio_id:      plantio.id,
+        cultura_id:      cultura.id,
+        dia_previsto:    etapa.dia,
+        etapa:           etapa.etapa,
+        produto:         etapa.produto || '',
+        dose:            etapa.dose || '',
+        forma_aplicacao: etapa.forma || '',
+        tipo:            etapa.tipo || 'manejo',
+        status:          'pendente',
+        is_custom:       false,
+      });
+    });
+  }
+
+  // 2. Standard cronograma steps (shifted by diasViveiro)
+  if (cultura.cronograma) {
+    cultura.cronograma.forEach(etapa => {
+      const diaComShift = etapa.dia + (diasViveiro || 0);
+      rows.push({
+        user_id:         userId,
+        plantio_id:      plantio.id,
+        cultura_id:      cultura.id,
+        dia_previsto:    diaComShift,
+        etapa:           etapa.etapa,
+        produto:         etapa.produto || '',
+        dose:            etapa.dose || '',
+        forma_aplicacao: etapa.forma || '',
+        tipo:            etapa.tipo || 'manejo',
+        status:          'pendente',
+        is_custom:       false,
+      });
+    });
+  }
+
+  if (rows.length === 0) return;
+
+  // Insert with ignoreDuplicates so re-runs don't fail if rows already exist
+  const { error } = await supabase
+    .from('cronograma_atividades')
+    .upsert(rows, { onConflict: 'plantio_id,etapa,dia_previsto,is_custom', ignoreDuplicates: true });
+
+  if (error) logDbError('preCarregarEtapasPadrao', error);
+}
+
+/**
  * Load all cronograma_atividades rows for a given plantio.
  * Used on mount to rehydrate status from Supabase (source of truth).
  */

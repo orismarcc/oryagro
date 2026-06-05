@@ -25,6 +25,7 @@ import { makeStableId, makeCustomId } from '../hooks/useCronogramaSync';
 import { formatDatePtBR, fmtNumber, today, safeLS } from './lote/shared';
 import TabInsumos from './lote/TabInsumos';
 import TabDiario from './lote/TabDiario';
+import TabProducao from './lote/TabProducao';
 import TabDespesas from './lote/TabDespesas';
 import TabReceitas from './lote/TabReceitas';
 
@@ -420,6 +421,7 @@ function TabColheita({ cultura, lote }) {
 const TABS = [
   { value: 'cronograma', label: 'Cronograma', Icon: CalendarDays },
   { value: 'colheita',   label: 'Colheita',   Icon: TrendingUp },
+  { value: 'producao',   label: 'Produção',   Icon: Sprout },
   { value: 'receitas',   label: 'Receitas',   Icon: DollarSign },
   { value: 'despesas',   label: 'Despesas',   Icon: Receipt },
   { value: 'diario',     label: 'Diário',     Icon: BookOpen },
@@ -705,6 +707,9 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
           )}
           {tab === 'despesas' && (
             <TabDespesas lote={lote} cor={cor} canDelete={canDelete} />
+          )}
+          {tab === 'producao' && (
+            <TabProducao lote={lote} cultura={cultura} />
           )}
           {tab === 'diario' && (
             <TabDiario lote={lote} canDelete={canDelete} />

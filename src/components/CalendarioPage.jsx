@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, CalendarDays, X, DollarSign } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CalendarDays, X, DollarSign, CheckCircle2, AlertCircle, Wheat, TrendingUp } from 'lucide-react';
 import { CULTURAS } from '../data/culturas';
-import { loadTodosLotes } from '../hooks/useSupabaseSync';
+import { loadTodosLotes, loadAllColheitaEventos } from '../hooks/useSupabaseSync';
 import { cacheGet, cacheSet } from '../hooks/useOfflineCache';
 import { supabase } from '../lib/supabase';
 import { updateParcela } from '../hooks/useCompradores';
@@ -388,8 +388,137 @@ function InfoRow({ label, value }) {
   );
 }
 
+/** Sumário mensal — card abaixo do grid */
+function SumarioMensal({ monthStart, atividadesPorDia, today, colheitaEventos, lotes }) {
+  const m = monthStart.getMonth();
+  const y = monthStart.getFullYear();
+
+  // Collect all activities in the month (excl. parcelas financeiras)
+  const atvsDoMes = useMemo(() => {
+    const result = [];
+    Object.entries(atividadesPorDia).forEach(([iso, arr]) => {
+      const d = new Date(iso + 'T12:00:00');
+      if (d.getMonth() !== m || d.getFullYear() !== y) return;
+      arr.forEach(a => { if (!a.isParcela) result.push(a); });
+    });
+    return result;
+  }, [atividadesPorDia, m, y]);
+
+  const total      = atvsDoMes.length;
+  const concluidas = atvsDoMes.filter(a => a.done).length;
+  const atrasadas  = atvsDoMes.filter(a => !a.done && a.dataPlanejada && a.dataPlanejada < today).length;
+
+  // Harvest kg from plantio_eventos (tipo='colheita') in this month
+  const colheitaKg = useMemo(() => {
+    return (colheitaEventos || []).reduce((sum, ev) => {
+      if (!ev.data) return sum;
+      const d = new Date(ev.data + 'T12:00:00');
+      if (d.getMonth() !== m || d.getFullYear() !== y) return sum;
+      return sum + (parseFloat(ev.quantidade) || 0);
+    }, 0);
+  }, [colheitaEventos, m, y]);
+
+  // Estimated revenue: for each lote that had a harvest event this month,
+  // use its cultura's venda.precoUnitario (per kg where unidade='kg', else skip)
+  const receitaEstimada = useMemo(() => {
+    if (!colheitaEventos || !lotes) return 0;
+    const loteById = Object.fromEntries(lotes.map(l => [l.id, l]));
+    return (colheitaEventos).reduce((sum, ev) => {
+      if (!ev.data) return sum;
+      const d = new Date(ev.data + 'T12:00:00');
+      if (d.getMonth() !== m || d.getFullYear() !== y) return sum;
+      const kg = parseFloat(ev.quantidade) || 0;
+      if (!kg) return sum;
+      const lote = loteById[ev.plantio_id];
+      if (!lote) return sum;
+      const cultura = CULTURAS[lote.cultura_id];
+      const preco = cultura?.venda?.precoUnitario || 0;
+      return sum + kg * preco;
+    }, 0);
+  }, [colheitaEventos, lotes, m, y]);
+
+  if (total === 0 && colheitaKg === 0) return null;
+
+  return (
+    <div
+      className="mt-5 rounded-2xl p-4"
+      style={{ background: 'hsl(160 60% 97%)', border: '1px solid hsl(160 60% 85%)' }}
+    >
+      <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">
+        Resumo do mês
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        {/* Atividades */}
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'hsl(210 16% 92%)' }}>
+            <CalendarDays size={14} color="hsl(215 20% 35%)" />
+          </div>
+          <div>
+            <p className="text-[18px] font-extrabold text-foreground leading-none">{total}</p>
+            <p className="text-[10px] text-muted-foreground">atividade{total !== 1 ? 's' : ''}</p>
+          </div>
+        </div>
+        {/* Concluídas */}
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: '#dcfce7' }}>
+            <CheckCircle2 size={14} color="#16a34a" />
+          </div>
+          <div>
+            <p className="text-[18px] font-extrabold leading-none" style={{ color: '#16a34a' }}>{concluidas}</p>
+            <p className="text-[10px] text-muted-foreground">concluída{concluidas !== 1 ? 's' : ''}</p>
+          </div>
+        </div>
+        {/* Atrasadas */}
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: atrasadas > 0 ? '#fee2e2' : 'hsl(210 16% 92%)' }}>
+            <AlertCircle size={14} color={atrasadas > 0 ? '#dc2626' : 'hsl(215 20% 55%)'} />
+          </div>
+          <div>
+            <p className="text-[18px] font-extrabold leading-none"
+              style={{ color: atrasadas > 0 ? '#dc2626' : 'hsl(215 20% 45%)' }}>{atrasadas}</p>
+            <p className="text-[10px] text-muted-foreground">atrasada{atrasadas !== 1 ? 's' : ''}</p>
+          </div>
+        </div>
+        {/* Colheita kg */}
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: '#f3e8ff' }}>
+            <Wheat size={14} color="#7c3aed" />
+          </div>
+          <div>
+            <p className="text-[18px] font-extrabold leading-none" style={{ color: '#7c3aed' }}>
+              {colheitaKg > 0 ? (colheitaKg % 1 === 0 ? colheitaKg : colheitaKg.toFixed(1)) : '—'}
+            </p>
+            <p className="text-[10px] text-muted-foreground">kg colhidos</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Receita estimada — full width row */}
+      {receitaEstimada > 0 && (
+        <div className="mt-3 pt-3 flex items-center gap-2.5"
+          style={{ borderTop: '1px solid hsl(160 60% 85%)' }}>
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: '#dbeafe' }}>
+            <TrendingUp size={14} color="#2563eb" />
+          </div>
+          <div className="flex-1">
+            <p className="text-[11px] text-muted-foreground">Receita estimada (colheitas registradas)</p>
+            <p className="text-[16px] font-extrabold leading-none mt-0.5" style={{ color: '#2563eb' }}>
+              {receitaEstimada.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Month grid view */
-function MonthView({ monthStart, atividadesPorDia, today, selectedDay, setSelectedDay, onAtivClick }) {
+function MonthView({ monthStart, atividadesPorDia, today, selectedDay, setSelectedDay, onAtivClick, colheitaEventos, lotes }) {
   const year = monthStart.getFullYear();
   const month = monthStart.getMonth();
 
@@ -541,6 +670,15 @@ function MonthView({ monthStart, atividadesPorDia, today, selectedDay, setSelect
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Monthly summary card */}
+      <SumarioMensal
+        monthStart={monthStart}
+        atividadesPorDia={atividadesPorDia}
+        today={today}
+        colheitaEventos={colheitaEventos}
+        lotes={lotes}
+      />
     </div>
   );
 }
@@ -557,6 +695,7 @@ export default function CalendarioPage() {
   const [loading, setLoading] = useState(true);
   const [pagandoParcela, setPagandoParcela] = useState(false);
   const [cacheTimestamp, setCacheTimestamp] = useState(null);
+  const [colheitaEventos, setColheitaEventos] = useState([]);
 
   const CACHE_KEY = 'calendario_lotes';
 
@@ -581,6 +720,9 @@ export default function CalendarioPage() {
         // Sem internet e sem cache — mantém tela de loading
         if (!cached) setLoading(false);
       });
+
+    // 3. Load harvest events for monthly summary
+    loadAllColheitaEventos().then(evs => setColheitaEventos(evs)).catch(() => {});
   }, []);
 
   // ── Cronograma status from Supabase (source of truth) ───────────────────────
@@ -777,6 +919,8 @@ export default function CalendarioPage() {
             selectedDay={selectedDay}
             setSelectedDay={setSelectedDay}
             onAtivClick={a => a.isParcela ? setPopupParcela(a.parcelaObj) : setPopupAtiv(a)}
+            colheitaEventos={colheitaEventos}
+            lotes={lotes}
           />
         ) : (
           weekDays.map(d => {
