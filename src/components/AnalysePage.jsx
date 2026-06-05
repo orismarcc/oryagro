@@ -634,6 +634,18 @@ function ProjecaoReceitaCard({ lotes, eventosColheita }) {
   });
   const [prices, setPrices] = useState(defaultPrices);
 
+  // ── Polpa / In-natura ─────────────────────────────────────────────────────
+  // Per-cultura toggle: 'inNatura' | 'polpa'
+  const [modoProjecao, setModoProjecao] = useState({});
+  // % rendimento: kg polpa / kg fruta (default 70%)
+  const [rendimentos, setRendimentos] = useState({});
+  // Preço R$/kg da polpa processada
+  const [precosPolpa, setPrecosPolpa] = useState({});
+
+  const getModo = (cid) => modoProjecao[cid] ?? 'inNatura';
+  const getRendimento = (cid) => rendimentos[cid] ?? 70;
+  const getPrecoPolpa = (cid) => precosPolpa[cid] ?? (prices[cid] ?? 5) * 2;
+
   // Culture groups present
   const culturaGroups = {};
   lotes.forEach(l => {
@@ -655,10 +667,18 @@ function ProjecaoReceitaCard({ lotes, eventosColheita }) {
   const endYear = Math.max(currentYear + 4, minPlantYear + 6);
   const years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
 
-  // For each year, compute projected revenue across all lotes
+  // ── Compute projected revenue per year — modo polpa vs in-natura ─────────
+  // projByYear = projeção PRINCIPAL (polpa se ativado, in-natura caso contrário)
+  // projInNaturaByYear = projeção de referência in-natura (sempre calculada, só exibida)
   const projByYear = {};
+  const projInNaturaByYear = {};
+  const projPolpaByYear = {};
+
   years.forEach(yr => {
-    let total = 0;
+    let totalPrincipal = 0;
+    let totalInNatura = 0;
+    let totalPolpa = 0;
+
     lotes.forEach(l => {
       const c = getCultura(l.cultura_id);
       if (!c) return;
@@ -667,13 +687,29 @@ function ProjecaoReceitaCard({ lotes, eventosColheita }) {
       const factor = getRampFactor(c.id, yearFromPlant);
       if (factor === 0) return;
 
-      // Full-potential production via single source of truth (no safrasAno multiplier)
-      const priceKg = prices[c.id] ?? c.venda?.precoUnitario ?? 3.5;
       const { kg } = estimateKgAnual(l, c.id, factor);
-      total += kg * priceKg;
+      const priceInNatura = prices[c.id] ?? c.venda?.precoUnitario ?? 3.5;
+      const rendPct = getRendimento(c.id) / 100;
+      const pricePolpa = getPrecoPolpa(c.id);
+      const modo = getModo(c.id);
+
+      const receitaInNatura = kg * priceInNatura;
+      const receitaPolpa = kg * rendPct * pricePolpa;
+
+      totalInNatura += receitaInNatura;
+      totalPolpa += receitaPolpa;
+      totalPrincipal += modo === 'polpa' ? receitaPolpa : receitaInNatura;
     });
-    projByYear[yr] = total;
+
+    projByYear[yr] = totalPrincipal;
+    projInNaturaByYear[yr] = totalInNatura;
+    projPolpaByYear[yr] = totalPolpa;
   });
+
+  // Check if any cultura has polpa mode on
+  const anyPolpaModo = Object.values(culturaGroups).some(({ cultura }) =>
+    getModo(cultura.id) === 'polpa'
+  );
 
   // Actual revenue by year from vendas/colheita eventos
   const actualByYear = {};
@@ -754,16 +790,172 @@ function ProjecaoReceitaCard({ lotes, eventosColheita }) {
         ))}
       </div>
 
+      {/* ── Polpa / In-natura toggles ─────────────────────────────────────────── */}
+      <div className="px-4 pt-2 pb-1 flex flex-col gap-2">
+        {Object.values(culturaGroups).map(({ cultura }) => {
+          const modo = getModo(cultura.id);
+          const isPolpa = modo === 'polpa';
+          return (
+            <div
+              key={cultura.id}
+              className="rounded-xl border p-3"
+              style={{
+                background: isPolpa ? '#f0fdf4' : '#f8fafc',
+                borderColor: isPolpa ? '#86efac' : '#e2e8f0',
+              }}
+            >
+              {/* Cultura header + toggle */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[13px]">{cultura.emoji}</span>
+                  <span className="text-[12px] font-bold text-foreground">{cultura.nome}</span>
+                </div>
+                <div className="flex rounded-lg overflow-hidden border border-gray-200 text-[10px] font-bold">
+                  <button
+                    onClick={() => setModoProjecao(p => ({ ...p, [cultura.id]: 'inNatura' }))}
+                    className="px-2.5 py-1 transition-colors"
+                    style={{
+                      background: !isPolpa ? '#16a34a' : '#fff',
+                      color: !isPolpa ? '#fff' : '#6b7280',
+                    }}
+                  >
+                    🍒 In-natura
+                  </button>
+                  <button
+                    onClick={() => setModoProjecao(p => ({ ...p, [cultura.id]: 'polpa' }))}
+                    className="px-2.5 py-1 transition-colors"
+                    style={{
+                      background: isPolpa ? '#16a34a' : '#fff',
+                      color: isPolpa ? '#fff' : '#6b7280',
+                    }}
+                  >
+                    🧃 Polpa
+                  </button>
+                </div>
+              </div>
+
+              {/* In-natura: só mostra preço (já editável acima, mas repetimos aqui para clareza) */}
+              {!isPolpa && (
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <span>Preço fruta in-natura:</span>
+                  <span className="text-gray-400">R$</span>
+                  <input
+                    type="number" min="0" step="0.10"
+                    value={prices[cultura.id] ?? ''}
+                    onChange={e => setPrices(p => ({ ...p, [cultura.id]: parseFloat(e.target.value) || 0 }))}
+                    className="w-16 text-[11px] font-bold text-green-700 bg-white rounded-lg px-2 py-1 border border-gray-200 outline-none text-right"
+                  />
+                  <span className="text-gray-400">/kg</span>
+                </div>
+              )}
+
+              {/* Polpa: rendimento + preço polpa + referência in-natura */}
+              {isPolpa && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap gap-3 items-center">
+                    {/* Rendimento % */}
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      <span className="text-muted-foreground">Rendimento polpa:</span>
+                      <input
+                        type="number" min="1" max="100" step="1"
+                        value={getRendimento(cultura.id)}
+                        onChange={e => setRendimentos(p => ({ ...p, [cultura.id]: parseFloat(e.target.value) || 70 }))}
+                        className="w-12 text-[11px] font-bold text-green-700 bg-white rounded-lg px-2 py-1 border border-gray-200 outline-none text-center"
+                      />
+                      <span className="text-muted-foreground">%</span>
+                      <span className="text-[10px] text-gray-400 ml-1">
+                        (1 kg fruta → {(getRendimento(cultura.id) / 100).toFixed(2)} kg polpa)
+                      </span>
+                    </div>
+                    {/* Preço polpa */}
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      <span className="text-muted-foreground">R$/kg polpa:</span>
+                      <input
+                        type="number" min="0" step="0.10"
+                        value={precosPolpa[cultura.id] ?? getPrecoPolpa(cultura.id)}
+                        onChange={e => setPrecosPolpa(p => ({ ...p, [cultura.id]: parseFloat(e.target.value) || 0 }))}
+                        className="w-16 text-[11px] font-bold text-green-700 bg-white rounded-lg px-2 py-1 border border-gray-200 outline-none text-right"
+                      />
+                    </div>
+                  </div>
+                  {/* Referência in-natura (não entra nos gráficos) */}
+                  <div
+                    className="flex items-center gap-2 text-[10px] rounded-lg px-2 py-1.5"
+                    style={{ background: '#f1f5f9', color: '#64748b' }}
+                  >
+                    <span>📊 Ref. in-natura (preço:</span>
+                    <input
+                      type="number" min="0" step="0.10"
+                      value={prices[cultura.id] ?? ''}
+                      onChange={e => setPrices(p => ({ ...p, [cultura.id]: parseFloat(e.target.value) || 0 }))}
+                      className="w-14 text-[10px] font-bold bg-white rounded px-1.5 py-0.5 border border-gray-200 outline-none text-right text-gray-600"
+                    />
+                    <span>/kg) — referência apenas, não entra nos gráficos</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Comparativo polpa × in-natura (quando polpa ativo) ───────────────── */}
+      {anyPolpaModo && (
+        <div className="mx-4 mb-2 rounded-xl border border-green-200 bg-green-50 px-3 py-2.5">
+          <p className="text-[10px] font-bold text-green-700 uppercase tracking-wide mb-1.5">
+            Comparativo de projeção — próximos {years.length} anos
+          </p>
+          <div className="flex gap-4 flex-wrap">
+            <div>
+              <p className="text-[9px] text-green-600/70 font-medium">🧃 Polpa (modo ativo)</p>
+              <p className="text-[15px] font-black text-green-700">
+                {fmtBRL(years.reduce((s, y) => s + (projPolpaByYear[y] || 0), 0))}
+              </p>
+            </div>
+            <div>
+              <p className="text-[9px] text-gray-500 font-medium">🍒 In-natura (referência)</p>
+              <p className="text-[15px] font-bold text-gray-600">
+                {fmtBRL(years.reduce((s, y) => s + (projInNaturaByYear[y] || 0), 0))}
+              </p>
+            </div>
+            <div>
+              <p className="text-[9px] text-blue-500 font-medium">📈 Diferença</p>
+              <p className="text-[15px] font-bold text-blue-600">
+                {(() => {
+                  const polpa = years.reduce((s, y) => s + (projPolpaByYear[y] || 0), 0);
+                  const inNat = years.reduce((s, y) => s + (projInNaturaByYear[y] || 0), 0);
+                  const diff = polpa - inNat;
+                  return (diff >= 0 ? '+' : '') + fmtBRL(diff);
+                })()}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Total projection chip */}
       {totalProjAll > 0 && (
-        <div className="px-4 pt-2">
+        <div className="px-4 pt-2 flex items-center gap-3 flex-wrap">
           <div className="inline-flex items-center gap-1.5 bg-green-50 rounded-xl px-3 py-1.5">
             <div className="w-2.5 h-2.5 rounded-sm bg-green-400" />
             <div>
-              <p className="text-[9px] text-green-600/70 font-medium leading-none">Receita total projetada ({years[0]}–{years[years.length - 1]})</p>
+              <p className="text-[9px] text-green-600/70 font-medium leading-none">
+                {anyPolpaModo ? '🧃 Projeção com polpa' : '🍒 Projeção in-natura'} — {years[0]}–{years[years.length - 1]}
+              </p>
               <p className="text-[14px] font-bold text-green-700 leading-tight">{fmtBRL(totalProjAll)}</p>
             </div>
           </div>
+          {anyPolpaModo && (
+            <div className="inline-flex items-center gap-1.5 bg-gray-50 rounded-xl px-3 py-1.5 border border-gray-200">
+              <div className="w-2.5 h-2.5 rounded-sm bg-gray-400" />
+              <div>
+                <p className="text-[9px] text-gray-500 font-medium leading-none">🍒 Ref. in-natura</p>
+                <p className="text-[14px] font-bold text-gray-600 leading-tight">
+                  {fmtBRL(years.reduce((s, y) => s + (projInNaturaByYear[y] || 0), 0))}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
