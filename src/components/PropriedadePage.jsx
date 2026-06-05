@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { motion } from 'framer-motion';
-import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database } from 'lucide-react';
-import { loadLotesByPropriedade, deleteLoteCompleto } from '../hooks/useSupabaseSync';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database, Loader2 } from 'lucide-react';
+import { loadLotesByPropriedade, deleteLoteCompleto, loadTalhoesPorPropriedade, criarTalhao } from '../hooks/useSupabaseSync';
 import { useCronogramaStatusBatch, makeStableId } from '../hooks/useCronogramaSync';
 import { loadEstoque } from '../hooks/useGestao';
 import { CULTURAS } from '../data/culturas';
@@ -434,18 +434,195 @@ function FarmMembersSection({ propriedade, userRole }) {
   );
 }
 
-export default function PropriedadePage({ propriedade, userRole, onBack, onSelectLote, onGoEstoque, onAddLote }) {
+// ── TalhaoCard (mini card for perennial areas) ─────────────────────────────────
+function TalhaoCard({ talhao, onSelect, index }) {
+  const cultura = CULTURAS[talhao.cultura_id];
+  const cor = cultura?.cor ?? '#16a34a';
+  const idadeAnos = talhao.data_implantacao
+    ? ((Date.now() - new Date(talhao.data_implantacao + 'T12:00:00').getTime()) / (365.25 * 86400000)).toFixed(1)
+    : null;
+
+  return (
+    <motion.button
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.04, duration: 0.22 }}
+      onClick={() => onSelect(talhao)}
+      className="card-interactive w-full text-left p-4"
+      style={{ borderLeft: `3px solid ${cor}` }}
+    >
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+          style={{ background: `${cor}15` }}>
+          {cultura?.emoji ?? '🌱'}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-[14px] font-bold text-foreground leading-tight truncate">{talhao.nome}</p>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+              style={{ background: `${cor}20`, color: cor }}>
+              Perene
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap text-[11px] text-muted-foreground">
+            <span>{cultura?.nome ?? talhao.cultura_id}</span>
+            {talhao.area_ha && <span>· {talhao.area_ha} ha</span>}
+            {talhao.total_plantas && <span>· {talhao.total_plantas.toLocaleString('pt-BR')} plantas</span>}
+          </div>
+        </div>
+        <div className="text-right flex-shrink-0">
+          {idadeAnos && (
+            <>
+              <div className="text-[13px] font-black leading-none" style={{ color: cor }}>{idadeAnos}</div>
+              <div className="text-[9px] text-muted-foreground mt-0.5">anos</div>
+            </>
+          )}
+        </div>
+      </div>
+    </motion.button>
+  );
+}
+
+// ── Dialog: Novo Talhão ─────────────────────────────────────────────────────────
+function NovaTalhaoDialog({ propriedadeId, onClose, onCreated }) {
+  const [form, setForm] = useState({
+    nome: '', culturaId: '', dataImplantacao: new Date().toISOString().split('T')[0],
+    areaHa: '', totalPlantas: '', metodoPropagacao: '', observacoes: '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  // Somente culturas perenes
+  const culturasPerenes = Object.values(CULTURAS).filter(c => c.tipoCultura === 'perene');
+
+  const handleCreate = async () => {
+    if (!form.nome || !form.culturaId || !form.dataImplantacao) return;
+    setSaving(true);
+    const talhao = await criarTalhao({
+      propriedadeId,
+      nome: form.nome,
+      culturaId: form.culturaId,
+      dataImplantacao: form.dataImplantacao,
+      areaHa: parseFloat(form.areaHa) || null,
+      totalPlantas: parseInt(form.totalPlantas) || null,
+      metodoPropagacao: form.metodoPropagacao || null,
+      observacoes: form.observacoes || null,
+    });
+    setSaving(false);
+    if (talhao) { onCreated(talhao); }
+  };
+
+  const cor = form.culturaId ? (CULTURAS[form.culturaId]?.cor ?? '#16a34a') : '#16a34a';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <motion.div
+        className="relative bg-background rounded-t-3xl sm:rounded-2xl w-full max-w-lg max-h-[90svh] flex flex-col overflow-hidden shadow-2xl"
+        initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+      >
+        <div className="px-5 pt-5 pb-3 border-b border-border flex-shrink-0">
+          <h3 className="text-[15px] font-bold text-foreground">Novo Talhão</h3>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Área física permanente de cultura perene</p>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3">
+          {/* Cultura */}
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Cultura *</label>
+            <select
+              value={form.culturaId}
+              onChange={e => setForm(f => ({ ...f, culturaId: e.target.value }))}
+              className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-sm bg-background outline-none"
+            >
+              <option value="">Selecionar cultura perene…</option>
+              {culturasPerenes.map(c => (
+                <option key={c.id} value={c.id}>{c.emoji} {c.nome}</option>
+              ))}
+            </select>
+          </div>
+          {/* Nome */}
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Nome do Talhão *</label>
+            <input
+              type="text"
+              value={form.nome}
+              onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+              placeholder="Ex: Acerola Bloco A, Talhão Norte..."
+              className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-sm bg-background outline-none"
+            />
+          </div>
+          {/* Data implantação */}
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Data de implantação *</label>
+            <input
+              type="date"
+              value={form.dataImplantacao}
+              onChange={e => setForm(f => ({ ...f, dataImplantacao: e.target.value }))}
+              className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-sm bg-background outline-none"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Área (ha)</label>
+              <input type="number" min="0" step="0.01" value={form.areaHa}
+                onChange={e => setForm(f => ({ ...f, areaHa: e.target.value }))}
+                className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-sm bg-background outline-none" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Nº de plantas</label>
+              <input type="number" min="0" value={form.totalPlantas}
+                onChange={e => setForm(f => ({ ...f, totalPlantas: e.target.value }))}
+                className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-sm bg-background outline-none" />
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Método de propagação</label>
+            <input type="text" value={form.metodoPropagacao}
+              onChange={e => setForm(f => ({ ...f, metodoPropagacao: e.target.value }))}
+              placeholder="Ex: Estaquia, Enxertia..."
+              className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-sm bg-background outline-none" />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Observações</label>
+            <textarea value={form.observacoes}
+              onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
+              rows={2} placeholder="Variedade, localização, etc..."
+              className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-sm bg-background outline-none resize-none" />
+          </div>
+        </div>
+        <div className="px-5 py-4 border-t border-border flex gap-2 flex-shrink-0">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-input text-[13px] font-medium text-muted-foreground">
+            Cancelar
+          </button>
+          <button onClick={handleCreate} disabled={saving || !form.nome || !form.culturaId || !form.dataImplantacao}
+            className="flex-1 py-2.5 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50"
+            style={{ background: cor }}>
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+            {saving ? 'Criando…' : 'Criar Talhão'}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+export default function PropriedadePage({ propriedade, userRole, onBack, onSelectLote, onGoEstoque, onAddLote, onSelectTalhao }) {
   const [lotes, setLotes]         = useState([]);
+  const [talhoes, setTalhoes]     = useState([]);
   const [alertas, setAlertas]     = useState(0);
   const [loading, setLoading]     = useState(true);
   const [showBackup, setShowBackup] = useState(false);
+  const [showNovoTalhao, setShowNovoTalhao] = useState(false);
 
   useEffect(() => {
     Promise.all([
       loadLotesByPropriedade(propriedade.id),
       loadEstoque(propriedade.id),
-    ]).then(([ls, insumos]) => {
-      setLotes(ls);
+      loadTalhoesPorPropriedade(propriedade.id),
+    ]).then(([ls, insumos, ts]) => {
+      // Lotes anuais: não têm talhao_id OU tipo_cultura == 'anual'
+      setLotes(ls.filter(l => !l.talhao_id && l.tipo_cultura !== 'perene'));
+      setTalhoes(ts ?? []);
       setAlertas(insumos.filter(i => i.quantidade <= i.quantidade_minima && i.quantidade_minima > 0).length);
       setLoading(false);
     });
@@ -507,35 +684,76 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
         </div>
       </div>
 
-      <div className="px-4 pt-5 pb-32 max-w-2xl mx-auto">
-        <div className="flex items-center justify-between mb-3 px-1">
-          <p className="section-label">Lotes</p>
-          <span className="text-[11px] text-muted-foreground">{lotes.length} lote{lotes.length !== 1 ? 's' : ''}</span>
+      <div className="px-4 pt-5 pb-32 max-w-2xl mx-auto flex flex-col gap-6">
+
+        {/* ── Talhões Perenes ─────────────────────────────────────────────── */}
+        <div>
+          <div className="flex items-center justify-between mb-3 px-1">
+            <div className="flex items-center gap-2">
+              <p className="section-label">Talhões Perenes</p>
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                style={{ background: '#f0fdf4', color: '#16a34a' }}>
+                Acerola · Banana · Cupuaçu…
+              </span>
+            </div>
+            <button
+              onClick={() => setShowNovoTalhao(true)}
+              className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-xl"
+              style={{ background: '#f0fdf4', color: '#16a34a' }}
+            >
+              <Plus size={11} /> Novo Talhão
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="space-y-2">{[1].map(i => <div key={i} className="h-16 rounded-2xl bg-muted animate-pulse" />)}</div>
+          ) : talhoes.length === 0 ? (
+            <div className="card p-5 text-center" style={{ borderStyle: 'dashed', borderColor: '#86efac' }}>
+              <p className="text-[12px] text-muted-foreground">
+                Nenhum talhão perene. Culturas como <strong>acerola, banana e cupuaçu</strong> duram
+                décadas — use talhões para rastrear todas as safras da mesma planta.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {talhoes.map((t, i) => (
+                <TalhaoCard key={t.id} talhao={t} onSelect={onSelectTalhao ?? (() => {})} index={i} />
+              ))}
+            </div>
+          )}
         </div>
 
-        {loading ? (
-          <div className="space-y-2">{[1,2].map(i => <div key={i} className="h-20 rounded-2xl bg-muted animate-pulse" />)}</div>
-        ) : lotes.length === 0 ? (
-          <div className="card p-8 flex flex-col items-center gap-3 text-center">
-            <Leaf size={32} className="opacity-30" />
-            <p className="text-[14px] font-bold text-foreground">Nenhum lote nesta propriedade</p>
-            <p className="text-[12px] text-muted-foreground">Adicione o primeiro lote clicando em "Novo Lote" acima.</p>
+        {/* ── Lotes Anuais ────────────────────────────────────────────────── */}
+        <div>
+          <div className="flex items-center justify-between mb-3 px-1">
+            <p className="section-label">Lotes Anuais</p>
+            <span className="text-[11px] text-muted-foreground">{lotes.length} lote{lotes.length !== 1 ? 's' : ''}</span>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {lotes.map((lote, i) => (
-              <LoteSummaryCard
-                key={lote.id}
-                lote={lote}
-                onSelect={onSelectLote}
-                index={i}
-                onDeleteLote={handleDeleteLote}
-                canDelete={canDeleteLote}
-                doneStatus={statusByLote[lote.id]}
-              />
-            ))}
-          </div>
-        )}
+
+          {loading ? (
+            <div className="space-y-2">{[1,2].map(i => <div key={i} className="h-20 rounded-2xl bg-muted animate-pulse" />)}</div>
+          ) : lotes.length === 0 ? (
+            <div className="card p-8 flex flex-col items-center gap-3 text-center">
+              <Leaf size={32} className="opacity-30" />
+              <p className="text-[14px] font-bold text-foreground">Nenhum lote anual</p>
+              <p className="text-[12px] text-muted-foreground">Adicione o primeiro lote clicando em "Novo Lote" acima.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {lotes.map((lote, i) => (
+                <LoteSummaryCard
+                  key={lote.id}
+                  lote={lote}
+                  onSelect={onSelectLote}
+                  index={i}
+                  onDeleteLote={handleDeleteLote}
+                  canDelete={canDeleteLote}
+                  doneStatus={statusByLote[lote.id]}
+                />
+              ))}
+            </div>
+          )}
+        </div>
 
         <FarmMembersSection propriedade={propriedade} userRole={userRole} />
       </div>
@@ -543,6 +761,20 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
       {showBackup && (
         <BackupModal propriedade={propriedade} onClose={() => setShowBackup(false)} />
       )}
+
+      <AnimatePresence>
+        {showNovoTalhao && (
+          <NovaTalhaoDialog
+            propriedadeId={propriedade.id}
+            onClose={() => setShowNovoTalhao(false)}
+            onCreated={(talhao) => {
+              setTalhoes(prev => [...prev, talhao]);
+              setShowNovoTalhao(false);
+              if (onSelectTalhao) onSelectTalhao(talhao);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

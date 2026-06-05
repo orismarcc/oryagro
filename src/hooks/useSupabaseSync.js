@@ -561,3 +561,164 @@ export async function countLotesByPropriedade() {
     return acc;
   }, {});
 }
+
+// ── Talhões (Culturas Perenes) ────────────────────────────────────────────────
+
+/**
+ * Cria um novo talhão na tabela talhoes. Retorna o row criado ou null.
+ */
+export async function criarTalhao({ propriedadeId, nome, culturaId, dataImplantacao, areaHa, totalPlantas, metodoPropagacao, espacamentoLinhas, espacamentoPlanta, observacoes }) {
+  const userId = await getUserId();
+  if (!userId) return null;
+  const { data, error } = await supabase
+    .from('talhoes')
+    .insert({
+      user_id:              userId,
+      propriedade_id:       propriedadeId,
+      nome,
+      cultura_id:           culturaId,
+      data_implantacao:     dataImplantacao || null,
+      area_ha:              areaHa || null,
+      total_plantas:        totalPlantas || null,
+      metodo_propagacao:    metodoPropagacao || null,
+      espacamento_linhas:   espacamentoLinhas || null,
+      espacamento_plantas:  espacamentoPlanta || null,
+      observacoes:          observacoes || null,
+      status:               'ativo',
+    })
+    .select()
+    .single();
+  if (error) { logDbError('criarTalhao', error); return null; }
+  return data;
+}
+
+/**
+ * Retorna todos os talhões ativos de uma propriedade.
+ * Inclui contagem de safras (plantios) vinculadas ao talhão.
+ */
+export async function loadTalhoesPorPropriedade(propriedadeId) {
+  if (!propriedadeId) return [];
+  const { data, error } = await supabase
+    .from('talhoes')
+    .select('*, safras:plantios(id, status, safra_numero)')
+    .eq('propriedade_id', propriedadeId)
+    .eq('status', 'ativo')
+    .order('nome');
+  if (error) { logDbError('loadTalhoesPorPropriedade', error); return []; }
+  // Normaliza: conta safras concluídas e identifica safra ativa
+  return (data || []).map(t => {
+    const safras = Array.isArray(t.safras) ? t.safras : [];
+    return {
+      ...t,
+      safras_concluidas: safras.filter(s => s.status === 'concluido').length,
+      safra_ativa:       safras.find(s => s.status === 'ativo') || null,
+      total_safras:      safras.length,
+    };
+  });
+}
+
+/**
+ * Retorna todos os talhões do usuário atual (todas as propriedades), apenas ativos.
+ */
+export async function loadTodosTalhoes() {
+  const userId = await getUserId();
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from('talhoes')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'ativo')
+    .order('nome');
+  if (error) { logDbError('loadTodosTalhoes', error); return []; }
+  return data || [];
+}
+
+/**
+ * Retorna todos os plantios vinculados a um talhão, ordenados por safra_numero crescente.
+ */
+export async function loadSafrasDeTalhao(talhaoId) {
+  if (!talhaoId) return [];
+  const { data, error } = await supabase
+    .from('plantios')
+    .select('*')
+    .eq('talhao_id', talhaoId)
+    .order('safra_numero', { ascending: true });
+  if (error) { logDbError('loadSafrasDeTalhao', error); return []; }
+  return data || [];
+}
+
+/**
+ * Cria uma nova safra (plantio) vinculada a um talhão perene.
+ * O safra_numero é calculado como max(safra_numero existentes) + 1.
+ * Copia area_ha, total_plantas, metodo_propagacao e propriedade_id do talhão.
+ * Retorna o novo plantio ou null.
+ *
+ * @param {string} talhaoId   — UUID do talhão
+ * @param {string} dataSafra  — data de início da safra (ISO date string)
+ * @param {object} talhaoData — row do talhão (deve conter area_ha, total_plantas,
+ *                              metodo_propagacao, propriedade_id, cultura_id, nome)
+ */
+export async function criarSafraDeTalhao(talhaoId, dataSafra, talhaoData) {
+  const userId = await getUserId();
+  if (!userId) return null;
+
+  // Calcula o próximo número de safra
+  const { data: safrasExistentes, error: fetchErr } = await supabase
+    .from('plantios')
+    .select('safra_numero')
+    .eq('talhao_id', talhaoId)
+    .order('safra_numero', { ascending: false })
+    .limit(1);
+  if (fetchErr) { logDbError('criarSafraDeTalhao:fetchSafras', fetchErr); return null; }
+
+  const ultimaSafra = safrasExistentes?.[0]?.safra_numero ?? 0;
+  const proximaSafra = ultimaSafra + 1;
+
+  const { data, error } = await supabase
+    .from('plantios')
+    .insert({
+      user_id:           userId,
+      talhao_id:         talhaoId,
+      propriedade_id:    talhaoData.propriedade_id || null,
+      cultura_id:        talhaoData.cultura_id,
+      nome:              `${talhaoData.nome || 'Talhão'} — Safra ${proximaSafra}`,
+      data_plantio:      dataSafra,
+      area_ha:           talhaoData.area_ha || null,
+      total_plantas:     talhaoData.total_plantas || null,
+      metodo_propagacao: talhaoData.metodo_propagacao || null,
+      tipo_cultura:      'perene',
+      safra_numero:      proximaSafra,
+      status:            'ativo',
+    })
+    .select()
+    .single();
+  if (error) { logDbError('criarSafraDeTalhao', error); return null; }
+  return data;
+}
+
+/**
+ * Atualiza campos de um talhão. Retorna o row atualizado ou null.
+ */
+export async function atualizarTalhao(id, updates) {
+  const { data, error } = await supabase
+    .from('talhoes')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) { logDbError('atualizarTalhao', error); return null; }
+  return data;
+}
+
+/**
+ * Soft-delete de um talhão: marca status como 'inativo'.
+ * Retorna true em caso de sucesso.
+ */
+export async function deletarTalhao(id) {
+  const { error } = await supabase
+    .from('talhoes')
+    .update({ status: 'inativo', updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) { logDbError('deletarTalhao', error); return false; }
+  return true;
+}

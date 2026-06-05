@@ -544,7 +544,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
                 style={{ background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.25)' }}
               >
                 <CheckCircle2 size={12} />
-                {concluindo ? 'Concluindo…' : 'Concluir Lote'}
+                {concluindo ? 'Concluindo…' : lote.tipo_cultura === 'perene' ? 'Concluir Safra' : 'Concluir Lote'}
               </button>
             )}
             {concluido && (
@@ -573,7 +573,15 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
               {cultura.emoji}
             </div>
             <div>
-              <p className="text-white/55 text-[11px] font-semibold leading-none mb-0.5">{cultura.nome}</p>
+              <div className="flex items-center gap-2 mb-0.5">
+                <p className="text-white/55 text-[11px] font-semibold leading-none">{cultura.nome}</p>
+                {lote.tipo_cultura === 'perene' && lote.safra_numero && (
+                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none"
+                    style={{ background: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.85)' }}>
+                    Safra {lote.safra_numero}
+                  </span>
+                )}
+              </div>
               <h1 className="font-display text-white font-extrabold leading-tight" style={{ fontSize: 'clamp(18px, 5vw, 26px)' }}>
                 {lote.nome}
               </h1>

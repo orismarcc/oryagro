@@ -1,6 +1,7 @@
 export const CULTURAS = {
   alface: {
     id: 'alface',
+    tipoCultura: 'anual',
     tipo: 'canteiro',
     nome: 'Alface',
     nomesCientifico: 'Lactuca sativa',
@@ -52,6 +53,7 @@ export const CULTURAS = {
   },
   cebolinha: {
     id: 'cebolinha',
+    tipoCultura: 'anual',
     tipo: 'canteiro',
     nome: 'Cebolinha',
     nomesCientifico: 'Allium fistulosum',
@@ -103,6 +105,7 @@ export const CULTURAS = {
   },
   coentro: {
     id: 'coentro',
+    tipoCultura: 'anual',
     tipo: 'canteiro',
     nome: 'Coentro',
     nomesCientifico: 'Coriandrum sativum',
@@ -151,6 +154,7 @@ export const CULTURAS = {
   },
   quiabo: {
     id: 'quiabo',
+    tipoCultura: 'anual',
     tipo: 'campo',
     nome: 'Quiabo',
     nomesCientifico: 'Abelmoschus esculentus',
@@ -196,6 +200,7 @@ export const CULTURAS = {
   },
   mandioca: {
     id: 'mandioca',
+    tipoCultura: 'anual',
     tipo: 'campo',
     nome: 'Mandioca',
     nomesCientifico: 'Manihot esculenta',
@@ -241,6 +246,7 @@ export const CULTURAS = {
   },
   abacaxi: {
     id: 'abacaxi',
+    tipoCultura: 'anual',
     tipo: 'campo',
     nome: 'Abacaxi',
     nomesCientifico: 'Ananas comosus',
@@ -289,6 +295,9 @@ export const CULTURAS = {
   },
   acerola: {
     id: 'acerola',
+    tipoCultura: 'perene',
+    vidaUtilAnos: 20,
+    safrasAnoEsperado: 2,
     tipo: 'campo',
     nome: 'Acerola',
     nomesCientifico: 'Malpighia emarginata',
@@ -407,6 +416,9 @@ export const CULTURAS = {
   },
   cupuacu: {
     id: 'cupuacu',
+    tipoCultura: 'perene',
+    vidaUtilAnos: 20,
+    safrasAnoEsperado: 1,
     tipo: 'campo',
     nome: 'Cupuaçu',
     nomesCientifico: 'Theobroma grandiflorum',
@@ -511,6 +523,7 @@ export const CULTURAS = {
   },
   rucula: {
     id: 'rucula',
+    tipoCultura: 'anual',
     tipo: 'canteiro',
     nome: 'Rúcula',
     nomesCientifico: 'Eruca sativa',
@@ -559,6 +572,7 @@ export const CULTURAS = {
   },
   couve: {
     id: 'couve',
+    tipoCultura: 'anual',
     tipo: 'canteiro',
     nome: 'Couve',
     nomesCientifico: 'Brassica oleracea var. acephala',
@@ -610,6 +624,9 @@ export const CULTURAS = {
   },
   banana_ana: {
     id: 'banana_ana',
+    tipoCultura: 'perene',
+    vidaUtilAnos: 15,
+    safrasAnoEsperado: 1,
     tipo: 'campo',
     nome: 'Banana terra-anã',
     nomesCientifico: 'Musa spp. (subgrupo Cavendish)',
@@ -689,6 +706,9 @@ export const CULTURAS = {
   },
   mamao_tainung: {
     id: 'mamao_tainung',
+    tipoCultura: 'perene',
+    vidaUtilAnos: 5,
+    safrasAnoEsperado: 1,
     tipo: 'campo',
     nome: 'Mamão Tainung 01',
     nomesCientifico: 'Carica papaya L. (Tainung 01 — Formosa)',

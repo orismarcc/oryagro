@@ -434,6 +434,8 @@ export async function arquivarCicloLote(lote, vendas = [], _eventos = [], movime
     // Persiste no Supabase (fonte da verdade). Erro é logado e propagado para
     // o chamador via valor de retorno — não silenciamos para evitar estado
     // inconsistente em que UI mostra "arquivado" mas o BD não tem o registro.
+    // Para lotes perenes, passa talhaoId e safraNúmero ao histórico.
+    const ePerene = lote.tipo_cultura === 'perene';
     const saved = await saveCicloHistorico({
       loteId:        lote.id,
       loteNome:      lote.nome,
@@ -445,6 +447,10 @@ export async function arquivarCicloLote(lote, vendas = [], _eventos = [], movime
       custoInsumos,
       custoMaoObra,
       diasCicloReal,
+      ...(ePerene ? {
+        talhaoId:    lote.talhao_id ?? null,
+        safraNúmero: lote.safra_numero ?? null,
+      } : {}),
     });
     if (!saved) {
       logDbError('arquivarCicloLote:saveCicloHistorico', new Error('saveCicloHistorico returned null'));
@@ -500,7 +506,7 @@ export async function deleteMaoObraRegistro(id) {
 
 // ── Ciclos histórico (Supabase) ────────────────────────────────
 
-export async function saveCicloHistorico({ loteId, loteNome, culturaId, dataPlantio, dataConclusao, totalVendasKg, receitaTotal, custoInsumos, custoMaoObra, diasCicloReal }) {
+export async function saveCicloHistorico({ loteId, loteNome, culturaId, dataPlantio, dataConclusao, totalVendasKg, receitaTotal, custoInsumos, custoMaoObra, diasCicloReal, talhaoId = null, safraNúmero = null }) {
   const userId = await getUserId();
   if (!userId) return null;
   const { data: row, error } = await supabase
@@ -519,6 +525,9 @@ export async function saveCicloHistorico({ loteId, loteNome, culturaId, dataPlan
         custo_mao_obra:  custoMaoObra,
         dias_ciclo_real: diasCicloReal,
         archived_at:     new Date().toISOString(),
+        // Campos opcionais para culturas perenes
+        ...(talhaoId   != null ? { talhao_id:    talhaoId }   : {}),
+        ...(safraNúmero != null ? { safra_numero: safraNúmero } : {}),
       },
       { onConflict: 'lote_id' },
     )

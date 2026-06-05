@@ -12,6 +12,7 @@ import CalendarioPage from './components/CalendarioPage';
 import EstoquePage from './components/EstoquePage';
 import PropriedadesPage from './components/PropriedadesPage';
 import PropriedadePage from './components/PropriedadePage';
+import TalhaoPage from './components/TalhaoPage';
 import MigrationWizard from './components/MigrationWizard';
 import SettingsPage from './components/SettingsPage';
 import NetworkStatusBanner from './components/NetworkStatus';
@@ -138,6 +139,7 @@ function AppInner({ session, displayName, signOut }) {
   const [autoOpenLoteForm, setAutoOpenLoteForm] = useState(false);
   const [selectedLote, setSelectedLote]     = useState(null);
   const [selectedPropriedade, setSelectedPropriedade] = useState(null);
+  const [selectedTalhao, setSelectedTalhao] = useState(null);
   const [showMigrationWizard, setShowMigrationWizard] = useState(false);
   const [propriedades, setPropriedades] = useState([]);
   const [allLotes, setAllLotes] = useState([]);
@@ -194,10 +196,12 @@ function AppInner({ session, displayName, signOut }) {
     setMainView('lote');
   };
 
-  // Back from LotePage → context-aware (propriedade or dashboard)
+  // Back from LotePage → context-aware (talhao, propriedade or dashboard)
   const handleBackFromLote = () => {
     setSelectedLote(null);
-    if (loteOpenedFrom === 'propriedade') {
+    if (loteOpenedFrom === 'talhao') {
+      setMainView('talhao');
+    } else if (loteOpenedFrom === 'propriedade') {
       setMainView('propriedade');
     } else {
       setMainView('dashboard');
@@ -261,6 +265,26 @@ function AppInner({ session, displayName, signOut }) {
   const handleBackFromPropriedade = () => {
     setSelectedPropriedade(null);
     setMainView('propriedades');
+  };
+
+  const handleSelectTalhao = (talhao) => {
+    setSelectedTalhao(talhao);
+    setMainView('talhao');
+  };
+
+  const handleBackFromTalhao = () => {
+    setSelectedTalhao(null);
+    setMainView('propriedade');
+  };
+
+  const handleSelectLoteFromTalhao = (lote) => {
+    setSelectedLote(lote);
+    if (lote.propriedade_id) {
+      const prop = propriedades.find(p => p.id === lote.propriedade_id) ?? null;
+      setSelectedPropriedade(prop);
+    }
+    setLoteOpenedFrom('talhao');
+    setMainView('lote');
   };
 
   const handleGoEstoque = () => {
@@ -379,6 +403,7 @@ function AppInner({ session, displayName, signOut }) {
               mainView === 'lote'           ? `lote-${selectedLote?.id}` :
               mainView === 'cultura-picker' ? 'cultura-picker' :
               mainView === 'propriedade'    ? `propriedade-${selectedPropriedade?.id}` :
+              mainView === 'talhao'         ? `talhao-${selectedTalhao?.id}` :
               mainView
             }
             initial={{ opacity: 0 }}
@@ -454,6 +479,14 @@ function AppInner({ session, displayName, signOut }) {
                 onSelectLote={handleSelectLoteFromPropriedade}
                 onGoEstoque={handleGoEstoque}
                 onAddLote={handleAddLoteFromPropriedade}
+                onSelectTalhao={handleSelectTalhao}
+              />
+            )}
+            {mainView === 'talhao' && selectedTalhao && (
+              <TalhaoPage
+                talhao={selectedTalhao}
+                onBack={handleBackFromTalhao}
+                onSelectLote={handleSelectLoteFromTalhao}
               />
             )}
           </motion.div>
