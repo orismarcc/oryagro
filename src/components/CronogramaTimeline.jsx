@@ -246,15 +246,29 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
 
         dbRows.forEach(row => {
           if (row.is_custom) {
-            // Reconstrói a definição da atividade customizada
-            dbCustomDefs.push({
-              dia:     row.dia_previsto,
-              etapa:   row.etapa,
-              produto: row.produto || '',
-              dose:    row.dose || '',
-              forma:   row.forma_aplicacao || '',
-              tipo:    row.tipo || 'manejo',
-            });
+            // Usa hash-based stableId (evita mismatch por índice)
+            const stableId = makeCustomId(row.etapa, row.dia_previsto);
+
+            // Registra status para TODOS os custom rows (feito, removida, pendente)
+            const val = { status: row.status || 'pendente', data: row.data_execucao };
+            dbStatus[stableId] = val;
+            // retrocompat: também salva por índice sequencial para dados antigos
+            // (calculado abaixo, fora deste loop)
+
+            // NÃO adicionar rows removidas ao dbCustomDefs — elas serão filtradas
+            // por status em allEvents; se incluídas aqui sem _stableId, o _id ficaria
+            // index-based e quebraria o filtro de removida.
+            if (row.status !== 'removida') {
+              dbCustomDefs.push({
+                dia:       row.dia_previsto,
+                etapa:     row.etapa,
+                produto:   row.produto || '',
+                dose:      row.dose || '',
+                forma:     row.forma_aplicacao || '',
+                tipo:      row.tipo || 'manejo',
+                _stableId: stableId,  // ← essencial para manter hash-based IDs
+              });
+            }
           } else {
             // Determina o prefixo do ID estável (viveiro vs default)
             const isViveiro = vivSteps.some(e => e.etapa === row.etapa);
@@ -265,25 +279,26 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
           }
         });
 
-        // Status das atividades customizadas
-        // Op#11: usar stableId (hash de etapa+dia) E o índice para retrocompatibilidade
+        // Retrocompat: também indexar custom rows por posição (dados antigos sem _stableId)
         const customDbRows = dbRows.filter(r => r.is_custom);
         customDbRows.forEach((row, i) => {
           if (row.status && row.status !== 'pendente') {
-            const stableId = makeCustomId(row.etapa, row.dia_previsto);
             const val = { status: row.status, data: row.data_execucao };
-            dbStatus[stableId] = val;
-            dbStatus[`custom_${i}`] = val; // retrocompat para dados antigos
+            dbStatus[`custom_${i}`] = val; // retrocompat índice
           }
         });
 
         // Merge: Supabase prevalece sobre localStorage para status com valor
         const merged = { ...localStatus, ...dbStatus };
-        const finalCustomRows = dbCustomDefs.length > 0 ? dbCustomDefs : localCustomRows;
+        // dbCustomDefs já exclui rows 'removida' — usar Supabase como fonte de verdade
+        // Se dbCustomDefs for [] (todas removidas ou nenhuma custom), isso é correto.
+        // Só usar localCustomRows se Supabase não retornou nada (offline/erro).
+        const hasSomeCustomInDb = customDbRows.length > 0;
+        const finalCustomRows = hasSomeCustomInDb ? dbCustomDefs : localCustomRows;
 
         // Mantém localStorage sincronizado (cache offline)
         localStorage.setItem(storageKey, JSON.stringify(merged));
-        if (dbCustomDefs.length > 0) localStorage.setItem(customKey, JSON.stringify(finalCustomRows));
+        if (hasSomeCustomInDb) localStorage.setItem(customKey, JSON.stringify(finalCustomRows));
 
         setStatus(merged);
         setCustomRows(finalCustomRows);
