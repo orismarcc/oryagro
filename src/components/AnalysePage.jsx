@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getProductionFactorSync, useCurvasProducao } from '../hooks/useCurvasProducao';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { CULTURAS } from '../data/culturas';
 import { exportarRelatorioPDF } from '../lib/pdfExport';
 import { gerarPdfCreditoAgricola } from '../lib/pdfCreditoAgricola';

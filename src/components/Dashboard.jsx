@@ -356,6 +356,13 @@ function computeAlertas(lotes, statusByLote) {
         : null;
       const shift = metodoObj?.diasViveiro ?? 0;
 
+      // Para etapas viveiro: o useCronogramaStatusBatch salva com prefixo 'default_'
+      // (BUG-5 — não recebe vivSteps). Checamos ambos os prefixos para não gerar
+      // falsos alertas em etapas já concluídas.
+      const getStepStatus = (id, etapa) => {
+        return doneStatus[id] || doneStatus[makeStableId('default', etapa)] || null;
+      };
+
       const steps = [
         ...(metodoObj?.etapasViveiro?.map(e => ({
           ...e,
@@ -366,15 +373,24 @@ function computeAlertas(lotes, statusByLote) {
           dia: e.dia + shift,
           _id: makeStableId('default', e.etapa),
         })),
-      ].filter(s => doneStatus[s._id]?.status !== 'removida');
+      ].filter(s => {
+        const st = getStepStatus(s._id, s.etapa);
+        return st?.status !== 'removida';
+      });
 
       const atrasadas = steps.filter(s => {
-        const st = doneStatus[s._id]?.status;
-        return !st || (st !== 'feito' && st !== 'removida' && s.dia < diasDecorridos);
+        // Só alertar se:
+        // 1. A etapa é do PASSADO (dia < diasDecorridos)
+        // 2. O status NÃO é 'feito' nem 'removida' (inclui undefined — não carregado = pendente)
+        // NÃO usar !st sozinho pois isso inclui etapas futuras sem status
+        if (s.dia >= diasDecorridos) return false; // etapa futura → não é alerta
+        const st = getStepStatus(s._id, s.etapa)?.status;
+        return st !== 'feito' && st !== 'removida';
       });
 
       atrasadas.forEach(step => {
         const diasAtraso = diasDecorridos - step.dia;
+        if (diasAtraso <= 0) return; // sanity check: não gerar alertas com 0 ou menos dias
         const id = `etapa_atrasada_${lote.id}_${step._id}`;
         if (isDismissed(id)) return;
         alertas.push({

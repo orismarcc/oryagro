@@ -8,7 +8,7 @@
  * Padrão: comprovante econômico-financeiro de produtor rural
  */
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 // Paleta institucional
 const VERDE_PRIMARIO  = [22, 101, 52];   // #166534
@@ -171,7 +171,7 @@ export function gerarPdfCreditoAgricola({
     doc.setFontSize(8); doc.setTextColor(...CINZA_SUBTITULO);
     doc.text('Nenhuma propriedade cadastrada.', MARGIN, y); nl(7);
   } else {
-    doc.autoTable({
+    autoTable(doc, {
       startY: y,
       head: [['Propriedade', 'Lotes Ativos', 'Culturas']],
       body: propriedades.map(p => {
@@ -240,7 +240,7 @@ export function gerarPdfCreditoAgricola({
     newPage();
     secTitle('4. HISTÓRICO DETALHADO DE CICLOS PRODUTIVOS', '📋');
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: y,
       head: [['Cultura', 'Lote', 'Plantio', 'Colheita', 'Dias', 'Volume (kg)', 'Receita', 'Custo', 'Lucro', 'Margem']],
       body: ciclos
@@ -295,7 +295,7 @@ export function gerarPdfCreditoAgricola({
     doc.setFontSize(8); doc.setTextColor(...CINZA_SUBTITULO);
     doc.text('Nenhum lote ativo no momento.', MARGIN, y); nl(7);
   } else {
-    doc.autoTable({
+    autoTable(doc, {
       startY: y,
       head: [['Cultura', 'Nome', 'Plantio', 'Plantas', 'Área', 'Fase atual']],
       body: lotes
