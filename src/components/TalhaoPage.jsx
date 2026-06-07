@@ -6,11 +6,13 @@
  */
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, CheckCircle2, Clock, TrendingUp, Leaf, BarChart2, Calendar, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Plus, CheckCircle2, Clock, TrendingUp, Leaf, BarChart2, Calendar, AlertCircle, Loader2, Trash2 } from 'lucide-react';
 import { CULTURAS } from '../data/culturas';
-import { loadSafrasDeTalhao, criarSafraDeTalhao } from '../hooks/useSupabaseSync';
+import { loadSafrasDeTalhao, criarSafraDeTalhao, deleteTalhaoComSeguranca } from '../hooks/useSupabaseSync';
 import { resolveLifecycle } from '../lib/lifecycle';
 import { useToast } from '../context/ToastContext';
+import { useFarm } from '../context/FarmContext';
+import { can, FARM_ACTIONS } from '../lib/permissions';
 
 function fmtDate(iso) {
   if (!iso) return '—';
@@ -190,10 +192,30 @@ export default function TalhaoPage({ talhao, onBack, onSelectLote }) {
   const cultura = CULTURAS[talhao.cultura_id];
   const cor = cultura?.cor ?? '#16a34a';
   const toast = useToast();
+  const { getUserRole } = useFarm();
+  const canDelete = can(getUserRole(talhao.propriedade_id), FARM_ACTIONS.DELETE_ANY);
 
   const [safras, setSafras] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showNovaSafra, setShowNovaSafra] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteTalhao = async () => {
+    setDeleting(true);
+    const res = await deleteTalhaoComSeguranca(talhao.id);
+    setDeleting(false);
+    if (res.ok) {
+      toast.success('Talhão excluído.');
+      onBack();   // volta para a propriedade (que recarrega a lista de talhões)
+    } else if (res.reason === 'has_data') {
+      toast.error('Este talhão tem safras com dados (vendas, despesas ou etapas concluídas). Exclua ou arquive as safras antes.');
+      setConfirmDelete(false);
+    } else {
+      toast.error('Não foi possível excluir o talhão. Tente novamente.');
+      setConfirmDelete(false);
+    }
+  };
 
   useEffect(() => {
     loadSafrasDeTalhao(talhao.id).then(rows => {
@@ -351,6 +373,36 @@ export default function TalhaoPage({ talhao, onBack, onSelectLote }) {
             <div className="mt-3 pt-3 border-t border-border">
               <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wide mb-1">Observações</p>
               <p className="text-[12px] text-foreground">{talhao.observacoes}</p>
+            </div>
+          )}
+
+          {/* Excluir talhão */}
+          {canDelete && (
+            <div className="mt-3 pt-3 border-t border-border flex justify-end">
+              {confirmDelete ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-muted-foreground mr-1">Excluir este talhão?</span>
+                  <button
+                    onClick={handleDeleteTalhao}
+                    disabled={deleting}
+                    className="text-[11px] font-bold px-2.5 py-1 rounded-lg"
+                    style={{ background: '#fee2e2', color: '#dc2626' }}>
+                    {deleting ? '…' : 'Confirmar'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="text-[11px] font-medium px-2.5 py-1 rounded-lg"
+                    style={{ background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }}>
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="flex items-center gap-1.5 text-[12px] font-semibold text-muted-foreground hover:text-red-500 transition-colors">
+                  <Trash2 size={13} /> Excluir talhão
+                </button>
+              )}
             </div>
           )}
         </div>
