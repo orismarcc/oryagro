@@ -257,7 +257,9 @@ export async function preCarregarEtapasPadrao(plantio, cultura, diasViveiro = 0)
 
   if (rows.length === 0) return;
 
-  // Insert with ignoreDuplicates so re-runs don't fail if rows already exist
+  // Insert with ignoreDuplicates so re-runs don't fail if rows already exist.
+  // onConflict MUST match the real UNIQUE constraint
+  // (plantio_id, etapa, dia_previsto, is_custom).
   const { error } = await supabase
     .from('cronograma_atividades')
     .upsert(rows, { onConflict: 'plantio_id,etapa,dia_previsto,is_custom', ignoreDuplicates: true });
@@ -306,11 +308,11 @@ export async function syncCronogramaStatus(plantioId, culturaId, atividade) {
         updated_at:      new Date().toISOString(),
       },
       // True upsert: update the existing row if one already exists for this
-      // (plantio_id, etapa, dia_previsto, is_custom) tuple.
+      // (plantio_id, etapa, dia_previsto, is_custom) tuple. This MUST match the
+      // actual UNIQUE constraint in the live DB
+      // (cronograma_atividades_plantio_etapa_dia_custom_unique).
       // dia_previsto is part of the key so two custom rows with the same etapa
       // name on different days are treated as distinct rows (not overwritten).
-      // NOTE: requires UNIQUE constraint on (plantio_id, etapa, dia_previsto, is_custom)
-      //       in the DB. Run migration: see docs/migrations/add_dia_to_cron_unique.sql
       { onConflict: 'plantio_id,etapa,dia_previsto,is_custom' },
     )
     .select('id')

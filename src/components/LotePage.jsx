@@ -480,8 +480,14 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
         toast.error('Não foi possível arquivar o ciclo no histórico. O lote NÃO foi marcado como concluído. Tente novamente.');
         return; // finally resets setConcluindo
       }
-      // updateLoteStatus inside try so any throw is caught
-      await updateLoteStatus(lote.id, 'concluido');
+      // updateLoteStatus inside try so any throw is caught.
+      // Verifica o retorno: se a atualização falhar no banco, NÃO marca como
+      // concluído na UI (evita estado inconsistente UI×DB).
+      const atualizado = await updateLoteStatus(lote.id, 'concluido');
+      if (!atualizado) {
+        toast.error('O ciclo foi arquivado, mas não foi possível marcar o lote como concluído. Tente novamente.');
+        return;
+      }
       setConcluido(true);
     } catch {
       toast.error('Erro ao concluir lote. O ciclo pode não ter sido arquivado. Tente novamente.');
