@@ -67,9 +67,17 @@ function MovModal({ insumo, propriedadeId, onClose, onMoved, canEdit = false }) 
   // Técnicos só podem registrar saídas (uso); entradas são exclusivas de admin/dono
   const [tipo, setTipo]     = useState(canEdit ? 'entrada' : 'saida');
   const [qty, setQty]       = useState('');
+  const [valorPago, setValorPago] = useState(''); // total pago (só entrada)
   const [obs, setObs]       = useState('');
   const [data, setData]     = useState(() => new Date().toISOString().split('T')[0]);
   const [saving, setSaving] = useState(false);
+
+  // Preço unitário AUTOMÁTICO da entrada = valor pago ÷ quantidade
+  const qtyNum = parseFloat(qty) || 0;
+  const valorPagoNum = parseFloat(valorPago) || 0;
+  const precoUnitEntrada = (tipo === 'entrada' && qtyNum > 0 && valorPagoNum > 0)
+    ? valorPagoNum / qtyNum
+    : null;
   const [historico, setHistorico] = useState([]);
   const [lotes, setLotes] = useState([]);
   const [loteSelecionado, setLoteSelecionado] = useState('');
@@ -102,6 +110,7 @@ function MovModal({ insumo, propriedadeId, onClose, onMoved, canEdit = false }) 
       observacao: obs.trim() || null,
       data,
       plantioId: tipo === 'saida' && loteSelecionado ? loteSelecionado : null,
+      precoUnitarioMovimento: precoUnitEntrada,   // recalcula o preço médio do insumo
     });
     setSaving(false);
     onMoved();
@@ -181,6 +190,28 @@ function MovModal({ insumo, propriedadeId, onClose, onMoved, canEdit = false }) 
             </div>
           </div>
 
+          {/* Valor pago — só na entrada; calcula o preço unitário automaticamente */}
+          {tipo === 'entrada' && (
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Valor total pago (R$) — opcional
+              </label>
+              <input type="number" min="0" step="0.01" value={valorPago} onChange={e => setValorPago(e.target.value)}
+                placeholder="0,00"
+                className="w-full mt-1 rounded-xl border px-3 py-2 text-[13px] outline-none"
+                style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
+              <div className="flex items-center justify-between mt-2 rounded-xl px-3 py-2"
+                style={{ background: 'hsl(160 84% 27% / 0.08)', border: '1px solid hsl(160 84% 27% / 0.2)' }}>
+                <span className="text-[11px] font-semibold" style={{ color: 'hsl(160 84% 27%)' }}>Preço unitário (automático)</span>
+                <span className="text-[13px] font-bold" style={{ color: 'hsl(160 84% 27%)' }}>
+                  {precoUnitEntrada !== null
+                    ? `R$ ${precoUnitEntrada.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ${insumo.unidade}`
+                    : '—'}
+                </span>
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               Observação (opcional)
@@ -245,11 +276,19 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
   const [nome,    setNome]    = useState(existingInsumo?.nome    ?? '');
   const [unidade, setUnidade] = useState(existingInsumo?.unidade ?? 'kg');
   const [min,     setMin]     = useState(existingInsumo?.quantidade_minima != null ? String(existingInsumo.quantidade_minima) : '');
+  // Edição: preço unitário direto (correção). Cadastro: derivado do valor pago.
   const [preco,   setPreco]   = useState(existingInsumo?.preco_unitario != null    ? String(existingInsumo.preco_unitario)    : '');
   // Quantidade inicial — só disponível no cadastro (não no edit, pois a
   // quantidade real é controlada pelas movimentações)
   const [qtdInicial, setQtdInicial] = useState('');
+  // Valor total pago pela quantidade inicial — usado para calcular o preço unitário
+  const [valorPago, setValorPago] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Preço unitário AUTOMÁTICO no cadastro = valor pago ÷ quantidade inicial
+  const qtdInicialNum = parseFloat(qtdInicial) || 0;
+  const valorPagoNum  = parseFloat(valorPago)  || 0;
+  const precoCalculado = (qtdInicialNum > 0 && valorPagoNum > 0) ? valorPagoNum / qtdInicialNum : 0;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -257,15 +296,18 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
 
     const qtd = isEdit
       ? existingInsumo.quantidade               // mantém quantidade atual no edit
-      : (parseFloat(qtdInicial) || 0);          // usa quantidade inicial no cadastro
+      : qtdInicialNum;                          // usa quantidade inicial no cadastro
+
+    // Edit → preço digitado; Cadastro → preço calculado do valor pago
+    const precoUnit = isEdit ? (parseFloat(preco) || 0) : precoCalculado;
 
     const row = await upsertInsumo({
       id: existingInsumo?.id,
       nome,
       unidade,
       quantidade: qtd,
-      quantidade_minima: parseFloat(min)   || 0,
-      preco_unitario:    parseFloat(preco) || 0,
+      quantidade_minima: parseFloat(min) || 0,
+      preco_unitario:    precoUnit,
       propriedadeId,
     });
 
@@ -283,6 +325,7 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
         observacao: 'Estoque inicial',
         data: new Date().toISOString().split('T')[0],
         plantioId: null,
+        precoUnitarioMovimento: precoUnit,   // alimenta o preço médio ponderado
       });
     }
 
@@ -375,16 +418,40 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
           </div>
         )}
 
-        {/* Preço unitário */}
-        <div>
-          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-            Preço unitário (R$) — opcional
-          </label>
-          <input type="number" min="0" step="0.01" value={preco}
-            onChange={e => setPreco(e.target.value)} placeholder="0,00"
-            className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
-            style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
-        </div>
+        {/* Preço — no cadastro é calculado do valor pago; no edit é direto */}
+        {isEdit ? (
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Preço unitário (R$) — opcional
+            </label>
+            <input type="number" min="0" step="0.01" value={preco}
+              onChange={e => setPreco(e.target.value)} placeholder="0,00"
+              className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
+              style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
+          </div>
+        ) : (
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Valor total pago (R$) — opcional
+            </label>
+            <input type="number" min="0" step="0.01" value={valorPago}
+              onChange={e => setValorPago(e.target.value)} placeholder="0,00"
+              className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
+              style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
+            <div className="flex items-center justify-between mt-2 rounded-xl px-3 py-2"
+              style={{ background: 'hsl(160 84% 27% / 0.08)', border: '1px solid hsl(160 84% 27% / 0.2)' }}>
+              <span className="text-[11px] font-semibold" style={{ color: 'hsl(160 84% 27%)' }}>Preço unitário (automático)</span>
+              <span className="text-[13px] font-bold" style={{ color: 'hsl(160 84% 27%)' }}>
+                {precoCalculado > 0
+                  ? `R$ ${precoCalculado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ${unidade}`
+                  : '—'}
+              </span>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
+              Calculado do valor pago ÷ quantidade inicial. Informe a quantidade acima para calcular.
+            </p>
+          </div>
+        )}
 
         <button type="submit" disabled={saving || !nome}
           className="w-full py-3 rounded-xl text-[13px] font-bold text-white disabled:opacity-50"

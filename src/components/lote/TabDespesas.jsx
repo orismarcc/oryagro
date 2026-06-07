@@ -41,7 +41,6 @@ function TabDespesas({ lote, cor, canDelete }) {
     enabled: false,
     nomeInsumo: '',
     qtdMinima: '0',
-    precoUnitario: '',
   });
 
   const subcats = CATEGORIAS_DESPESA.find(c => c.label === form.categoria)?.subcategorias || [];
@@ -104,12 +103,16 @@ function TabDespesas({ lote, cor, canDelete }) {
       // A4-03: Estoque integration — movimento fica vinculado à despesa via despesa_id
       if (estoqueForm.enabled && estoqueForm.nomeInsumo.trim() && lote.propriedade_id && despesaRow?.id) {
         const qtd = parseFloat(form.quantidade) || 0;
+        // Preço unitário AUTOMÁTICO: valor total pago ÷ quantidade comprada.
+        const precoUnit = (qtd > 0 && parseFloat(form.valor) > 0)
+          ? parseFloat(form.valor) / qtd
+          : 0;
         const insumo = await upsertInsumo({
           nome:              estoqueForm.nomeInsumo.trim(),
           unidade:           form.unidade || 'un',
           quantidade:        0,                                        // managed via movimentos
           quantidade_minima: parseFloat(estoqueForm.qtdMinima) || 0,
-          preco_unitario:    parseFloat(estoqueForm.precoUnitario) || 0,
+          preco_unitario:    precoUnit,
           propriedadeId:     lote.propriedade_id,
         });
         if (insumo?.id && qtd > 0) {
@@ -121,6 +124,7 @@ function TabDespesas({ lote, cor, canDelete }) {
             data:        form.data,
             plantioId:   lote.id,
             despesaId:   despesaRow.id,
+            precoUnitarioMovimento: precoUnit,   // alimenta o preço médio ponderado
           });
         }
       }
@@ -138,7 +142,7 @@ function TabDespesas({ lote, cor, canDelete }) {
         valor: '',
         observacao: '',
       });
-      setEstoqueForm({ enabled: false, nomeInsumo: '', qtdMinima: '0', precoUnitario: '' });
+      setEstoqueForm({ enabled: false, nomeInsumo: '', qtdMinima: '0' });
     } catch {
       toast.error('Erro ao salvar despesa. Verifique sua conexão.');
     } finally {
@@ -362,40 +366,43 @@ function TabDespesas({ lote, cor, canDelete }) {
                       <p className="text-[10px] text-muted-foreground mt-0.5">Se já existir no estoque com esse nome, a entrada será adicionada ao mesmo item.</p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Qtd. mínima</label>
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            min="0"
-                            step="any"
-                            placeholder="0"
-                            value={estoqueForm.qtdMinima}
-                            onChange={e => setEstoqueForm(f => ({ ...f, qtdMinima: e.target.value }))}
-                            className="flex-1 rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
-                            style={{ '--tw-ring-color': cor }}
-                          />
-                          <span className="text-[11px] font-bold text-muted-foreground flex-shrink-0">{form.unidade || 'un'}</span>
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Preço unit. (R$)</label>
+                    <div>
+                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Qtd. mínima</label>
+                      <div className="flex items-center gap-1">
                         <input
                           type="number"
                           min="0"
-                          step="0.01"
-                          placeholder="0,00"
-                          value={estoqueForm.precoUnitario}
-                          onChange={e => setEstoqueForm(f => ({ ...f, precoUnitario: e.target.value }))}
-                          className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
+                          step="any"
+                          placeholder="0"
+                          value={estoqueForm.qtdMinima}
+                          onChange={e => setEstoqueForm(f => ({ ...f, qtdMinima: e.target.value }))}
+                          className="flex-1 rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
                           style={{ '--tw-ring-color': cor }}
                         />
+                        <span className="text-[11px] font-bold text-muted-foreground flex-shrink-0">{form.unidade || 'un'}</span>
                       </div>
                     </div>
 
+                    {/* Preço unitário AUTOMÁTICO = valor pago ÷ quantidade */}
+                    {(() => {
+                      const qtd = parseFloat(form.quantidade) || 0;
+                      const val = parseFloat(form.valor) || 0;
+                      const precoUnit = (qtd > 0 && val > 0) ? val / qtd : null;
+                      return (
+                        <div className="flex items-center justify-between rounded-xl px-3 py-2"
+                          style={{ background: `${cor}10`, border: `1px solid ${cor}25` }}>
+                          <span className="text-[11px] font-semibold" style={{ color: cor }}>Preço unitário (automático)</span>
+                          <span className="text-[13px] font-bold" style={{ color: cor }}>
+                            {precoUnit !== null
+                              ? `${fmtBRL(precoUnit)} / ${form.unidade || 'un'}`
+                              : '—'}
+                          </span>
+                        </div>
+                      );
+                    })()}
+
                     <p className="text-[10px] text-muted-foreground">
-                      A quantidade do campo acima ({form.quantidade || '0'} {form.unidade || 'un'}) será registrada como entrada no estoque da propriedade.
+                      {form.quantidade || '0'} {form.unidade || 'un'} serão registrados como entrada no estoque. O preço unitário é calculado do valor pago ({fmtBRL(parseFloat(form.valor) || 0)}) ÷ quantidade.
                     </p>
                   </div>
                 </motion.div>

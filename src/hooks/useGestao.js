@@ -74,12 +74,15 @@ export async function deleteInsumo(id) {
   return !error;
 }
 
-export async function addMovimento({ insumoId, tipo, quantidade, observacao, data, plantioId, despesaId, cronogramaAtividadeId }) {
+export async function addMovimento({ insumoId, tipo, quantidade, observacao, data, plantioId, despesaId, cronogramaAtividadeId, precoUnitarioMovimento }) {
   const userId = await getUserId();
   if (!userId) return null;
 
   // 1. Inserir movimento — retorna a linha para que o chamador conheça o id
   // (A4-08: rastreabilidade; A4-03/04: vinculação a despesa / atividade do cronograma)
+  // precoUnitarioMovimento: preço pago por unidade nesta entrada. Quando informado
+  // numa 'entrada', o trigger tg_estoque_movimentos_cmp recalcula o preço médio
+  // ponderado do insumo.
   const { data: movRow, error: mErr } = await supabase
     .from('estoque_movimentos')
     .insert({
@@ -92,6 +95,9 @@ export async function addMovimento({ insumoId, tipo, quantidade, observacao, dat
       plantio_id: plantioId || null,
       despesa_id: despesaId || null,
       cronograma_atividade_id: cronogramaAtividadeId || null,
+      preco_unitario_movimento: (precoUnitarioMovimento != null && precoUnitarioMovimento > 0)
+        ? precoUnitarioMovimento
+        : null,
     })
     .select('id')
     .single();
