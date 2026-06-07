@@ -42,6 +42,33 @@ export function logDbError(context, error) {
     // Em produção: apenas context + campos seguros, sem stack trace
     console.error(`[DB] ${context}:`, sanitizeError(error));
   }
+  notifyDbError(context, error);
+}
+
+// ── Notificação ao usuário (ponto único para os erros antes silenciosos) ───────
+// Em vez de retrofitar 100+ chamadas, qualquer logDbError dispara um evento
+// global. O ToastProvider escuta e exibe um toast — com throttle para não
+// inundar a tela quando vários erros acontecem em sequência.
+//
+// Importante: quando OFFLINE não emitimos toast de erro — esse caso é coberto
+// pelo indicador de conexão (uma falha offline é esperada, não um bug).
+let _lastErrorToastAt = 0;
+const ERROR_TOAST_THROTTLE_MS = 5000;
+
+function notifyDbError(context, error) {
+  if (typeof window === 'undefined') return;
+  // Não notificar erros enquanto offline (indicador de conexão cobre esse caso)
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+
+  const now = Date.now();
+  if (now - _lastErrorToastAt < ERROR_TOAST_THROTTLE_MS) return;
+  _lastErrorToastAt = now;
+
+  try {
+    window.dispatchEvent(new CustomEvent('oryagro:db-error', {
+      detail: { context, message: (error && error.message) || 'erro' },
+    }));
+  } catch { /* ambiente sem CustomEvent — ignora */ }
 }
 
 /**

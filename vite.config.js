@@ -117,6 +117,22 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Separa bibliotecas pesadas em chunks próprios. Elas mudam raramente,
+        // então ficam em cache do browser entre deploys, e saem do bundle
+        // principal — que cai de ~2,2 MB para um tamanho bem menor.
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'animation':    ['framer-motion'],
+          'charts':       ['recharts'],
+          'pdf':          ['jspdf'],
+          'supabase':     ['@supabase/supabase-js'],
+        },
+      },
+    },
+  },
   server: {
     headers: Object.fromEntries(securityHeaders.map(h => [h.key, h.value])),
   },

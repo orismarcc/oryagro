@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react';
 
@@ -102,6 +102,22 @@ export function ToastProvider({ children }) {
     warning: (msg, dur) => showToast(msg, 'warning', dur),
     info:    (msg, dur) => showToast(msg, 'info',    dur),
   };
+
+  // ── Erros de banco antes silenciosos → toast ───────────────────────────────
+  // logDbError dispara 'oryagro:db-error' (com throttle). Aqui mostramos uma
+  // mensagem genérica e segura ao usuário, para que falhas de escrita/leitura
+  // nunca mais passem despercebidas.
+  useEffect(() => {
+    const onDbError = () => {
+      showToast(
+        'Falha de comunicação com o servidor. Algumas alterações podem não ter sido salvas — verifique sua conexão e tente novamente.',
+        'error',
+        6000,
+      );
+    };
+    window.addEventListener('oryagro:db-error', onDbError);
+    return () => window.removeEventListener('oryagro:db-error', onDbError);
+  }, [showToast]);
 
   return (
     <ToastContext.Provider value={toast}>

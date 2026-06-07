@@ -1,25 +1,28 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Dashboard from './components/Dashboard';
 import CulturaPicker from './components/CulturaPicker';
 import CulturaPage from './components/CulturaPage';
 import LotePage from './components/LotePage';
-import SimuladorPage from './components/SimuladorPage';
-import ComparacaoCulturas from './components/ComparacaoCulturas';
-import AnalysePage from './components/AnalysePage';
 import LoginPage from './components/LoginPage';
-import CalendarioPage from './components/CalendarioPage';
-import EstoquePage from './components/EstoquePage';
 import PropriedadesPage from './components/PropriedadesPage';
 import PropriedadePage from './components/PropriedadePage';
 import TalhaoPage from './components/TalhaoPage';
 import MigrationWizard from './components/MigrationWizard';
 import SettingsPage from './components/SettingsPage';
 import NetworkStatusBanner from './components/NetworkStatus';
-import CalculadoraPage from './components/CalculadoraPage';
-import FinanceiroPage from './components/FinanceiroPage';
-import CompradoresPage from './components/CompradoresPage';
 import HamburgerMenu from './components/HamburgerMenu';
+
+// ── Páginas pesadas: carregadas sob demanda (code-splitting) ──────────────────
+// Reduz o bundle inicial — recharts/jspdf e estas telas só baixam quando abertas.
+const SimuladorPage     = lazy(() => import('./components/SimuladorPage'));
+const ComparacaoCulturas = lazy(() => import('./components/ComparacaoCulturas'));
+const AnalysePage       = lazy(() => import('./components/AnalysePage'));
+const CalendarioPage    = lazy(() => import('./components/CalendarioPage'));
+const EstoquePage       = lazy(() => import('./components/EstoquePage'));
+const CalculadoraPage   = lazy(() => import('./components/CalculadoraPage'));
+const FinanceiroPage    = lazy(() => import('./components/FinanceiroPage'));
+const CompradoresPage   = lazy(() => import('./components/CompradoresPage'));
 import NotificacoesBell from './components/NotificacoesBell';
 import InstallPWA from './components/InstallPWA';
 import { CULTURAS } from './data/culturas';
@@ -411,6 +414,11 @@ function AppInner({ session, displayName, signOut }) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
           >
+            <Suspense fallback={
+              <div className="flex items-center justify-center py-24">
+                <Loader2 size={28} className="animate-spin" style={{ color: 'hsl(160 84% 27%)' }} />
+              </div>
+            }>
             {mainView === 'dashboard' && (
               <Dashboard
                 onAddLote={handleAddLote}
@@ -489,6 +497,7 @@ function AppInner({ session, displayName, signOut }) {
                 onSelectLote={handleSelectLoteFromTalhao}
               />
             )}
+            </Suspense>
           </motion.div>
         </AnimatePresence>
       </main>
