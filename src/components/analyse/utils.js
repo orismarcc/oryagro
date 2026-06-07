@@ -5,6 +5,15 @@
 import { CULTURAS } from '../../data/culturas';
 import { resolveLifecycle, parseCicloDias } from '../../lib/lifecycle';
 import { logDbError } from '../../lib/logger';
+import { getProductionFactorSync } from '../../hooks/useCurvasProducao';
+
+/**
+ * Fator de produção anual (0–1) para o ano N do plantio.
+ * Usa curvas_producao (via cache singleton), com fallback embutido.
+ */
+export function getRampFactor(culturaId, yearFromPlanting) {
+  return getProductionFactorSync(culturaId, yearFromPlanting);
+}
 
 export function formatDate(dateStr) {
   if (!dateStr) return '—';
