@@ -679,18 +679,21 @@ export async function criarSafraDeTalhao(talhaoId, dataSafra, talhaoData) {
   const { data, error } = await supabase
     .from('plantios')
     .insert({
-      user_id:           userId,
-      talhao_id:         talhaoId,
-      propriedade_id:    talhaoData.propriedade_id || null,
-      cultura_id:        talhaoData.cultura_id,
-      nome:              `${talhaoData.nome || 'Talhão'} — Safra ${proximaSafra}`,
-      data_plantio:      dataSafra,
-      area_ha:           talhaoData.area_ha || null,
-      total_plantas:     talhaoData.total_plantas || null,
-      metodo_propagacao: talhaoData.metodo_propagacao || null,
-      tipo_cultura:      'perene',
-      safra_numero:      proximaSafra,
-      status:            'ativo',
+      user_id:             userId,
+      talhao_id:           talhaoId,
+      propriedade_id:      talhaoData.propriedade_id || null,
+      cultura_id:          talhaoData.cultura_id,
+      nome:                `${talhaoData.nome || 'Talhão'} — Safra ${proximaSafra}`,
+      data_plantio:        dataSafra,
+      area_ha:             talhaoData.area_ha || null,
+      total_plantas:       talhaoData.total_plantas || null,
+      metodo_propagacao:   talhaoData.metodo_propagacao || null,
+      // Herda espaçamento do talhão (necessário para escala de doses no cronograma)
+      espacamento_linhas:  talhaoData.espacamento_linhas ?? null,
+      espacamento_plantas: talhaoData.espacamento_plantas ?? null,
+      tipo_cultura:        'perene',
+      safra_numero:        proximaSafra,
+      status:              'ativo',
     })
     .select()
     .single();
@@ -723,4 +726,41 @@ export async function deletarTalhao(id) {
     .eq('id', id);
   if (error) { logDbError('deletarTalhao', error); return false; }
   return true;
+}
+
+/**
+ * Exclui um talhão com segurança.
+ *  - Bloqueia se ALGUMA safra tiver dados reais: vendas, despesas ou etapas
+ *    concluídas no cronograma. Nesse caso retorna { ok:false, reason:'has_data' }.
+ *  - Se todas as safras estiverem vazias, exclui as safras (cascata via
+ *    deleteLoteCompleto) e então faz soft-delete do talhão.
+ *
+ * @returns {Promise<{ ok: boolean, reason?: 'has_data' | 'error' }>}
+ */
+export async function deleteTalhaoComSeguranca(talhaoId) {
+  if (!talhaoId) return { ok: false, reason: 'error' };
+
+  const safras   = await loadSafrasDeTalhao(talhaoId);
+  const safraIds = safras.map(s => s.id);
+
+  if (safraIds.length > 0) {
+    // Verifica se há dados reais em qualquer safra
+    const [despRes, vendRes, feitoRes] = await Promise.all([
+      supabase.from('despesas').select('id', { count: 'exact', head: true }).in('plantio_id', safraIds),
+      supabase.from('vendas').select('id', { count: 'exact', head: true }).in('plantio_id', safraIds),
+      supabase.from('cronograma_atividades').select('id', { count: 'exact', head: true })
+        .in('plantio_id', safraIds).eq('status', 'feito'),
+    ]);
+    const totalDados = (despRes.count || 0) + (vendRes.count || 0) + (feitoRes.count || 0);
+    if (totalDados > 0) return { ok: false, reason: 'has_data' };
+
+    // Safras vazias — remove cada uma com toda a cascata (cronograma pendente, etc.)
+    for (const id of safraIds) {
+      const ok = await deleteLoteCompleto(id);
+      if (!ok) return { ok: false, reason: 'error' };
+    }
+  }
+
+  const ok = await deletarTalhao(talhaoId);
+  return ok ? { ok: true } : { ok: false, reason: 'error' };
 }

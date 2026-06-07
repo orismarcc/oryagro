@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database, Loader2 } from 'lucide-react';
-import { loadLotesByPropriedade, deleteLoteCompleto, loadTalhoesPorPropriedade, criarTalhao } from '../hooks/useSupabaseSync';
+import { loadLotesByPropriedade, deleteLoteCompleto, loadTalhoesPorPropriedade, criarTalhao, criarSafraDeTalhao, deleteTalhaoComSeguranca, preCarregarEtapasPadrao } from '../hooks/useSupabaseSync';
 import { useCronogramaStatusBatch, makeStableId } from '../hooks/useCronogramaSync';
+import { calcularPlantas } from '../hooks/useSimulador';
 import { loadEstoque } from '../hooks/useGestao';
 import { CULTURAS } from '../data/culturas';
 import { resolveLifecycle, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
 import { loadFarmMembers, addFarmMember, removeFarmMember, updateFarmMemberRole } from '../hooks/useFarmMembers';
 import { supabase } from '../lib/supabase';
 import { can, FARM_ACTIONS } from '../lib/permissions';
+import { useToast } from '../context/ToastContext';
+import PropagacaoSelector from './PropagacaoSelector';
 import BackupModal from './BackupModal';
 
 
@@ -435,83 +438,188 @@ function FarmMembersSection({ propriedade, userRole }) {
 }
 
 // ── TalhaoCard (mini card for perennial areas) ─────────────────────────────────
-function TalhaoCard({ talhao, onSelect, index }) {
+function TalhaoCard({ talhao, onSelect, index, onDeleteTalhao, canDelete }) {
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
+
   const cultura = CULTURAS[talhao.cultura_id];
   const cor = cultura?.cor ?? '#16a34a';
   const idadeAnos = talhao.data_implantacao
     ? ((Date.now() - new Date(talhao.data_implantacao + 'T12:00:00').getTime()) / (365.25 * 86400000)).toFixed(1)
     : null;
 
+  const handleDelete = async (e) => {
+    e.stopPropagation();
+    setDeleting(true);
+    await onDeleteTalhao(talhao.id);   // parent shows toast on block/erro
+    setDeleting(false);
+    setConfirmDelete(false);
+  };
+
   return (
-    <motion.button
+    <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.04, duration: 0.22 }}
-      onClick={() => onSelect(talhao)}
-      className="card-interactive w-full text-left p-4"
+      className="card w-full p-4 relative"
       style={{ borderLeft: `3px solid ${cor}` }}
     >
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-          style={{ background: `${cor}15` }}>
-          {cultura?.emoji ?? '🌱'}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-[14px] font-bold text-foreground leading-tight truncate">{talhao.nome}</p>
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-              style={{ background: `${cor}20`, color: cor }}>
-              Perene
-            </span>
+      {/* div (não button) para permitir botões de excluir aninhados */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onSelect(talhao)}
+        onKeyDown={(e) => e.key === 'Enter' && onSelect(talhao)}
+        className="w-full text-left cursor-pointer"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+            style={{ background: `${cor}15` }}>
+            {cultura?.emoji ?? '🌱'}
           </div>
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap text-[11px] text-muted-foreground">
-            <span>{cultura?.nome ?? talhao.cultura_id}</span>
-            {talhao.area_ha && <span>· {talhao.area_ha} ha</span>}
-            {talhao.total_plantas && <span>· {talhao.total_plantas.toLocaleString('pt-BR')} plantas</span>}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-[14px] font-bold text-foreground leading-tight truncate">{talhao.nome}</p>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                style={{ background: `${cor}20`, color: cor }}>
+                Perene
+              </span>
+            </div>
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap text-[11px] text-muted-foreground">
+              <span>{cultura?.nome ?? talhao.cultura_id}</span>
+              {talhao.area_ha && <span>· {talhao.area_ha} ha</span>}
+              {talhao.total_plantas && <span>· {talhao.total_plantas.toLocaleString('pt-BR')} plantas</span>}
+            </div>
           </div>
-        </div>
-        <div className="text-right flex-shrink-0">
-          {idadeAnos && (
-            <>
-              <div className="text-[13px] font-black leading-none" style={{ color: cor }}>{idadeAnos}</div>
-              <div className="text-[9px] text-muted-foreground mt-0.5">anos</div>
-            </>
-          )}
+          <div className="text-right flex-shrink-0">
+            {idadeAnos && (
+              <>
+                <div className="text-[13px] font-black leading-none" style={{ color: cor }}>{idadeAnos}</div>
+                <div className="text-[9px] text-muted-foreground mt-0.5">anos</div>
+              </>
+            )}
+          </div>
         </div>
       </div>
-    </motion.button>
+
+      {/* Delete control */}
+      {canDelete && (
+        <div className="mt-2.5 pt-2.5 flex justify-end" style={{ borderTop: '1px solid hsl(214 20% 92%)' }}>
+          {confirmDelete ? (
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-muted-foreground mr-1">Excluir talhão?</span>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="text-[10px] font-bold px-2.5 py-1 rounded-lg"
+                style={{ background: '#fee2e2', color: '#dc2626' }}>
+                {deleting ? '…' : 'Confirmar'}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); }}
+                className="text-[10px] font-medium px-2.5 py-1 rounded-lg"
+                style={{ background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }}>
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
+              className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-red-500 transition-colors py-0.5 px-1">
+              <Trash2 size={11} /> Excluir talhão
+            </button>
+          )}
+        </div>
+      )}
+    </motion.div>
   );
 }
 
 // ── Dialog: Novo Talhão ─────────────────────────────────────────────────────────
+// Usa a mesma UX do formulário "Novo Lote" (anual): seletor visual de método de
+// propagação + calculadora de dimensões que calcula o nº de plantas. Ao criar,
+// já inicia a Safra 1 automaticamente com o cronograma pré-carregado.
 function NovaTalhaoDialog({ propriedadeId, onClose, onCreated }) {
+  const toast = useToast();
+  const today = new Date().toISOString().split('T')[0];
+
+  const culturasPerenes = Object.values(CULTURAS).filter(c => c.tipoCultura === 'perene');
+
   const [form, setForm] = useState({
-    nome: '', culturaId: '', dataImplantacao: new Date().toISOString().split('T')[0],
-    areaHa: '', totalPlantas: '', metodoPropagacao: '', observacoes: '',
+    culturaId: '', nome: '', dataImplantacao: today,
+    areaHa: '', linhas: '', plantas: '',
+    metodoPropagacao: '', observacoes: '',
   });
   const [saving, setSaving] = useState(false);
 
-  // Somente culturas perenes
-  const culturasPerenes = Object.values(CULTURAS).filter(c => c.tipoCultura === 'perene');
+  const cultura = form.culturaId ? CULTURAS[form.culturaId] : null;
+  const cor = cultura?.cor ?? '#16a34a';
 
-  const handleCreate = async () => {
-    if (!form.nome || !form.culturaId || !form.dataImplantacao) return;
-    setSaving(true);
-    const talhao = await criarTalhao({
-      propriedadeId,
-      nome: form.nome,
-      culturaId: form.culturaId,
-      dataImplantacao: form.dataImplantacao,
-      areaHa: parseFloat(form.areaHa) || null,
-      totalPlantas: parseInt(form.totalPlantas) || null,
-      metodoPropagacao: form.metodoPropagacao || null,
-      observacoes: form.observacoes || null,
-    });
-    setSaving(false);
-    if (talhao) { onCreated(talhao); }
+  // Ao escolher a cultura, pré-preenche dimensões e método com os padrões dela
+  const handleCulturaChange = (culturaId) => {
+    const c = CULTURAS[culturaId];
+    setForm(f => ({
+      ...f,
+      culturaId,
+      linhas:  c?.espacamento?.linhas != null ? String(c.espacamento.linhas) : '',
+      plantas: c?.espacamento?.plantas != null ? String(c.espacamento.plantas) : '',
+      areaHa:  c?.area?.padrao != null ? String(c.area.padrao) : f.areaHa,
+      metodoPropagacao: c?.metodosPropagacao?.[0]?.key ?? '',
+    }));
   };
 
-  const cor = form.culturaId ? (CULTURAS[form.culturaId]?.cor ?? '#16a34a') : '#16a34a';
+  // Nº de plantas calculado a partir de área + espaçamento
+  const dim = cultura
+    ? calcularPlantas(cultura, {
+        areaHa: form.areaHa,
+        espacamentoLinhas: form.linhas,
+        espacamentoPlantas: form.plantas,
+      })
+    : { totalPlantas: 0 };
+
+  const metodoObj = cultura?.metodosPropagacao?.find(m => m.key === form.metodoPropagacao) ?? null;
+  const diasViveiro = metodoObj?.diasViveiro ?? 0;
+
+  const podeSalvar = !!cultura && !!form.nome.trim() && !!form.dataImplantacao
+    && (parseFloat(form.areaHa) > 0) && dim.totalPlantas > 0;
+
+  const handleCreate = async () => {
+    if (!podeSalvar) return;
+    setSaving(true);
+    try {
+      // 1. Cria o talhão (área física permanente)
+      const talhao = await criarTalhao({
+        propriedadeId,
+        nome: form.nome.trim(),
+        culturaId: form.culturaId,
+        dataImplantacao: form.dataImplantacao,
+        areaHa: parseFloat(form.areaHa) || null,
+        totalPlantas: dim.totalPlantas || null,
+        metodoPropagacao: form.metodoPropagacao || null,
+        espacamentoLinhas: parseFloat(form.linhas) || null,
+        espacamentoPlanta: parseFloat(form.plantas) || null,
+        observacoes: form.observacoes || null,
+      });
+      if (!talhao) { toast.error('Não foi possível criar o talhão. Tente novamente.'); return; }
+
+      // 2. Inicia a Safra 1 automaticamente (herda os dados do talhão)
+      const safra = await criarSafraDeTalhao(talhao.id, form.dataImplantacao, talhao);
+      if (safra) {
+        // 3. Pré-carrega o cronograma da safra para não abrir vazio
+        preCarregarEtapasPadrao(safra, cultura, diasViveiro).catch(() => {});
+      } else {
+        toast.error('Talhão criado, mas não foi possível iniciar a Safra 1. Abra o talhão e use "Nova Safra".');
+      }
+
+      onCreated(talhao);
+    } catch {
+      toast.error('Erro ao criar talhão. Verifique sua conexão.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputCls = "w-full mt-1 rounded-xl border border-input px-3 py-2 text-sm bg-background outline-none focus:ring-2";
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
@@ -522,16 +630,20 @@ function NovaTalhaoDialog({ propriedadeId, onClose, onCreated }) {
       >
         <div className="px-5 pt-5 pb-3 border-b border-border flex-shrink-0">
           <h3 className="text-[15px] font-bold text-foreground">Novo Talhão</h3>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Área física permanente de cultura perene</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Área física permanente de cultura perene — a 1ª safra começa junto
+          </p>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3">
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3" style={{ scrollbarWidth: 'none' }}>
           {/* Cultura */}
           <div>
-            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Cultura *</label>
+            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Cultura perene *</label>
             <select
               value={form.culturaId}
-              onChange={e => setForm(f => ({ ...f, culturaId: e.target.value }))}
-              className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-sm bg-background outline-none"
+              onChange={e => handleCulturaChange(e.target.value)}
+              className={inputCls}
+              style={{ '--tw-ring-color': cor }}
             >
               <option value="">Selecionar cultura perene…</option>
               {culturasPerenes.map(c => (
@@ -539,66 +651,101 @@ function NovaTalhaoDialog({ propriedadeId, onClose, onCreated }) {
               ))}
             </select>
           </div>
-          {/* Nome */}
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Nome do Talhão *</label>
-            <input
-              type="text"
-              value={form.nome}
-              onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
-              placeholder="Ex: Acerola Bloco A, Talhão Norte..."
-              className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-sm bg-background outline-none"
-            />
-          </div>
-          {/* Data implantação */}
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Data de implantação *</label>
-            <input
-              type="date"
-              value={form.dataImplantacao}
-              onChange={e => setForm(f => ({ ...f, dataImplantacao: e.target.value }))}
-              className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-sm bg-background outline-none"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Área (ha)</label>
-              <input type="number" min="0" step="0.01" value={form.areaHa}
-                onChange={e => setForm(f => ({ ...f, areaHa: e.target.value }))}
-                className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-sm bg-background outline-none" />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Nº de plantas</label>
-              <input type="number" min="0" value={form.totalPlantas}
-                onChange={e => setForm(f => ({ ...f, totalPlantas: e.target.value }))}
-                className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-sm bg-background outline-none" />
-            </div>
-          </div>
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Método de propagação</label>
-            <input type="text" value={form.metodoPropagacao}
-              onChange={e => setForm(f => ({ ...f, metodoPropagacao: e.target.value }))}
-              placeholder="Ex: Estaquia, Enxertia..."
-              className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-sm bg-background outline-none" />
-          </div>
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Observações</label>
-            <textarea value={form.observacoes}
-              onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
-              rows={2} placeholder="Variedade, localização, etc..."
-              className="w-full mt-1 rounded-xl border border-input px-3 py-2 text-sm bg-background outline-none resize-none" />
-          </div>
+
+          {cultura && (
+            <>
+              {/* Nome */}
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Nome do Talhão *</label>
+                <input
+                  type="text"
+                  value={form.nome}
+                  onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+                  placeholder="Ex: Acerola Bloco A, Talhão Norte…"
+                  className={inputCls}
+                  style={{ '--tw-ring-color': cor }}
+                />
+              </div>
+
+              {/* Método de propagação (seletor visual, igual ao Novo Lote) */}
+              {cultura.metodosPropagacao?.length > 0 && (
+                <PropagacaoSelector
+                  metodos={cultura.metodosPropagacao}
+                  selected={form.metodoPropagacao}
+                  onChange={(key) => setForm(f => ({ ...f, metodoPropagacao: key }))}
+                  cor={cor}
+                />
+              )}
+
+              {/* Dimensões → calcula nº de plantas */}
+              <div className="card p-3 space-y-3" style={{ background: `${cor}06`, border: `1px solid ${cor}20` }}>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: cor }}>Dimensões</p>
+                  <span className="text-[12px] font-bold px-2.5 py-1 rounded-full" style={{ background: `${cor}18`, color: cor }}>
+                    {dim.totalPlantas.toLocaleString('pt-BR')} plantas
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Área (ha)</label>
+                    <input type="number" min="0" step="0.1" value={form.areaHa}
+                      onChange={e => setForm(f => ({ ...f, areaHa: e.target.value }))}
+                      className={inputCls} style={{ '--tw-ring-color': cor }} />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Esp. Linhas (m)</label>
+                    <input type="number" min="0" step="0.05" value={form.linhas}
+                      onChange={e => setForm(f => ({ ...f, linhas: e.target.value }))}
+                      className={inputCls} style={{ '--tw-ring-color': cor }} />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Esp. Plantas (m)</label>
+                    <input type="number" min="0" step="0.05" value={form.plantas}
+                      onChange={e => setForm(f => ({ ...f, plantas: e.target.value }))}
+                      className={inputCls} style={{ '--tw-ring-color': cor }} />
+                  </div>
+                </div>
+                {dim.plantasPorHa > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {dim.plantasPorHa.toLocaleString('pt-BR')} plantas/ha × {parseFloat(form.areaHa) || 0} ha
+                  </p>
+                )}
+              </div>
+
+              {/* Data implantação */}
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Data de implantação *</label>
+                <input
+                  type="date"
+                  value={form.dataImplantacao}
+                  onChange={e => setForm(f => ({ ...f, dataImplantacao: e.target.value }))}
+                  className={inputCls}
+                  style={{ '--tw-ring-color': cor }}
+                />
+              </div>
+
+              {/* Observações */}
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Observações</label>
+                <textarea value={form.observacoes}
+                  onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
+                  rows={2} placeholder="Variedade, localização, etc…"
+                  className={`${inputCls} resize-none`} style={{ '--tw-ring-color': cor }} />
+              </div>
+            </>
+          )}
         </div>
+
         <div className="px-5 py-4 border-t border-border flex gap-2 flex-shrink-0">
           <button onClick={onClose}
             className="flex-1 py-2.5 rounded-xl border border-input text-[13px] font-medium text-muted-foreground">
             Cancelar
           </button>
-          <button onClick={handleCreate} disabled={saving || !form.nome || !form.culturaId || !form.dataImplantacao}
+          <button onClick={handleCreate} disabled={saving || !podeSalvar}
             className="flex-1 py-2.5 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50"
             style={{ background: cor }}>
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-            {saving ? 'Criando…' : 'Criar Talhão'}
+            {saving ? 'Criando…' : 'Criar Talhão + Safra 1'}
           </button>
         </div>
       </motion.div>
@@ -628,9 +775,22 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
     });
   }, [propriedade.id]);
 
+  const toast = useToast();
+
   const handleDeleteLote = async (id) => {
     const ok = await deleteLoteCompleto(id);
     if (ok) setLotes(prev => prev.filter(l => l.id !== id));
+  };
+
+  const handleDeleteTalhao = async (id) => {
+    const res = await deleteTalhaoComSeguranca(id);
+    if (res.ok) {
+      setTalhoes(prev => prev.filter(t => t.id !== id));
+    } else if (res.reason === 'has_data') {
+      toast.error('Este talhão tem safras com dados (vendas, despesas ou etapas concluídas). Exclua ou arquive as safras antes.');
+    } else {
+      toast.error('Não foi possível excluir o talhão. Tente novamente.');
+    }
   };
 
   // Cronograma status from Supabase — source of truth for step alerts
@@ -717,7 +877,14 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
           ) : (
             <div className="space-y-2">
               {talhoes.map((t, i) => (
-                <TalhaoCard key={t.id} talhao={t} onSelect={onSelectTalhao ?? (() => {})} index={i} />
+                <TalhaoCard
+                  key={t.id}
+                  talhao={t}
+                  onSelect={onSelectTalhao ?? (() => {})}
+                  index={i}
+                  onDeleteTalhao={handleDeleteTalhao}
+                  canDelete={canDeleteLote}
+                />
               ))}
             </div>
           )}
@@ -726,8 +893,17 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
         {/* ── Lotes Anuais ────────────────────────────────────────────────── */}
         <div>
           <div className="flex items-center justify-between mb-3 px-1">
-            <p className="section-label">Lotes Anuais</p>
-            <span className="text-[11px] text-muted-foreground">{lotes.length} lote{lotes.length !== 1 ? 's' : ''}</span>
+            <div className="flex items-center gap-2">
+              <p className="section-label">Lotes Anuais</p>
+              <span className="text-[11px] text-muted-foreground">{lotes.length} lote{lotes.length !== 1 ? 's' : ''}</span>
+            </div>
+            <button
+              onClick={onAddLote}
+              className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-xl"
+              style={{ background: 'hsl(210 16% 94%)', color: 'hsl(215 16% 35%)' }}
+            >
+              <Plus size={11} /> Novo Lote
+            </button>
           </div>
 
           {loading ? (

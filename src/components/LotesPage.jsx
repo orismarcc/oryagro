@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, CalendarDays, Sprout, CheckCircle2, Info, ChevronDown, ChevronUp, Leaf } from 'lucide-react';
+import { Plus, Trash2, CalendarDays, Sprout, CheckCircle2, ChevronDown, ChevronUp, Leaf } from 'lucide-react';
 import { calcularPlantas } from '../hooks/useSimulador';
 import { registrarPlantio, deleteLote, updateLoteMudas, preCarregarEtapasPadrao } from '../hooks/useSupabaseSync';
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
+import PropagacaoSelector from './PropagacaoSelector';
 
 function today() {
   const d = new Date();
@@ -205,44 +206,6 @@ function LoteCard({ lote, cultura, cor, isCampo, onDelete, deleting }) {
         </div>
       </div>
     </motion.div>
-  );
-}
-
-// ── PropagacaoSelector ──────────────────────────────────────────────────────
-
-function PropagacaoSelector({ metodos, selected, onChange, cor }) {
-  const selectedMetodo = metodos.find(m => m.key === selected);
-  return (
-    <div>
-      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-        Método de propagação
-      </p>
-      <div className="flex flex-wrap gap-1.5 mb-2">
-        {metodos.map(m => (
-          <button
-            key={m.key}
-            type="button"
-            onClick={() => onChange(m.key)}
-            className="px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all"
-            style={selected === m.key
-              ? { background: cor, color: '#fff' }
-              : { background: 'hsl(210 16% 94%)', color: 'hsl(215 16% 40%)' }}
-          >
-            {m.label}
-            {m.diasViveiro > 0 && (
-              <span className="ml-1 opacity-70">· {m.diasViveiro}d viveiro</span>
-            )}
-          </button>
-        ))}
-      </div>
-      {selectedMetodo && (
-        <div className="flex items-start gap-1.5 px-3 py-2 rounded-xl text-[11px] text-muted-foreground"
-          style={{ background: `${cor}08`, border: `1px solid ${cor}20` }}>
-          <Info size={11} className="flex-shrink-0 mt-0.5" style={{ color: cor }} />
-          <span>{selectedMetodo.descricao}</span>
-        </div>
-      )}
-    </div>
   );
 }
 
