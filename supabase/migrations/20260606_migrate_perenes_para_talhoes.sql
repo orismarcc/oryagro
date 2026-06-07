@@ -41,7 +41,9 @@ BEGIN
     SET talhao_id    = v_talhao_id,
         tipo_cultura = 'perene',
         safra_numero = 1,
-        nome         = p.nome || ' — Safra 1'
+        -- chr(8212) = em-dash (—); usar o codepoint evita corrupção de encoding
+        -- caso a migration seja aplicada por uma ferramenta que mangle UTF-8.
+        nome         = p.nome || ' ' || chr(8212) || ' Safra 1'
     WHERE id = p.id;
 
     RAISE NOTICE 'Migrado plantio % (%) -> talhão %', p.id, p.cultura_id, v_talhao_id;
