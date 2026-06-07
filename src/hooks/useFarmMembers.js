@@ -12,21 +12,42 @@ import { logDbError } from '../lib/logger';
  * @returns {Promise<Array>}
  */
 export async function loadFarmMembers(farmId) {
-  const { data, error } = await supabase
+  // NÃO usar embed profiles(...) — não existe FK direto farm_members→profiles
+  // (ambos referenciam auth.users). O embed causava PGRST200 e o toast de erro.
+  // Buscamos os membros e os perfis em duas queries e fazemos o merge.
+  const { data: members, error } = await supabase
     .from('farm_members')
-    .select('id, user_id, role, invited_by, created_at, profiles(email, display_name)')
+    .select('id, user_id, role, invited_by, created_at')
     .eq('farm_id', farmId)
     .order('created_at', { ascending: true });
   if (error) { logDbError('loadFarmMembers', error); return []; }
-  return (data || []).map(m => ({
-    id:          m.id,
-    user_id:     m.user_id,
-    role:        m.role,
-    invited_by:  m.invited_by,
-    created_at:  m.created_at,
-    email:       m.profiles?.email ?? '',
-    displayName: m.profiles?.display_name ?? m.profiles?.email?.split('@')[0] ?? '',
-  }));
+  if (!members || members.length === 0) return [];
+
+  // Busca os perfis dos membros (best-effort — se falhar, usa fallback)
+  const userIds = [...new Set(members.map(m => m.user_id).filter(Boolean))];
+  let profileMap = {};
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, email, display_name')
+      .in('id', userIds);
+    if (profiles) {
+      profileMap = profiles.reduce((acc, p) => { acc[p.id] = p; return acc; }, {});
+    }
+  }
+
+  return members.map(m => {
+    const p = profileMap[m.user_id] || {};
+    return {
+      id:          m.id,
+      user_id:     m.user_id,
+      role:        m.role,
+      invited_by:  m.invited_by,
+      created_at:  m.created_at,
+      email:       p.email ?? '',
+      displayName: p.display_name ?? p.email?.split('@')[0] ?? '',
+    };
+  });
 }
 
 /**
