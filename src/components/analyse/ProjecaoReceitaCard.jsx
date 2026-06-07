@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { DollarSign } from 'lucide-react';
 import { estimateKgAnual } from '../../constants/cropYields';
 import { Card } from './ui';
+import CalcNote from '../CalcNote';
 import { fmtBRL, getCultura, safeResolveLifecycle, getRampFactor } from './utils';
 
 function ProjecaoReceitaCard({ lotes, eventosColheita }) {
@@ -155,6 +156,15 @@ import { fmtBRL, getCultura, safeResolveLifecycle, getRampFactor } from './utils
       <div className="px-4 pt-4 pb-1 flex items-center gap-2 border-b border-gray-50">
         <DollarSign size={14} className="text-green-500" />
         <span className="text-[13px] font-bold text-gray-700">Projeção de Receita — {startYear}–{endYear}</span>
+      </div>
+
+      <div className="px-4 pt-2">
+        <CalcNote>
+          <li>Receita = produção estimada (kg) × preço por kg (editável acima).</li>
+          <li>Produção (kg/ano) = nº de plantas (ou área) × rendimento da cultura × fator da curva de produção do ano.</li>
+          <li>Preço: use o valor <strong>in natura</strong> (fruta fresca) ou o de <strong>polpa</strong> processada — cada um tem seu R$/kg.</li>
+          <li>Não inclui custos — é receita bruta projetada.</li>
+        </CalcNote>
       </div>
 
       {/* Price per kg editors */}
@@ -458,5 +468,5 @@ import { fmtBRL, getCultura, safeResolveLifecycle, getRampFactor } from './utils
       </p>
     </Card>
   );
-}
+}
 export default ProjecaoReceitaCard;

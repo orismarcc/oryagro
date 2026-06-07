@@ -1,9 +1,10 @@
 /** ProjecaoKgCard — extraído de AnalysePage. */
-import React, { useState } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 import { Sprout } from 'lucide-react';
 import { estimateKgAnual, getProductionBase, getYieldConfig } from '../../constants/cropYields';
 import { Card } from './ui';
+import CalcNote from '../CalcNote';
 import { getCultura, safeResolveLifecycle, getRampFactor } from './utils';
 
 function ProjecaoKgCard({ lotes, eventosColheita = [], allLotes = [] }) {
@@ -244,6 +245,15 @@ import { getCultura, safeResolveLifecycle, getRampFactor } from './utils';
         )}
       </div>
 
+      <div className="px-4 pt-2">
+        <CalcNote>
+          <li>Produção <strong>in natura</strong> (fruta fresca), não polpa.</li>
+          <li>Base: culturas por planta → nº de plantas × kg/planta/ano; culturas por área → ha × kg/ha/ano.</li>
+          <li>Multiplicado pelo <strong>fator da curva de produção</strong> do ano (planta jovem produz menos).</li>
+          <li>"Pico" = produção na maturidade plena (100% da curva).</li>
+        </CalcNote>
+      </div>
+
       {/* Culture legend with basis tags */}
       <div className="px-4 pt-2 flex flex-wrap gap-2">
         {lotes.map(l => {
@@ -439,5 +449,5 @@ import { getCultura, safeResolveLifecycle, getRampFactor } from './utils';
       </p>
     </Card>
   );
-}
+}
 export default ProjecaoKgCard;
