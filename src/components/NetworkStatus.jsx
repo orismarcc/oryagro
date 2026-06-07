@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WifiOff, Wifi } from 'lucide-react';
+import { pendingCount } from '../lib/outbox';
 
 export default function NetworkStatusBanner() {
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [justReconnected, setJustReconnected] = useState(false);
+  const [pendentes, setPendentes] = useState(() => pendingCount());
 
   useEffect(() => {
     let reconnectTimer;
@@ -18,11 +20,14 @@ export default function NetworkStatusBanner() {
       setJustReconnected(false);
       clearTimeout(reconnectTimer);
     };
+    const handleOutbox = (e) => setPendentes(e.detail?.size ?? pendingCount());
     window.addEventListener('online',  handleOnline);
     window.addEventListener('offline', handleOffline);
+    window.addEventListener('oryagro:outbox-change', handleOutbox);
     return () => {
       window.removeEventListener('online',  handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('oryagro:outbox-change', handleOutbox);
       clearTimeout(reconnectTimer);
     };
   }, []);
@@ -43,7 +48,9 @@ export default function NetworkStatusBanner() {
           style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a' }}
         >
           <WifiOff size={14} />
-          Sem conexão – modo offline. Algumas funções podem não funcionar.
+          {pendentes > 0
+            ? `Sem conexão – ${pendentes} alteração${pendentes > 1 ? 'ões' : ''} salva${pendentes > 1 ? 's' : ''} na fila para sincronizar.`
+            : 'Sem conexão – modo offline. Algumas funções podem não funcionar.'}
         </motion.div>
       )}
       {showReconnected && (

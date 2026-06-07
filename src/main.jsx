@@ -2,7 +2,11 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
+import { initOutbox } from './lib/outbox';
 import './index.css';
+
+// Liga a fila de escritas offline (retry automático ao reconectar).
+initOutbox();
 
 // Impede que o WebView/browser restaure o scroll antigo ao voltar de uma página.
 if ('scrollRestoration' in history) {

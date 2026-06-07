@@ -1874,6 +1874,10 @@ function DespesasPorCategoriaCard({ despesas }) {
 /* ─── Benchmarking de Ciclos ──────────────────────────────── */
 
 function BenchmarkingCiclosCard({ ciclosHistorico, lotesAtivos }) {
+  // Hooks devem ser chamados incondicionalmente, ANTES de qualquer early return,
+  // senão a ordem dos hooks muda entre renders (Rules of Hooks) e o React quebra.
+  const [activeIdx, setActiveIdx] = useState(null);
+
   if (!ciclosHistorico || ciclosHistorico.length === 0) {
     // Find lote closest to completion
     let maisProximo = null;
@@ -1971,8 +1975,6 @@ function BenchmarkingCiclosCard({ ciclosHistorico, lotesAtivos }) {
     const pct = ((last.kgDia - prev.kgDia) / prev.kgDia) * 100;
     trends[culturaId] = pct;
   });
-
-  const [activeIdx, setActiveIdx] = useState(null);
 
   return (
     <Card>

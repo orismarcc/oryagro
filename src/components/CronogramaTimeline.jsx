@@ -112,11 +112,14 @@ function dateToISO(d) {
 }
 
 // ── Toggle component ─────────────────────────────────────────────────────────
-function Toggle({ enabled, onToggle, color }) {
+function Toggle({ enabled, onToggle, color, label }) {
   return (
     <button
       type="button"
       onClick={onToggle}
+      role="switch"
+      aria-checked={enabled}
+      aria-label={label || 'Alternar'}
       className="relative flex-shrink-0"
       style={{ width: 40, height: 22 }}
     >
@@ -854,7 +857,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
           <Button variant="outline" size="sm" onClick={() => setAddDialog(true)}>
             <Plus size={13} /> Adicionar
           </Button>
-          <Button variant="outline" size="sm" onClick={() => window.print()}>
+          <Button variant="outline" size="sm" onClick={() => window.print()} aria-label="Imprimir cronograma">
             <Printer size={13} />
           </Button>
         </div>

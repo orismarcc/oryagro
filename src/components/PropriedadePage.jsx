@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database, Loader2 } from 'lucide-react';
+import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database, Loader2, History } from 'lucide-react';
 import { loadLotesByPropriedade, deleteLoteCompleto, loadTalhoesPorPropriedade, criarTalhao, criarSafraDeTalhao, deleteTalhaoComSeguranca, preCarregarEtapasPadrao } from '../hooks/useSupabaseSync';
 import { useCronogramaStatusBatch, makeStableId } from '../hooks/useCronogramaSync';
 import { calcularPlantas } from '../hooks/useSimulador';
@@ -13,6 +13,7 @@ import { can, FARM_ACTIONS } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import PropagacaoSelector from './PropagacaoSelector';
 import BackupModal from './BackupModal';
+import AuditLogModal from './AuditLogModal';
 
 
 
@@ -759,6 +760,7 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
   const [alertas, setAlertas]     = useState(0);
   const [loading, setLoading]     = useState(true);
   const [showBackup, setShowBackup] = useState(false);
+  const [showHistorico, setShowHistorico] = useState(false);
   const [showNovoTalhao, setShowNovoTalhao] = useState(false);
 
   useEffect(() => {
@@ -834,6 +836,13 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
             style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)' }}>
             <Plus size={13} /> Novo Lote
           </button>
+          {canDeleteLote && (
+            <button onClick={() => setShowHistorico(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold"
+              style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)' }}>
+              <History size={13} /> Histórico
+            </button>
+          )}
           {canDeleteLote && (
             <button onClick={() => setShowBackup(true)}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold"
@@ -936,6 +945,10 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
 
       {showBackup && (
         <BackupModal propriedade={propriedade} onClose={() => setShowBackup(false)} />
+      )}
+
+      {showHistorico && (
+        <AuditLogModal onClose={() => setShowHistorico(false)} />
       )}
 
       <AnimatePresence>

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { supabase, getUserId } from '../lib/supabase';
 import { logDbError } from '../lib/logger';
 import { cacheSet, cacheGet } from './useOfflineCache';
+import { enqueueUpsert } from '../lib/outbox';
 
 /**
  * Debounced upsert of simulator config values to Supabase.
@@ -289,35 +290,42 @@ export async function loadCronogramaAtividades(plantioId) {
 export async function syncCronogramaStatus(plantioId, culturaId, atividade) {
   // A4-13: retorna o id da atividade upserted para permitir vinculação com
   // estoque_movimentos (necessário para reverter saídas ao desfazer etapas).
+  const payload = {
+    plantio_id:      plantioId,
+    cultura_id:      culturaId,
+    dia_previsto:    atividade.dia,
+    etapa:           atividade.etapa,
+    produto:         atividade.produto        || '',
+    dose:            atividade.dose           || '',
+    forma_aplicacao: atividade.forma          || '',
+    tipo:            atividade.tipo           || 'manejo',
+    status:          atividade.status,
+    data_execucao:   atividade.data           || null,
+    observacao:      atividade.obs            || null,
+    is_custom:       atividade.isCustom       || false,
+    updated_at:      new Date().toISOString(),
+  };
+  // onConflict DEVE bater com a UNIQUE real do banco
+  // (cronograma_atividades_plantio_etapa_dia_custom_unique).
+  const options = { onConflict: 'plantio_id,etapa,dia_previsto,is_custom' };
+
   const { data, error } = await supabase
     .from('cronograma_atividades')
-    .upsert(
-      {
-        plantio_id:      plantioId,
-        cultura_id:      culturaId,
-        dia_previsto:    atividade.dia,
-        etapa:           atividade.etapa,
-        produto:         atividade.produto        || '',
-        dose:            atividade.dose           || '',
-        forma_aplicacao: atividade.forma          || '',
-        tipo:            atividade.tipo           || 'manejo',
-        status:          atividade.status,
-        data_execucao:   atividade.data           || null,
-        observacao:      atividade.obs            || null,
-        is_custom:       atividade.isCustom       || false,
-        updated_at:      new Date().toISOString(),
-      },
-      // True upsert: update the existing row if one already exists for this
-      // (plantio_id, etapa, dia_previsto, is_custom) tuple. This MUST match the
-      // actual UNIQUE constraint in the live DB
-      // (cronograma_atividades_plantio_etapa_dia_custom_unique).
-      // dia_previsto is part of the key so two custom rows with the same etapa
-      // name on different days are treated as distinct rows (not overwritten).
-      { onConflict: 'plantio_id,etapa,dia_previsto,is_custom' },
-    )
+    .upsert(payload, options)
     .select('id')
     .single();
-  if (error) { logDbError('syncCronogramaStatus', error); return null; }
+
+  if (error) {
+    // Offline: enfileira para reenviar quando a conexão voltar. O upsert é
+    // idempotente (chave única), então o replay é seguro. Sem id de retorno —
+    // o chamador já atualizou o estado local de forma otimista.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      enqueueUpsert({ table: 'cronograma_atividades', payload, options });
+      return null;
+    }
+    logDbError('syncCronogramaStatus', error);
+    return null;
+  }
   return data?.id ?? null;
 }
 
