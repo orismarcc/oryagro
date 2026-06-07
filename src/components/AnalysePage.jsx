@@ -14,6 +14,7 @@ import { estimateKgAnual } from '../constants/cropYields';
 import { can, FARM_ACTIONS } from '../lib/permissions';
 import { formatDate, formatDateShort, getCultura, safeResolveLifecycle, fmtBRL, getRampFactor } from './analyse/utils';
 import { StatCard, SectionLabel, Card } from './analyse/ui';
+import CalcNote from './CalcNote';
 import BenchmarkingCiclosCard from './analyse/BenchmarkingCiclosCard';
 import ProjecaoReceitaCard from './analyse/ProjecaoReceitaCard';
 import ProjecaoKgCard from './analyse/ProjecaoKgCard';
@@ -33,6 +34,7 @@ import {
   FileDown,
   Award,
   X,
+  ChevronDown,
 } from 'lucide-react';
 
 /* ─── helpers e primitivos visuais → extraídos para ./analyse/shared ─────── */
@@ -281,6 +283,12 @@ function IndicadoresCampoCard({ lotes, allLotes }) {
       <div className="px-4 pt-4 pb-1 flex items-center gap-2 border-b border-gray-50">
         <Activity size={14} className="text-green-500" />
         <span className="text-[13px] font-bold text-gray-700">Indicadores de Campo</span>
+      </div>
+      <div className="px-4 pt-2">
+        <CalcNote>
+          <li>Totais e contagens dos lotes ativos filtrados.</li>
+          <li>Total de plantas e área somam todos os lotes; "Finalizados" = ciclos já concluídos.</li>
+        </CalcNote>
       </div>
       <div className="px-4 py-3 grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-0.5 bg-green-50 rounded-xl px-3 py-2">
@@ -571,6 +579,13 @@ function ProjecaoProducaoCard({ lotes }) {
         <span className="text-[13px] font-bold text-gray-700">Produção Estimada por Lote</span>
         <span className="ml-auto text-[10px] text-gray-400">{fmtBRL(totalReceita)}</span>
       </div>
+      <div className="px-4 pt-2">
+        <CalcNote>
+          <li>Receita estimada por lote = produção (kg) × preço/kg da cultura.</li>
+          <li>Produção usa nº de plantas/área × rendimento × curva de produção do ano.</li>
+          <li>Receita bruta projetada (não desconta custos).</li>
+        </CalcNote>
+      </div>
       <div className="divide-y divide-gray-50">
         {rows.map(({ lote, cultura, qtdKg, receita, harvestDate, lc }) => {
           const pct = totalReceita > 0 ? (receita / totalReceita) * 100 : 0;
@@ -746,6 +761,14 @@ function CustoProducaoCard({ lotes, todasVendas }) {
             R$ {custoKg.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kg
           </span>
         )}
+      </div>
+
+      <div className="px-4 pt-2">
+        <CalcNote>
+          <li>Custo = insumos (saídas de estoque) + despesas + mão de obra.</li>
+          <li>Receita = vendas registradas do lote (valores reais, não projeção).</li>
+          <li>Margem = receita − custo. Custo/kg = custo ÷ kg vendidos.</li>
+        </CalcNote>
       </div>
 
       {/* Summary totals */}
@@ -931,6 +954,79 @@ function Spinner() {
 
 /* ─── Main component ──────────────────────────────────────── */
 
+// ── Abas da Análise ───────────────────────────────────────────────────────────
+const ABAS_ANALISE = [
+  { key: 'financeiro', label: 'Financeiro', Icon: DollarSign },
+  { key: 'operacao',   label: 'Operação',   Icon: Sprout },
+  { key: 'historico',  label: 'Histórico',  Icon: Clock },
+];
+
+function AbaBar({ ativa, onChange }) {
+  return (
+    <div className="flex gap-1 rounded-xl p-1 mt-3" style={{ background: 'rgba(0,0,0,0.14)' }}>
+      {ABAS_ANALISE.map(({ key, label, Icon }) => {
+        const isActive = ativa === key;
+        return (
+          <button
+            key={key}
+            onClick={() => onChange(key)}
+            className="relative flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold transition-colors"
+            style={{ color: isActive ? 'hsl(160 84% 27%)' : 'rgba(255,255,255,0.7)' }}
+          >
+            {isActive && (
+              <motion.span
+                layoutId="aba-analise-pill"
+                className="absolute inset-0 rounded-lg"
+                style={{ background: 'rgba(255,255,255,0.95)' }}
+                transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+              />
+            )}
+            <span className="relative flex items-center gap-1.5"><Icon size={13} /> {label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Card colapsável com cabeçalho animado. Lembra o estado aberto/fechado.
+function CollapsibleCard({ label, delay = 0, defaultOpen = true, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay }}
+    >
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-1 mb-2"
+        aria-expanded={open}
+      >
+        <span className="text-[10px] font-bold uppercase tracking-widest text-green-700/60">{label}</span>
+        <ChevronDown
+          size={14}
+          className="text-gray-400"
+          style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+        />
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            style={{ overflow: 'hidden' }}
+          >
+            {children}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
 export default function AnalysePage({ onSignOut, userName, propriedades = [], userRole = null }) {
   // Popula o cache singleton de curvas_producao para que getRampFactor use dados do BD
   useCurvasProducao();
@@ -943,6 +1039,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
   const [loading, setLoading] = useState(true);
   const [exportingPDF, setExportingPDF] = useState(false);
   const [selectedLoteId, setSelectedLoteId] = useState(null); // null = all
+  const [abaAnalise, setAbaAnalise] = useState('financeiro');
   const [showCreditoModal, setShowCreditoModal] = useState(false);
   const [produtorForm, setProdutorForm] = useState({ nome: '', cpf: '', telefone: '', municipio: '', estado: 'MT' });
   const [gerandoCredito, setGerandoCredito] = useState(false);
@@ -1131,6 +1228,11 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
             })}
           </div>
         )}
+
+        {/* ── Abas ── */}
+        {!loading && lotes.length > 0 && (
+          <AbaBar ativa={abaAnalise} onChange={setAbaAnalise} />
+        )}
       </div>
 
       {/* ── Content ── */}
@@ -1140,139 +1242,72 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
         ) : lotes.length === 0 ? (
           <EmptyState />
         ) : (
-          <>
-            {/* Projeção de Receita */}
+          <AnimatePresence mode="wait">
             <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
+              key={abaAnalise}
+              initial={{ opacity: 0, x: 14 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -14 }}
+              transition={{ duration: 0.22 }}
+              className="flex flex-col gap-5"
             >
-              <SectionLabel>Projeção Financeira</SectionLabel>
-              <ProjecaoReceitaCard lotes={lotesFiltrados} eventosColheita={eventosColheita} />
-            </motion.div>
+            {abaAnalise === 'financeiro' && (
+              <>
+                <CollapsibleCard label="Projeção Financeira" delay={0}>
+                  <ProjecaoReceitaCard lotes={lotesFiltrados} eventosColheita={eventosColheita} />
+                </CollapsibleCard>
+                <CollapsibleCard label="Produção em kg/ano" delay={0.04}>
+                  <ProjecaoKgCard lotes={lotesFiltrados} eventosColheita={eventosColheita} allLotes={lotes} />
+                </CollapsibleCard>
+                <CollapsibleCard label="Receita por Lote" delay={0.06}>
+                  <ProjecaoProducaoCard lotes={lotesFiltrados} />
+                </CollapsibleCard>
+                <CollapsibleCard label="Custo × Margem" delay={0.08}>
+                  <CustoProducaoCard lotes={lotesFiltrados} todasVendas={todasVendas} />
+                </CollapsibleCard>
+                <CollapsibleCard label="Despesas por Categoria" delay={0.1}>
+                  <DespesasPorCategoriaCard despesas={despesas} />
+                </CollapsibleCard>
+              </>
+            )}
 
-            {/* Produção em kg/ano */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.04 }}
-            >
-              <SectionLabel>Produção em kg/ano</SectionLabel>
-              <ProjecaoKgCard lotes={lotesFiltrados} eventosColheita={eventosColheita} allLotes={lotes} />
-            </motion.div>
+            {abaAnalise === 'operacao' && (
+              <>
+                <CollapsibleCard label="Distribuição" delay={0}>
+                  <DistribuicaoCard lotes={lotesFiltrados} />
+                </CollapsibleCard>
+                <CollapsibleCard label="Status" delay={0.04}>
+                  <StatusCard lotes={lotesFiltrados} />
+                </CollapsibleCard>
+                <CollapsibleCard label="Próximas Colheitas" delay={0.06}>
+                  <ProximasColheitasCard lotes={lotesFiltrados} />
+                </CollapsibleCard>
+                <CollapsibleCard label="Indicadores de Campo" delay={0.08}>
+                  <IndicadoresCampoCard lotes={lotesFiltrados} allLotes={lotes} />
+                </CollapsibleCard>
+                {(propriedades.length > 0 || lotesAtivos.some((l) => l.propriedade_id != null)) && (
+                  <CollapsibleCard label="Por Propriedade" delay={0.1}>
+                    <ResumoPorPropriedadeCard lotes={lotesFiltrados} propriedades={propriedades} />
+                  </CollapsibleCard>
+                )}
+              </>
+            )}
 
-            {/* Produção Estimada por Lote */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.05 }}
-            >
-              <SectionLabel>Receita por Lote</SectionLabel>
-              <ProjecaoProducaoCard lotes={lotesFiltrados} />
+            {abaAnalise === 'historico' && (
+              <>
+                <CollapsibleCard label="Desempenho por Ciclo" delay={0}>
+                  <BenchmarkingCiclosCard ciclosHistorico={ciclosHistorico} lotesAtivos={lotesAtivos} />
+                </CollapsibleCard>
+                <CollapsibleCard label="Histórico de Lotes" delay={0.04}>
+                  <HistoricoList lotes={lotesFiltrados} />
+                </CollapsibleCard>
+                <CollapsibleCard label="Safras Anteriores" delay={0.06}>
+                  <SafrasAnterioresCard lotes={lotes} />
+                </CollapsibleCard>
+              </>
+            )}
             </motion.div>
-
-            {/* Custo × Receita × Margem */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.12 }}
-            >
-              <SectionLabel>Custo × Margem</SectionLabel>
-              <CustoProducaoCard lotes={lotesFiltrados} todasVendas={todasVendas} />
-            </motion.div>
-
-            {/* Benchmarking de Ciclos */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.14 }}
-            >
-              <SectionLabel>Desempenho por Ciclo</SectionLabel>
-              <BenchmarkingCiclosCard ciclosHistorico={ciclosHistorico} lotesAtivos={lotesAtivos} />
-            </motion.div>
-
-            {/* Distribuição por Cultura */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.08 }}
-            >
-              <SectionLabel>Distribuição</SectionLabel>
-              <DistribuicaoCard lotes={lotesFiltrados} />
-            </motion.div>
-
-            {/* Status dos Lotes */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.1 }}
-            >
-              <SectionLabel>Status</SectionLabel>
-              <StatusCard lotes={lotesFiltrados} />
-            </motion.div>
-
-            {/* Próximas Colheitas */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.15 }}
-            >
-              <SectionLabel>Próximas Colheitas</SectionLabel>
-              <ProximasColheitasCard lotes={lotesFiltrados} />
-            </motion.div>
-
-            {/* Indicadores de Campo */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.2 }}
-            >
-              <SectionLabel>Indicadores de Campo</SectionLabel>
-              <IndicadoresCampoCard lotes={lotesFiltrados} allLotes={lotes} />
-            </motion.div>
-
-            {/* Despesas por Categoria */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.22 }}
-            >
-              <SectionLabel>Despesas por Categoria</SectionLabel>
-              <DespesasPorCategoriaCard despesas={despesas} />
-            </motion.div>
-
-            {/* Resumo por Propriedade */}
-            {propriedades.length > 0 || lotesAtivos.some((l) => l.propriedade_id != null) ? (
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: 0.25 }}
-              >
-                <SectionLabel>Por Propriedade</SectionLabel>
-                <ResumoPorPropriedadeCard lotes={lotesFiltrados} propriedades={propriedades} />
-              </motion.div>
-            ) : null}
-
-            {/* Histórico de Lotes */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.3 }}
-            >
-              <SectionLabel>Histórico de Lotes</SectionLabel>
-              <HistoricoList lotes={lotesFiltrados} />
-            </motion.div>
-
-            {/* Safras Anteriores */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.35 }}
-            >
-              <SectionLabel>Safras Anteriores</SectionLabel>
-              <SafrasAnterioresCard lotes={lotes} />
-            </motion.div>
-          </>
+          </AnimatePresence>
         )}
       </div>
 
