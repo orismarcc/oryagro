@@ -66,7 +66,11 @@ export function buildStatusFromDbRows(rows = [], vivSteps = []) {
   customDbRows.forEach((row) => {
     // Use stable hash-based ID so indices don't shift when new rows are inserted
     const stableId = makeCustomId(row.etapa, row.dia_previsto);
+    // Status is recorded for EVERY row (including 'removida') so the filter works.
     statusMap[stableId] = { status: row.status, data: row.data_execucao };
+    // BUT removed rows must NOT be re-injected into the visible customRows array —
+    // otherwise a deleted custom step reappears after a Realtime refresh.
+    if (row.status === 'removida') return;
     customRows.push({
       dia:       row.dia_previsto,
       etapa:     row.etapa,
