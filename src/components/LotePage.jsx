@@ -709,6 +709,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
                 curves={curvasProducao}
                 anoAtual={anoRelativo}
                 producaoPlena={producaoPlena}
+                totalPlantas={lote.total_plantas}
               />
               <CronogramaTimeline cultura={cultura} lotes={[lote]} propriedadeId={lote.propriedade_id ?? null} />
             </div>

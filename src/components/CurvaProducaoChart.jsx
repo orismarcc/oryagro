@@ -49,6 +49,7 @@ export default function CurvaProducaoChart({
   curves = {},
   anoAtual = null,
   producaoPlena = null,
+  totalPlantas = null,
   compact = false,
 }) {
   // ID único por instância do componente — evita conflito de IDs SVG na página
@@ -63,6 +64,15 @@ export default function CurvaProducaoChart({
 
   const fatorAtual = anoAtual !== null && curve[anoAtual] !== undefined
     ? Math.round(curve[anoAtual] * 100)
+    : null;
+
+  // ── Média por planta (derivada da MESMA produção plena exibida no gráfico) ──
+  // Mantém consistência interna: kg/planta = produção plena ÷ nº de plantas.
+  const kgPorPlantaPlena = (producaoPlena && totalPlantas > 0)
+    ? producaoPlena / totalPlantas
+    : null;
+  const kgPorPlantaAtual = (kgPorPlantaPlena !== null && fatorAtual !== null)
+    ? kgPorPlantaPlena * (fatorAtual / 100)
     : null;
 
   // ── Compact (barras inline) ──────────────────────────────────────────────────
@@ -226,6 +236,44 @@ export default function CurvaProducaoChart({
               </span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── Como é calculada a produção (transparência) ────────────────────── */}
+      {producaoPlena && (
+        <div
+          className="mt-3 pt-3 rounded-xl px-3 py-2.5"
+          style={{ borderTop: '1px solid hsl(214 20% 91%)', background: `${culturaCor}06` }}
+        >
+          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-1.5">
+            Como é calculada
+          </p>
+          <ul className="flex flex-col gap-1 text-[11px] text-muted-foreground leading-snug">
+            <li>
+              🍎 Base: produção <span className="font-semibold text-foreground">in natura</span> (fruta fresca) — não é polpa.
+            </li>
+            {kgPorPlantaPlena !== null ? (
+              <>
+                <li>
+                  🧮 Fórmula: <span className="font-semibold text-foreground">nº de plantas × kg/planta/ano × % da curva</span> (idade do lote).
+                </li>
+                <li>
+                  🌱 Média por planta:{' '}
+                  <span className="font-semibold text-foreground">
+                    ~{kgPorPlantaPlena.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kg/planta/ano
+                  </span>{' '}
+                  na produção plena
+                  {kgPorPlantaAtual !== null && fatorAtual !== null && (
+                    <> · este ano <span className="font-semibold text-foreground">~{kgPorPlantaAtual.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kg/planta</span> ({fatorAtual}% da curva)</>
+                  )}
+                </li>
+              </>
+            ) : (
+              <li>
+                🧮 Fórmula: <span className="font-semibold text-foreground">área × kg/ha/ano × % da curva</span> (idade do lote).
+              </li>
+            )}
+          </ul>
         </div>
       )}
     </div>
