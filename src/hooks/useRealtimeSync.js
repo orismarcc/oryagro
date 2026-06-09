@@ -16,9 +16,17 @@
  *   - RLS ensures the user only receives rows they're allowed to see.
  *   - Channel names include the filter value so each open tab/component
  *     gets an isolated subscription.
+ *   - CHANNEL_ERROR/TIMED_OUT → retry automático com backoff exponencial
+ *     (2s → 4s → 8s → 16s → 30s máx). Essencial para rede fraca no campo:
+ *     sem isso o sync multi-device morria silenciosamente até refresh manual.
+ *     Ao reconectar com sucesso, dispara onRefresh() para buscar o que foi
+ *     perdido durante a janela offline.
  */
 import { useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+
+const RETRY_BASE_MS = 2000;
+const RETRY_MAX_MS  = 30000;
 
 /**
  * @param {string}             table      - Supabase table name
@@ -38,7 +46,12 @@ export function useRealtimeSync(table, onRefresh, filter = null) {
   useEffect(() => {
     if (!table) return;
 
-    // Unique channel name: scoped to table + filter value + per-instance suffix
+    let channel = null;
+    let retryTimer = null;
+    let attempt = 0;
+    let disposed = false;
+    let everConnected = false;
+
     const channelName = filter?.value
       ? `rt_${table}_${filter.column}_${filter.value}`
       : `rt_${table}_${instanceId.current}`;
@@ -52,18 +65,46 @@ export function useRealtimeSync(table, onRefresh, filter = null) {
         : {}),
     };
 
-    const channel = supabase
-      .channel(channelName)
-      .on('postgres_changes', pgConfig, () => {
-        refreshRef.current?.();
-      })
-      .subscribe((status) => {
-        // CLOSED / CHANNEL_ERROR → silent; component will still work via manual fetches
-        if (status === 'CHANNEL_ERROR') {
-          console.warn(`[useRealtimeSync] channel error on table "${table}"`);
-        }
-      });
+    const connect = () => {
+      if (disposed) return;
+      // Remove canal anterior antes de recriar (evita vazamento de sockets)
+      if (channel) { supabase.removeChannel(channel); channel = null; }
 
-    return () => { supabase.removeChannel(channel); };
+      channel = supabase
+        .channel(`${channelName}_a${attempt}`)
+        .on('postgres_changes', pgConfig, () => {
+          refreshRef.current?.();
+        })
+        .subscribe((status) => {
+          if (disposed) return;
+
+          if (status === 'SUBSCRIBED') {
+            // Reconexão após falha → busca mudanças perdidas na janela offline
+            if (everConnected && attempt > 0) refreshRef.current?.();
+            everConnected = true;
+            attempt = 0;
+            return;
+          }
+
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            attempt += 1;
+            const delay = Math.min(RETRY_BASE_MS * 2 ** (attempt - 1), RETRY_MAX_MS);
+            console.warn(
+              `[useRealtimeSync] ${status} on "${table}" — retry #${attempt} em ${delay / 1000}s`,
+            );
+            clearTimeout(retryTimer);
+            retryTimer = setTimeout(connect, delay);
+          }
+          // CLOSED durante cleanup é esperado — sem ação.
+        });
+    };
+
+    connect();
+
+    return () => {
+      disposed = true;
+      clearTimeout(retryTimer);
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [table, filterValue]); // eslint-disable-line react-hooks/exhaustive-deps
 }

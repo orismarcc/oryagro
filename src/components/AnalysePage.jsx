@@ -812,7 +812,17 @@ function CustoProducaoCard({ lotes, todasVendas }) {
                 <div className="flex justify-between">
                   <span className="text-gray-400">
                     Mão de obra
-                    <span className="text-[10px] text-muted-foreground ml-1">({maoObraSource})</span>
+                    <span
+                      className="text-[10px] ml-1"
+                      style={maoObraSource === 'sem dados'
+                        ? { color: '#d97706', fontWeight: 700 }
+                        : { color: 'inherit', opacity: 0.7 }}
+                      title={maoObraSource === 'sem dados'
+                        ? 'Nenhum registro de mão de obra — o lucro abaixo não inclui esse custo'
+                        : undefined}
+                    >
+                      ({maoObraSource === 'sem dados' ? '⚠ sem dados' : maoObraSource})
+                    </span>
                   </span>
                   <span className="font-semibold text-gray-600">{fmtBRL(maoObra)}</span>
                 </div>

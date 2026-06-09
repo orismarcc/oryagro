@@ -67,12 +67,13 @@ export async function registrarPlantio(payload) {
 export async function loadLotes(culturaId) {
   const userId = await getUserId();
   if (!userId) return [];
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('plantios')
     .select('*')
     .eq('user_id', userId)
     .eq('cultura_id', culturaId)
     .order('data_plantio', { ascending: false });
+  if (error) logDbError('loadLotes', error);
   return data || [];
 }
 
@@ -134,12 +135,13 @@ export async function updateLoteMudas(id, mudas_feitas) {
 export async function loadEventos(plantioId) {
   const userId = await getUserId();
   if (!userId) return [];
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('plantio_eventos')
     .select('*')
     .eq('user_id', userId)
     .eq('plantio_id', plantioId)
     .order('data', { ascending: true });
+  if (error) logDbError('loadEventos', error);
   return data || [];
 }
 
@@ -173,12 +175,13 @@ export async function deleteEvento(id) {
 export async function loadAllColheitaEventos() {
   const userId = await getUserId();
   if (!userId) return [];
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('plantio_eventos')
     .select('*')
     .eq('user_id', userId)
     .eq('tipo', 'colheita')
     .order('data', { ascending: true });
+  if (error) logDbError('loadAllColheitaEventos', error);
   return data || [];
 }
 
@@ -539,11 +542,12 @@ export async function deleteLoteCompleto(id) {
  */
 export async function loadLotesByPropriedade(propriedadeId) {
   if (!propriedadeId) return [];
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('plantios')
     .select('*')
     .eq('propriedade_id', propriedadeId)
     .order('data_plantio', { ascending: false });
+  if (error) logDbError('loadLotesByPropriedade', error);
   return data || [];
 }
 
@@ -561,10 +565,11 @@ export async function countLotesByPropriedade() {
     .eq('user_id', userId);
   if (!memberships || memberships.length === 0) return {};
   const farmIds = memberships.map(m => m.farm_id);
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('plantios')
     .select('propriedade_id')
     .in('propriedade_id', farmIds);
+  if (error) logDbError('countLotesByPropriedade', error);
   if (!data) return {};
   return data.reduce((acc, row) => {
     acc[row.propriedade_id] = (acc[row.propriedade_id] || 0) + 1;

@@ -213,13 +213,14 @@ export async function deleteMovimentoByCronogramaAtividade(cronogramaAtividadeId
 export async function loadMovimentos(insumoId) {
   const userId = await getUserId();
   if (!userId) return [];
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('estoque_movimentos')
     .select('*, plantio:plantios(nome)')
     .eq('user_id', userId)
     .eq('insumo_id', insumoId)
     .order('data', { ascending: false })
     .limit(30);
+  if (error) logDbError('loadMovimentos', error);
   return data || [];
 }
 
@@ -231,12 +232,13 @@ export async function loadMovimentosBatch(insumoIds) {
   if (!insumoIds?.length) return {};
   const userId = await getUserId();
   if (!userId) return {};
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('estoque_movimentos')
     .select('*, plantio:plantios(nome)')
     .eq('user_id', userId)
     .in('insumo_id', insumoIds)
     .order('data', { ascending: false });
+  if (error) logDbError('loadMovimentosBatch', error);
   if (!data) return {};
   // Group by insumo_id
   const map = {};
@@ -254,13 +256,14 @@ export async function loadMovimentosBatch(insumoIds) {
 export async function loadMovimentosByLote(plantioId) {
   const userId = await getUserId();
   if (!userId) return [];
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('estoque_movimentos')
     .select('*, insumo:estoque_insumos(nome, unidade, preco_unitario)')
     .eq('user_id', userId)
     .eq('plantio_id', plantioId)
     .eq('tipo', 'saida')
     .order('data', { ascending: false });
+  if (error) logDbError('loadMovimentosByLote', error);
   return data || [];
 }
 
@@ -289,12 +292,13 @@ export async function loadMaoObraByLote(plantioId) {
   if (!plantioId) return { registros: [], total: 0 };
   const userId = await getUserId();
   if (!userId) return { registros: [], total: 0 };
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('mao_obra_registros')
     .select('*')
     .eq('plantio_id', plantioId)
     .eq('user_id', userId)
     .order('data', { ascending: false });
+  if (error) logDbError('loadMaoObraByLote', error);
   const registros = data || [];
   const total = registros.reduce((sum, r) => sum + (r.horas * r.valor_hora), 0);
   return { registros, total };
@@ -308,11 +312,12 @@ export async function loadMaoObraBatch(plantioIds) {
   if (!plantioIds?.length) return {};
   const userId = await getUserId();
   if (!userId) return {};
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('mao_obra_registros')
     .select('*')
     .eq('user_id', userId)
     .in('plantio_id', plantioIds);
+  if (error) logDbError('loadMaoObraBatch', error);
   const map = {};
   plantioIds.forEach(id => { map[id] = []; });
   (data || []).forEach(r => {
@@ -329,12 +334,13 @@ export async function loadMaoObraBatch(plantioIds) {
 export async function loadVendas(plantioId) {
   const userId = await getUserId();
   if (!userId) return [];
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('vendas')
     .select('*')
     .eq('user_id', userId)
     .eq('plantio_id', plantioId)
     .order('data', { ascending: false });
+  if (error) logDbError('loadVendas', error);
   return data || [];
 }
 
@@ -344,11 +350,12 @@ export async function loadVendas(plantioId) {
 export async function loadTodasVendas() {
   const userId = await getUserId();
   if (!userId) return [];
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('vendas')
     .select('*')
     .eq('user_id', userId)
     .order('data', { ascending: false });
+  if (error) logDbError('loadTodasVendas', error);
   return data || [];
 }
 

@@ -805,7 +805,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                     <>
                       <span className="text-[8px] font-black uppercase tracking-widest leading-none"
                         style={{ color: isPast ? '#ef4444' : isTomorrow ? '#2563eb' : meta.color }}>
-                        {isPast ? '!' : isToday ? 'HOJE' : isTomorrow ? 'AMHÃ' : 'DIA'}
+                        {isPast ? '!' : isToday ? 'HOJE' : isTomorrow ? 'AMANHÃ' : 'DIA'}
                       </span>
                       <span className="font-display font-black text-sm leading-none mt-0.5"
                         style={{ color: isPast ? '#ef4444' : isTomorrow ? '#2563eb' : meta.color }}>

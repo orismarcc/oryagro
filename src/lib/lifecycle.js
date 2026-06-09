@@ -69,10 +69,41 @@ export function fmtDiasRestantes(dias) {
  * @param {object} cultura – culturas.js entry
  */
 export function resolveLifecycle(lote, cultura) {
+  // ── Guard: data_plantio nula/inválida ──────────────────────────────────────
+  // Sem este guard, new Date('nullT12:00:00') vira NaN e contamina TODOS os
+  // cálculos abaixo (progresso, fases, datas). Retorna um objeto seguro com
+  // zeros/nulls e flag dataInvalida para que nenhum caller quebre nem mostre NaN.
+  const plantioTs = lote?.data_plantio
+    ? new Date(lote.data_plantio + 'T12:00:00').getTime()
+    : NaN;
+  if (Number.isNaN(plantioTs)) {
+    const cicloFallback = parseCicloDias(cultura?.ciclo);
+    return {
+      dataInvalida: true,
+      diasDecorridos: 0,
+      diasViveiro: 0,
+      cicloDias: cicloFallback,
+      diasPrimeiraProducao: cicloFallback,
+      diasProducaoPlena: cicloFallback,
+      faseAtual: null,
+      faseIndex: -1,
+      fases: null,
+      faseLimites: null,
+      dataTransplante: null,
+      dataPrimeiraProducao: null,
+      dataProducaoPlena: null,
+      progresso: 0,
+      prontoParaColheita: false,
+      emProducaoPlena: false,
+      diasParaColheita: cicloFallback,
+      metodoObj: null,
+    };
+  }
+
   // ── Elapsed days ──
   const diasDecorridos = Math.max(
     0,
-    Math.floor((Date.now() - new Date(lote.data_plantio + 'T12:00:00').getTime()) / MS_PER_DAY),
+    Math.floor((Date.now() - plantioTs) / MS_PER_DAY),
   );
 
   // ── Propagation method object ──

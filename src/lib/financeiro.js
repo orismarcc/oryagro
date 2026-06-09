@@ -22,18 +22,22 @@
  * }}
  */
 export function calcLucroLote({ lote, custoInsumos, custoDespesas, maoObraData, receitaVendas, receitaExtras = 0 }) {
-  // Labor cost: registros are authoritative; fallback to mao_obra_total only when no registros
-  const maoObraSource = (maoObraData?.registros?.length > 0) ? 'registros' : 'estimativa';
-  const maoObra = maoObraSource === 'registros'
-    ? (maoObraData?.total ?? 0)
-    : (parseFloat(lote?.mao_obra_total) || 0);
+  // Labor cost: registros are authoritative; fallback to mao_obra_total only when no registros.
+  // Terceiro estado 'sem dados': nem registros nem estimativa legada existem —
+  // o lucro NÃO inclui custo de mão de obra e o caller deve sinalizar isso ao
+  // usuário (senão a margem aparece inflada silenciosamente).
+  const temRegistros  = maoObraData?.registros?.length > 0;
+  const estimativa    = parseFloat(lote?.mao_obra_total) || 0;
+  const maoObraSource = temRegistros ? 'registros' : (estimativa > 0 ? 'estimativa' : 'sem dados');
+  const maoObra = temRegistros ? (maoObraData?.total ?? 0) : estimativa;
+  const maoObraIndisponivel = maoObraSource === 'sem dados';
 
   const custoTotal = custoInsumos + custoDespesas + maoObra;
   const receita = receitaVendas + receitaExtras;
   const lucro = receita - custoTotal;
   const margemPct = receita > 0 ? Math.round((lucro / receita) * 100) : null;
 
-  return { custoInsumos, custoDespesas, maoObra, maoObraSource, custoTotal, receita, lucro, margemPct };
+  return { custoInsumos, custoDespesas, maoObra, maoObraSource, maoObraIndisponivel, custoTotal, receita, lucro, margemPct };
 }
 
 /**
