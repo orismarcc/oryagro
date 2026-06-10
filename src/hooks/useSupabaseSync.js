@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { supabase, getUserId } from '../lib/supabase';
 import { logDbError } from '../lib/logger';
 import { cacheSet, cacheGet } from './useOfflineCache';
-import { enqueueUpsert } from '../lib/outbox';
+import { enqueueUpsert, insertOfflineSafe } from '../lib/outbox';
 
 /**
  * Debounced upsert of simulator config values to Supabase.
@@ -151,13 +151,10 @@ export async function loadEventos(plantioId) {
 export async function addEvento(payload) {
   const userId = await getUserId();
   if (!userId) return null;
-  const { data, error } = await supabase
-    .from('plantio_eventos')
-    .insert({ ...payload, user_id: userId })
-    .select()
-    .single();
+  // Offline-safe: colheita é registrada no campo, muitas vezes sem sinal.
+  const { row, error } = await insertOfflineSafe('plantio_eventos', { ...payload, user_id: userId });
   if (error) { logDbError('addEvento', error); return null; }
-  return data;
+  return row;
 }
 
 /**

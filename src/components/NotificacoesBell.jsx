@@ -296,10 +296,13 @@ export default function NotificacoesBell({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.97 }}
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="fixed z-50 w-80 max-h-[70vh] flex flex-col rounded-2xl shadow-xl overflow-hidden"
+              className="fixed z-50 max-h-[70vh] flex flex-col rounded-2xl shadow-xl overflow-hidden"
               style={{
                 top: 'calc(var(--safe-top) + 58px)',
                 right: '12px',
+                // Largura responsiva: máx 320px, mas nunca estoura telas pequenas
+                // (iPhone SE 320px). Antes era w-80 fixo → overflow em <344px.
+                width: 'min(20rem, calc(100vw - 24px))',
                 background: '#ffffff',
                 border: '1px solid hsl(214 20% 90%)',
                 boxShadow: '0 8px 40px -4px rgb(0 0 0 / 0.18)',

@@ -2,6 +2,7 @@
  * BenchmarkingCiclosCard — extraído de AnalysePage.jsx sem alterar a lógica.
  */
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { Award } from 'lucide-react';
 import { Card } from './ui';
 import { fmtBRL, formatDate, getCultura, safeResolveLifecycle } from './utils';
@@ -196,8 +197,8 @@ function BenchmarkingCiclosCard({ ciclosHistorico, lotesAtivos }) {
         const trend = trends[c.cultura_id];
         return (
           <motion.div
-            className="mx-3 mb-3 rounded-xl border px-3 py-2.5 flex flex-col gap-1.5"
-            style={{ background: '#faf5ff', borderColor: '#e9d5ff' }}
+            className="mx-3 mb-3 rounded-xl border px-3 py-2.5 flex flex-col gap-1.5 overflow-y-auto"
+            style={{ background: '#faf5ff', borderColor: '#e9d5ff', maxHeight: '60vh' }}
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
@@ -306,7 +307,7 @@ function BenchmarkingCiclosCard({ ciclosHistorico, lotesAtivos }) {
                           className="text-[9px] font-semibold"
                           style={{ color: ciclo.margemPct >= 0 ? '#15803d' : '#b45309' }}
                         >
-                          {ciclo.margemPct >= 0 ? '+' : ''}{ciclo.margemPct.toFixed(0)}% mg
+                          {ciclo.margemPct >= 0 ? '+' : ''}{ciclo.margemPct.toFixed(0)}% margem
                         </span>
                       </div>
                     </div>
@@ -323,6 +324,6 @@ function BenchmarkingCiclosCard({ ciclosHistorico, lotesAtivos }) {
       </p>
     </Card>
   );
-}
+}
 
 export default BenchmarkingCiclosCard;

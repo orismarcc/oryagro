@@ -92,6 +92,9 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade, onRefres
   };
 
   const handleUpdate = async (id, payload) => {
+    // Defesa em profundidade: além do botão já gated na UI, revalida o papel
+    // aqui (RLS no servidor é a barreira final, isto evita chamadas inúteis).
+    if (!can(getUserRole(id), FARM_ACTIONS.EDIT_FARM)) return;
     setSaving(true);
     const row = await updatePropriedade(id, payload);
     if (row) { setPropriedades(prev => prev.map(p => p.id === id ? row : p)); setEditingId(null); }
@@ -99,6 +102,7 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade, onRefres
   };
 
   const handleDelete = async (id) => {
+    if (!can(getUserRole(id), FARM_ACTIONS.DELETE_ANY)) return;
     setConfirmDeleteId(null);
     setDeletingId(id);
     const ok = await deletePropriedade(id);

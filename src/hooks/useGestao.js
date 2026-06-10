@@ -1,5 +1,6 @@
 import { supabase, getUserId } from '../lib/supabase';
 import { logDbError } from '../lib/logger';
+import { insertOfflineSafe } from '../lib/outbox';
 
 // ── Diário de campo ──────────────────────────────────────────────────────────
 
@@ -20,11 +21,10 @@ export async function loadDiario(plantioId = null) {
 export async function addDiarioEntry({ plantioId, data, tipo, texto }) {
   const userId = await getUserId();
   if (!userId) return null;
-  const { data: row, error } = await supabase
-    .from('diario_campo')
-    .insert({ user_id: userId, plantio_id: plantioId || null, data, tipo, texto })
-    .select()
-    .single();
+  // Offline-safe: enfileira no outbox e segue otimista se sem sinal (campo).
+  const { row, error } = await insertOfflineSafe('diario_campo', {
+    user_id: userId, plantio_id: plantioId || null, data, tipo, texto,
+  });
   if (error) { logDbError('addDiarioEntry', error); return null; }
   return row;
 }
@@ -197,15 +197,26 @@ export async function deleteMovimentoByCronogramaAtividade(cronogramaAtividadeId
   if (!cronogramaAtividadeId) return 0;
   const userId = await getUserId();
   if (!userId) return 0;
-  const { data: rows } = await supabase
+  const { data: rows, error } = await supabase
     .from('estoque_movimentos')
     .select('id')
     .eq('user_id', userId)
     .eq('cronograma_atividade_id', cronogramaAtividadeId);
+  if (error) logDbError('deleteMovimentoByCronogramaAtividade:select', error);
   if (!rows?.length) return 0;
+  // Cada deleteMovimento usa o RPC atômico delete_movimento_with_balance.
+  // O loop não é uma transação única, então uma falha parcial deixaria o saldo
+  // inconsistente. Detectamos isso comparando o total e logamos (→ toast) para
+  // que o usuário/dev saiba que precisa reconciliar, em vez de falhar em silêncio.
   let n = 0;
   for (const row of rows) {
     if (await deleteMovimento(row.id)) n += 1;
+  }
+  if (n !== rows.length) {
+    logDbError(
+      'deleteMovimentoByCronogramaAtividade:parcial',
+      new Error(`Reverteu ${n}/${rows.length} movimentos — saldo de estoque pode estar inconsistente`),
+    );
   }
   return n;
 }
@@ -365,22 +376,19 @@ export async function loadTodasVendas() {
 export async function addVenda({ plantioId, data, quantidade, unidade, precoUnitario, destino, observacao, compradorId, categoria }) {
   const userId = await getUserId();
   if (!userId) return null;
-  const { data: row, error } = await supabase
-    .from('vendas')
-    .insert({
-      user_id: userId,
-      plantio_id: plantioId,
-      data,
-      quantidade,
-      unidade: unidade || 'kg',
-      preco_unitario: precoUnitario || 0,
-      destino: destino || 'outros',
-      observacao: observacao || null,
-      categoria: categoria || 'Venda de produção in-natura',
-      ...(compradorId ? { comprador_id: compradorId } : {}),
-    })
-    .select()
-    .single();
+  // Offline-safe: quem vende no campo muitas vezes está sem sinal.
+  const { row, error } = await insertOfflineSafe('vendas', {
+    user_id: userId,
+    plantio_id: plantioId,
+    data,
+    quantidade,
+    unidade: unidade || 'kg',
+    preco_unitario: precoUnitario || 0,
+    destino: destino || 'outros',
+    observacao: observacao || null,
+    categoria: categoria || 'Venda de produção in-natura',
+    ...(compradorId ? { comprador_id: compradorId } : {}),
+  });
   if (error) { logDbError('addVenda', error); return null; }
   return row;
 }

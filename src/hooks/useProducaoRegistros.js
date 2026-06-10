@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { logDbError } from '../lib/logger';
+import { insertOfflineSafe } from '../lib/outbox';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 // Registro: { id, plantio_id, user_id, data, quantidade, unidade, qualidade, observacao }
@@ -26,20 +27,17 @@ export async function addProducaoRegistro({ plantioId, data, quantidade, unidade
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Não autenticado');
 
-  const { data: row, error } = await supabase
-    .from('producao_registros')
-    .insert({
-      plantio_id:  plantioId,
-      user_id:     user.id,
-      data,
-      quantidade:  parseFloat(quantidade),
-      unidade,
-      qualidade,
-      observacao: observacao || null,
-      updated_at: new Date().toISOString(),
-    })
-    .select()
-    .single();
+  // Offline-safe: registro de produção é feito no campo durante a colheita.
+  const { row, error } = await insertOfflineSafe('producao_registros', {
+    plantio_id:  plantioId,
+    user_id:     user.id,
+    data,
+    quantidade:  parseFloat(quantidade),
+    unidade,
+    qualidade,
+    observacao: observacao || null,
+    updated_at: new Date().toISOString(),
+  });
   if (error) { logDbError('addProducaoRegistro', error); throw error; }
   return row;
 }

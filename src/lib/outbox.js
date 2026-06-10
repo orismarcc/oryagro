@@ -5,15 +5,30 @@
  * em localStorage e reenviada automaticamente quando a internet volta. Isso é
  * essencial para uso em campo sem sinal (ex.: marcar etapas do cronograma).
  *
- * ⚠️ SEGURANÇA: só enfileiramos operações IDEMPOTENTES (upsert com onConflict),
- * cujo reenvio múltiplo produz o mesmo resultado. NUNCA enfileire inserts que
- * geram duplicatas ou movimentos de estoque (que alterariam saldo a cada
- * reenvio) — esses devem falhar de forma visível (toast) e ser refeitos online.
+ * ⚠️ SEGURANÇA: só enfileiramos operações IDEMPOTENTES.
+ *   - upsert (onConflict): reenviar produz o mesmo resultado.
+ *   - insert COM id gerado no cliente (enqueueInsert): o id é a chave primária,
+ *     então um reenvio duplicado viola a unique constraint (código 23505) — que
+ *     tratamos como sucesso ("já inserido"). Isso torna inserts seguros para a
+ *     fila offline sem gerar duplicatas nem alterar saldo de estoque 2×.
+ * NUNCA enfileire inserts SEM id de cliente (gerariam linhas duplicadas).
  */
 import { supabase } from './supabase';
 import { logWarn } from './logger';
 
 const KEY = 'oryagro_outbox_v1';
+
+/** Gera um UUID v4 no cliente (cobre WebView/Safari antigos sem crypto.randomUUID). */
+export function clientUuid() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 function read() {
   try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; }
@@ -44,10 +59,56 @@ export function enqueueUpsert({ table, payload, options }) {
   write(filtered);
 }
 
+/**
+ * Enfileira um INSERT idempotente para reenvio offline.
+ * O payload DEVE conter um `id` gerado no cliente (clientUuid) — é o que torna
+ * o reenvio seguro: a 2ª tentativa colide na PK (23505) e é tratada como sucesso.
+ * @param {{ table: string, payload: object }} op
+ */
+export function enqueueInsert({ table, payload }) {
+  if (!payload?.id) return; // sem id de cliente não é seguro enfileirar
+  const queue = read();
+  // Dedup pelo id do registro (mesma linha não entra duas vezes)
+  const sig = `insert:${table}:${payload.id}`;
+  const filtered = queue.filter(o => o._sig !== sig);
+  filtered.push({ id: `${Date.now()}_${Math.random().toString(36).slice(2)}`, kind: 'insert', table, payload, _sig: sig, ts: Date.now() });
+  write(filtered);
+}
+
+/**
+ * INSERT resiliente a offline. Gera um id no cliente (idempotência), tenta
+ * inserir online e — se a falha for por estar offline — enfileira para reenvio
+ * e devolve a linha otimista (mesmo id) para a UI seguir funcionando no campo.
+ *
+ * @param {string} table
+ * @param {object} payload  - sem id; user_id deve já estar incluído
+ * @returns {Promise<{ row: object|null, queued: boolean, error: object|null }>}
+ */
+export async function insertOfflineSafe(table, payload) {
+  const row = { id: clientUuid(), ...payload };
+  const { data, error } = await supabase.from(table).insert(row).select().single();
+  if (!error) return { row: data, queued: false, error: null };
+
+  // Offline → enfileira e segue otimista com o mesmo id (replay é idempotente).
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    enqueueInsert({ table, payload: row });
+    return { row, queued: true, error: null };
+  }
+  // Erro real (online) → caller decide como logar/avisar.
+  return { row: null, queued: false, error };
+}
+
 async function replay(op) {
   if (op.kind === 'upsert') {
     const { error } = await supabase.from(op.table).upsert(op.payload, op.options);
     return !error;
+  }
+  if (op.kind === 'insert') {
+    const { error } = await supabase.from(op.table).insert(op.payload);
+    // 23505 = unique_violation → a linha já foi inserida num replay anterior.
+    // Isso é exatamente o sucesso idempotente que queremos.
+    if (!error || error.code === '23505') return true;
+    return false;
   }
   return true; // tipo desconhecido — descarta para não travar a fila
 }

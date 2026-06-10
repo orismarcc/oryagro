@@ -29,23 +29,26 @@ function getStatusEtapas(cultura, lote, doneStatus = {}) {
       : null;
     const shift = metodoObj?.diasViveiro ?? 0;
 
+    // Etapas de viveiro: o useCronogramaStatusBatch grava com prefixo 'default_'
+    // (não recebe vivSteps), então checamos AMBOS os prefixos — senão a etapa
+    // aparece pendente mesmo já concluída (igual ao fallback do Dashboard).
+    const getStepStatus = (id, etapa) =>
+      doneStatus[id] || doneStatus[makeStableId('default', etapa)] || null;
+
     const steps = [
       // I-01: use slug-based stable IDs (matches CronogramaTimeline post-migration)
-      ...(metodoObj?.etapasViveiro?.map(e => ({
-        ...e,
-        _id: makeStableId('viveiro', e.etapa),
-        done: doneStatus[makeStableId('viveiro', e.etapa)]?.status === 'feito',
-      })) ?? []),
-      ...cultura.cronograma.map(e => ({
-        ...e,
-        dia: e.dia + shift,
-        _id: makeStableId('default', e.etapa),
-        done: doneStatus[makeStableId('default', e.etapa)]?.status === 'feito',
-      })),
+      ...(metodoObj?.etapasViveiro?.map(e => {
+        const _id = makeStableId('viveiro', e.etapa);
+        return { ...e, _id, done: getStepStatus(_id, e.etapa)?.status === 'feito' };
+      }) ?? []),
+      ...cultura.cronograma.map(e => {
+        const _id = makeStableId('default', e.etapa);
+        return { ...e, dia: e.dia + shift, _id, done: getStepStatus(_id, e.etapa)?.status === 'feito' };
+      }),
     ];
     // Exclude removed steps and done steps from pending calculations
     const pending = steps.filter(s =>
-      !s.done && doneStatus[s._id]?.status !== 'removida'
+      !s.done && getStepStatus(s._id, s.etapa)?.status !== 'removida'
     );
     const atrasadas = pending.filter(s => s.dia < diasDecorridos).length;
     const hoje   = pending.find(s => s.dia === diasDecorridos) || null;
