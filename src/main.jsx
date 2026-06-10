@@ -8,6 +8,21 @@ import './index.css';
 // Liga a fila de escritas offline (retry automático ao reconectar).
 initOutbox();
 
+// ── Capacitor (APK Android) ───────────────────────────────────────────────────
+// Em ambiente nativo: marca <html class="native"> (ativa o padding de safe-area
+// do CSS) e configura a status bar para sobrepor o WebView com ícones claros,
+// já que o topo de toda tela é o hero verde. No navegador isto é ignorado.
+(async () => {
+  try {
+    const { Capacitor } = await import('@capacitor/core');
+    if (!Capacitor.isNativePlatform()) return;
+    document.documentElement.classList.add('native');
+    const { StatusBar, Style } = await import('@capacitor/status-bar');
+    await StatusBar.setOverlaysWebView({ overlay: true });
+    await StatusBar.setStyle({ style: Style.Dark }); // Dark = texto/ícones claros
+  } catch { /* web ou plugin ausente — segue como PWA */ }
+})();
+
 // Impede que o WebView/browser restaure o scroll antigo ao voltar de uma página.
 if ('scrollRestoration' in history) {
   history.scrollRestoration = 'manual';

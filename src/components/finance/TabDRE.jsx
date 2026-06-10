@@ -129,6 +129,10 @@ import LoteCard from './LoteCard';
   }, [plantios]);
 
   const nomePlantio = (pid) => plantioById[String(pid)]?.nome || '';
+  const produtoPlantio = (pid) => {
+    const c = getCultura(plantioById[String(pid)]?.cultura_id);
+    return c?.nome || '';
+  };
 
   // plantios que passam no filtro de propriedade selecionado
   const plantioNoFiltroProp = (pid) => {
@@ -151,7 +155,7 @@ import LoteCard from './LoteCard';
     );
     const sufixo = (anoFiltro ? String(anoFiltro) : (periodMode === 'safra' ? 'safras' : 'anos'))
       .replace(/[^0-9a-zA-Z]+/g, '-');
-    exportFinanceiroCsv({ vendas, despesas, nomePlantio, sufixo });
+    exportFinanceiroCsv({ vendas, despesas, nomePlantio, produtoPlantio, sufixo });
   };
 
   if (loading) return <Spinner />;

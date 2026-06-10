@@ -61,13 +61,23 @@ const fmtData = (d) => {
 
 /**
  * Exporta vendas e despesas de um período como dois arquivos CSV.
+ * Campos seguem o schema real: vendas(data, quantidade, unidade, preco_unitario,
+ * destino, plantio_id); despesas(data, categoria, subcategoria, descricao,
+ * prestador, valor, plantio_id).
  * @param {object} args
- * @param {Array} args.vendas        - linhas de vendas (com .data, .quantidade, .preco_unitario, .cultura/nome)
- * @param {Array} args.despesas      - linhas de despesas (com .data, .categoria, .descricao, .valor)
- * @param {(p:object)=>string} [args.nomePlantio] - resolve nome do lote a partir do plantio_id
+ * @param {Array} args.vendas        - linhas de vendas
+ * @param {Array} args.despesas      - linhas de despesas
+ * @param {(pid:any)=>string} [args.nomePlantio]    - resolve nome do lote pelo plantio_id
+ * @param {(pid:any)=>string} [args.produtoPlantio] - resolve o produto/cultura pelo plantio_id
  * @param {string} [args.sufixo]     - sufixo do arquivo (ex.: período "2025-26")
  */
-export function exportFinanceiroCsv({ vendas = [], despesas = [], nomePlantio = () => '', sufixo = '' }) {
+export function exportFinanceiroCsv({
+  vendas = [],
+  despesas = [],
+  nomePlantio = () => '',
+  produtoPlantio = () => '',
+  sufixo = '',
+}) {
   const tag = sufixo ? `_${sufixo}` : '';
 
   const vendasRows = vendas.map((v) => {
@@ -75,16 +85,16 @@ export function exportFinanceiroCsv({ vendas = [], despesas = [], nomePlantio = 
     return [
       fmtData(v.data),
       nomePlantio(v.plantio_id) || '',
-      v.produto || v.cultura || '',
+      produtoPlantio(v.plantio_id) || '',
       fmtNum(v.quantidade),
       v.unidade || '',
       fmtNum(v.preco_unitario),
       fmtNum(valor),
-      v.comprador || v.cliente || '',
+      v.destino || '',
     ];
   });
   const vendasCsv = toCsv(
-    ['Data', 'Lote', 'Produto', 'Quantidade', 'Unidade', 'Preço unit. (R$)', 'Total (R$)', 'Comprador'],
+    ['Data', 'Lote', 'Produto', 'Quantidade', 'Unidade', 'Preço unit. (R$)', 'Total (R$)', 'Destino'],
     vendasRows,
   );
 
@@ -92,11 +102,13 @@ export function exportFinanceiroCsv({ vendas = [], despesas = [], nomePlantio = 
     fmtData(d.data),
     nomePlantio(d.plantio_id) || (d.plantio_id ? '' : 'Custo indireto'),
     d.categoria || '',
+    d.subcategoria || '',
     d.descricao || '',
+    d.prestador || '',
     fmtNum(d.valor),
   ]);
   const despesasCsv = toCsv(
-    ['Data', 'Lote', 'Categoria', 'Descrição', 'Valor (R$)'],
+    ['Data', 'Lote', 'Categoria', 'Subcategoria', 'Descrição', 'Prestador', 'Valor (R$)'],
     despesasRows,
   );
 

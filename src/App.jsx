@@ -352,6 +352,49 @@ function AppInner({ session, displayName, signOut }) {
     setAutoOpenLoteForm(false);
   };
 
+  // ── Botão "voltar" físico do Android (Capacitor) ────────────────────────────
+  // Integra o back nativo com a navegação interna em vez de fechar o app de
+  // imediato. Em telas de detalhe volta um nível; no dashboard, sai do app.
+  // Mantido num ref atualizado a cada render para refletir o mainView corrente.
+  const androidBackRef = useRef(() => false);
+  androidBackRef.current = () => {
+    switch (mainView) {
+      case 'cultura-picker': handleBackFromPicker();      return true;
+      case 'cultura':        handleBack();                return true;
+      case 'lote':           handleBackFromLote();        return true;
+      case 'configuracoes':  handleBackFromSettings();    return true;
+      case 'calculadora':    handleBackFromCalculadora(); return true;
+      case 'financeiro':     handleBackFromFinanceiro();  return true;
+      case 'compradores':    handleBackFromCompradores(); return true;
+      case 'estoque':        handleBackFromEstoque();     return true;
+      case 'propriedades':   handleBackFromPropriedades();return true;
+      case 'propriedade':    handleBackFromPropriedade(); return true;
+      case 'talhao':         handleBackFromTalhao();      return true;
+      case 'simulador':
+      case 'analise':
+      case 'comparacao':
+      case 'calendario':     setMainView('dashboard');    return true;
+      default:               return false; // dashboard — sem destino interno
+    }
+  };
+
+  useEffect(() => {
+    let remove = null;
+    (async () => {
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        if (!Capacitor.isNativePlatform()) return;
+        const { App: CapApp } = await import('@capacitor/app');
+        const sub = await CapApp.addListener('backButton', () => {
+          const handled = androidBackRef.current?.();
+          if (!handled) CapApp.exitApp();
+        });
+        remove = () => sub.remove();
+      } catch { /* web — sem botão físico */ }
+    })();
+    return () => { if (remove) remove(); };
+  }, []);
+
   return (
     <div className="bg-background" style={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <NetworkStatusBanner />
