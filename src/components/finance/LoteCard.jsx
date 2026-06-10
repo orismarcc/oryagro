@@ -16,7 +16,7 @@ import DreLine from './DreLine';
 
   // Calcular lucro e margem por ano — usando fórmula compartilhada com AnalysePage
   const anosComDados = Object.entries(anoEntries)
-    .filter(([ano]) => !anoFiltro || Number(ano) === Number(anoFiltro))
+    .filter(([ano]) => !anoFiltro || String(ano) === String(anoFiltro))
     .map(([ano, entry]) => {
       // buildDreMap already resolved the legacy/registros branching into custo_mao_obra.
       // We pass a non-empty registros sentinel so calcLucroLote uses entry.custo_mao_obra
@@ -34,9 +34,10 @@ import DreLine from './DreLine';
       });
       const lucro = result.lucro;
       const margem = result.margemPct !== null ? result.margemPct : null;
-      return [Number(ano), { ...entry, lucro, margem }];
+      // mantém o rótulo bruto do período (ano civil "2025" ou safra "2025/26")
+      return [ano, { ...entry, lucro, margem }];
     })
-    .sort(([a], [b]) => b - a); // mais recente primeiro
+    .sort(([a], [b]) => parseInt(b, 10) - parseInt(a, 10)); // mais recente primeiro
 
   if (anosComDados.length === 0) return null;
 

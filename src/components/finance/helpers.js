@@ -31,11 +31,34 @@ export function anoFromDate(dateStr) {
 }
 
 /**
+ * Ano-safra brasileiro: por convenção, a safra de grãos vai de julho a junho.
+ * Uma data de jul/2025 a jun/2026 pertence à safra "2025/26".
+ * Retorna o rótulo da safra (ex.: "2025/26") ou null.
+ */
+export function safraFromDate(dateStr, startMonth = 7) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + 'T12:00:00');
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1; // 1–12
+  const inicio = m >= startMonth ? y : y - 1;
+  return `${inicio}/${String((inicio + 1) % 100).padStart(2, '0')}`;
+}
+
+/**
+ * Retorna a chave de período de uma data conforme o modo selecionado.
+ * @param {string} dateStr  - YYYY-MM-DD
+ * @param {'ano'|'safra'} mode
+ */
+export function periodFromDate(dateStr, mode = 'ano') {
+  return mode === 'safra' ? safraFromDate(dateStr) : anoFromDate(dateStr);
+}
+
+/**
  * Constrói o mapa da DRE: { [plantioId]: { [ano]: { receita, custos…, vendas… } } }
  * a partir dos dados brutos (vendas, receitas, movimentos, despesas, plantios,
  * mão de obra). Função pura — sem efeitos colaterais.
  */
-export function buildDreMap(rawData) {
+export function buildDreMap(rawData, periodMode = 'ano') {
   const { vendas, receitas = [], movimentos, despesas, plantios, maoObraMap = {} } = rawData;
 
   const map = {};
@@ -60,7 +83,7 @@ export function buildDreMap(rawData) {
   // Processar vendas (tabela vendas — produção in-natura, etc.)
   vendas.forEach((v) => {
     if (!v.plantio_id || !v.data) return;
-    const ano = anoFromDate(v.data);
+    const ano = periodFromDate(v.data, periodMode);
     if (!ano) return;
     const entry = ensureEntry(String(v.plantio_id), ano);
     const valor = (v.quantidade ?? 0) * (v.preco_unitario ?? 0);
@@ -71,7 +94,7 @@ export function buildDreMap(rawData) {
   // Processar receitas diretas (tabela receitas — serviços, outras entradas)
   receitas.forEach((r) => {
     if (!r.data) return;
-    const ano = anoFromDate(r.data);
+    const ano = periodFromDate(r.data, periodMode);
     if (!ano) return;
     // Agrupa pelo plantio_id quando disponível; caso contrário usa '__receita__'
     const pid = r.plantio_id ? String(r.plantio_id) : '__receita__';
@@ -83,7 +106,7 @@ export function buildDreMap(rawData) {
   // Processar movimentos de saída de estoque
   movimentos.forEach((m) => {
     if (!m.plantio_id || !m.data) return;
-    const ano = anoFromDate(m.data);
+    const ano = periodFromDate(m.data, periodMode);
     if (!ano) return;
     const insumo = m.estoque_insumos;
     const preco = insumo?.preco_unitario ?? 0;
@@ -104,7 +127,7 @@ export function buildDreMap(rawData) {
   );
   despesas.forEach((d) => {
     if (!d.plantio_id || !d.data) return;
-    const ano = anoFromDate(d.data);
+    const ano = periodFromDate(d.data, periodMode);
     if (!ano) return;
     const pid = String(d.plantio_id);
     if (d.categoria === 'Mão de Obra' && lotesComMaoObraRegistros.has(pid)) return;
@@ -124,7 +147,7 @@ export function buildDreMap(rawData) {
       // Fonte autoritativa: soma de horas * valor_hora
       const totalMaoObra = registros.reduce((sum, r) => sum + (r.horas * r.valor_hora), 0);
       if (totalMaoObra <= 0) return;
-      const ano = anoFromDate(p.data_plantio);
+      const ano = periodFromDate(p.data_plantio, periodMode);
       if (!ano) return;
       const entry = ensureEntry(pid, ano);
       entry.custo_mao_obra = (entry.custo_mao_obra || 0) + totalMaoObra;
@@ -135,7 +158,7 @@ export function buildDreMap(rawData) {
       if (maoObraTotal <= 0) return;
       const temDespesas = despesas.some((d) => String(d.plantio_id) === pid);
       if (temDespesas) return;
-      const ano = anoFromDate(p.data_plantio);
+      const ano = periodFromDate(p.data_plantio, periodMode);
       if (!ano) return;
       const entry = ensureEntry(pid, ano);
       entry.custo_mao_obra = (entry.custo_mao_obra || 0) + maoObraTotal;

@@ -20,6 +20,12 @@ import {
   loadMovimentosByLote,
 } from '../hooks/useGestao';
 import { loadDespesasByLote } from '../hooks/useDespesas';
+import {
+  registrarPlantio,
+  preCarregarEtapasPadrao,
+  syncCronogramaStatus,
+  loadCronogramaAtividades,
+} from '../hooks/useSupabaseSync';
 import { can, FARM_ACTIONS } from '../lib/permissions';
 import { makeStableId, makeCustomId } from '../hooks/useCronogramaSync';
 import { formatDatePtBR, fmtNumber, today, safeLS } from './lote/shared';
@@ -427,12 +433,13 @@ const TABS = [
   { value: 'diario',     label: 'Diário',     Icon: BookOpen },
 ];
 
-export default function LotePage({ lote, cultura, onBack, userRole = null, propriedade = null }) {
+export default function LotePage({ lote, cultura, onBack, userRole = null, propriedade = null, onRepetido = null }) {
   const canDelete = can(userRole, FARM_ACTIONS.DELETE_ANY);
   const toast = useToast();
   const [tab, setTab] = useState('cronograma');
   const [concluindo, setConcluindo] = useState(false);
   const [concluido, setConcluido] = useState(lote.status === 'concluido');
+  const [repetindo, setRepetindo] = useState(false);
   const cor = cultura.cor;
 
   const lc = resolveLifecycle(lote, cultura);
@@ -497,6 +504,66 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
     }
   };
 
+  // 📋 Repetir plantio: cria um novo lote copiando os dados do atual + as etapas
+  // customizadas do cronograma. Útil para culturas anuais de ciclo curto (alface,
+  // coentro) que são replantadas a cada 30–40 dias.
+  const handleRepetir = async () => {
+    if (!window.confirm(`Criar um novo plantio de ${cultura.nome} copiando área, espaçamento e etapas deste lote?`)) return;
+    setRepetindo(true);
+    try {
+      // 1. Cria o novo plantio com data de hoje, copiando os atributos físicos.
+      const baseNome = lote.nome.replace(/\s*\(\d+\)\s*$/, '').trim();
+      const novo = await registrarPlantio({
+        cultura_id:          lote.cultura_id,
+        propriedade_id:      lote.propriedade_id ?? null,
+        nome:                `${baseNome} (novo)`,
+        data_plantio:        today(),
+        status:              'ativo',
+        area_ha:             lote.area_ha ?? null,
+        comprimento_m:       lote.comprimento_m ?? null,
+        largura_m:           lote.largura_m ?? null,
+        total_plantas:       lote.total_plantas ?? null,
+        espacamento_linhas:  lote.espacamento_linhas ?? null,
+        espacamento_plantas: lote.espacamento_plantas ?? null,
+        metodo_propagacao:   lote.metodo_propagacao ?? null,
+      });
+      if (!novo) { toast.error('Não foi possível criar o novo plantio.'); return; }
+
+      // 2. Pré-carrega as etapas-base padrão da cultura (status pendente).
+      const diasViveiro = lote.metodo_propagacao && cultura.metodosPropagacao
+        ? (cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao)?.diasViveiro ?? 0)
+        : 0;
+      await preCarregarEtapasPadrao(novo, cultura, diasViveiro).catch(() => {});
+
+      // 3. Copia as etapas CUSTOMIZADAS do lote atual (is_custom) como pendentes.
+      try {
+        const rows = await loadCronogramaAtividades(lote.id);
+        const custom = rows.filter(r => r.is_custom);
+        for (const r of custom) {
+          await syncCronogramaStatus(novo.id, cultura.id, {
+            dia:      r.dia_previsto,
+            etapa:    r.etapa,
+            produto:  r.produto || '',
+            dose:     r.dose || '',
+            forma:    r.forma_aplicacao || '',
+            tipo:     r.tipo || 'manejo',
+            status:   'pendente',
+            data:     null,
+            isCustom: true,
+          });
+        }
+      } catch { /* etapas custom são complemento — não bloqueiam o fluxo */ }
+
+      toast.success('Novo plantio criado!');
+      if (onRepetido) onRepetido(novo);
+      else onBack?.();
+    } catch {
+      toast.error('Erro ao repetir o plantio. Tente novamente.');
+    } finally {
+      setRepetindo(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
 
@@ -554,10 +621,24 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
               </button>
             )}
             {concluido && (
-              <span className="flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-xl"
-                style={{ background: 'rgba(22,163,74,0.25)', color: '#86efac', border: '1px solid rgba(22,163,74,0.35)' }}>
-                <CheckCircle2 size={12} /> Concluído
-              </span>
+              <div className="flex items-center gap-2">
+                {/* Repetir plantio — só para culturas anuais (perenes usam Nova Safra) */}
+                {canDelete && lote.tipo_cultura !== 'perene' && (
+                  <button
+                    onClick={handleRepetir}
+                    disabled={repetindo}
+                    className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all disabled:opacity-50"
+                    style={{ background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.25)' }}
+                  >
+                    <Sprout size={12} />
+                    {repetindo ? 'Criando…' : 'Repetir plantio'}
+                  </button>
+                )}
+                <span className="flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-xl"
+                  style={{ background: 'rgba(22,163,74,0.25)', color: '#86efac', border: '1px solid rgba(22,163,74,0.35)' }}>
+                  <CheckCircle2 size={12} /> Concluído
+                </span>
+              </div>
             )}
           </div>
 
@@ -711,7 +792,13 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
                 producaoPlena={producaoPlena}
                 totalPlantas={lote.total_plantas}
               />
-              <CronogramaTimeline cultura={cultura} lotes={[lote]} propriedadeId={lote.propriedade_id ?? null} />
+              <CronogramaTimeline
+                cultura={cultura}
+                lotes={[lote]}
+                propriedadeId={lote.propriedade_id ?? null}
+                cidade={propriedade?.cidade}
+                estado={propriedade?.estado}
+              />
             </div>
           )}
           {tab === 'colheita' && (

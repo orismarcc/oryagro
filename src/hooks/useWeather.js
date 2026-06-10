@@ -41,6 +41,75 @@ export function weatherAlert(forecast) {
   return null;
 }
 
+/**
+ * Sugere adiar uma etapa do cronograma com base na chuva prevista para a data
+ * da etapa (e o dia seguinte, pois a chuva persiste). Cruza o TIPO da etapa com
+ * a precipitação prevista (forecast da Open-Meteo, 5 dias). Retorna null se não
+ * houver risco, ou { nivel, mensagem } se valer a pena adiar.
+ *
+ * Regras agronômicas (conservadoras):
+ *  - Pulverização foliar / aplicação / adubação foliar: chuva > 2 mm lava o
+ *    produto → adiar.
+ *  - Adubação de solo: chuva forte > 15 mm lixivia o adubo → adiar.
+ *  - Colheita: chuva > 3 mm prejudica qualidade pós-colheita → adiar.
+ *  - Plantio / transplante: chuva forte > 15 mm encharca o solo → adiar.
+ *
+ * @param {{ tipo?: string, etapa?: string, dataPrevista?: string, forecast?: Array }} args
+ * @returns {null | { nivel: 'info'|'warning'|'critico', mensagem: string, chuva_mm: number }}
+ */
+export function sugerirAdiamento({ tipo, etapa = '', dataPrevista, forecast } = {}) {
+  if (!forecast?.length || !dataPrevista) return null;
+
+  // Previsão para o dia da etapa e o dia seguinte (efeito da chuva persiste).
+  const dia0 = forecast.find(f => f.date === dataPrevista);
+  const proximo = new Date(dataPrevista + 'T12:00:00');
+  proximo.setDate(proximo.getDate() + 1);
+  const dia1Str = `${proximo.getFullYear()}-${String(proximo.getMonth() + 1).padStart(2, '0')}-${String(proximo.getDate()).padStart(2, '0')}`;
+  const dia1 = forecast.find(f => f.date === dia1Str);
+  if (!dia0 && !dia1) return null; // etapa fora da janela de previsão (>5 dias)
+
+  const rain0   = parseFloat(dia0?.rain) || 0;
+  const rain1   = parseFloat(dia1?.rain) || 0;
+  const rainMax = Math.max(rain0, rain1);
+
+  const t = (tipo || '').toLowerCase();
+  const e = etapa.toLowerCase();
+  const isPulverizacao = ['foliar', 'aplicacao'].includes(t) || /foliar|pulveriz|defens/i.test(e);
+  const isAduboSolo    = t === 'adubo' || /adub|cobertura|ureia/i.test(e);
+  const isColheita     = t === 'colheita' || /colheit/i.test(e);
+  const isPlantio      = t === 'plantio' || /plantio|transplant/i.test(e);
+
+  if (isPulverizacao && rainMax > 2) {
+    return {
+      nivel: rainMax > 10 ? 'critico' : 'warning',
+      mensagem: `Chuva prevista (${rainMax.toFixed(1)} mm) pode lavar o produto — considere adiar a pulverização.`,
+      chuva_mm: rainMax,
+    };
+  }
+  if (isAduboSolo && rain0 > 15) {
+    return {
+      nivel: 'warning',
+      mensagem: `Chuva forte (${rain0.toFixed(1)} mm) pode lixiviar o adubo — considere adiar.`,
+      chuva_mm: rain0,
+    };
+  }
+  if (isColheita && rain0 > 3) {
+    return {
+      nivel: 'warning',
+      mensagem: `Chuva prevista (${rain0.toFixed(1)} mm) — risco para a qualidade pós-colheita.`,
+      chuva_mm: rain0,
+    };
+  }
+  if (isPlantio && rainMax > 15) {
+    return {
+      nivel: 'warning',
+      mensagem: `Chuva forte (${rainMax.toFixed(1)} mm) — solo pode ficar encharcado para o plantio.`,
+      chuva_mm: rainMax,
+    };
+  }
+  return null;
+}
+
 // Polyfill para AbortSignal.timeout (Chrome < 103, Safari < 15.4, Android WebView antigo)
 function timeoutSignal(ms) {
   if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {

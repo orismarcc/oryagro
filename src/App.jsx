@@ -451,6 +451,7 @@ function AppInner({ session, displayName, signOut }) {
                 onBack={handleBackFromLote}
                 userRole={userRole}
                 propriedade={selectedPropriedade}
+                onRepetido={handleSelectLote}
               />
             )}
             {mainView === 'simulador'  && <SimuladorPage />}

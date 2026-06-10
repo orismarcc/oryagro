@@ -5,9 +5,9 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ResponsiveContainer } from 
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { CULTURAS } from '../../data/culturas';
 import { Card } from './ui';
-import { fmtBRL } from './helpers';
+import { fmtBRL, periodFromDate } from './helpers';
 
-function RentabilidadePorCultura({ rawData, anoFiltro }) {
+function RentabilidadePorCultura({ rawData, anoFiltro, periodMode = 'ano' }) {
   const [aberto, setAberto] = useState(false);
 
   const dados = useMemo(() => {
@@ -25,8 +25,8 @@ import { fmtBRL } from './helpers';
       // Filtrar por ano se necessário
       const filtrarAno = (dateStr) => {
         if (!anoFiltro) return true;
-        const ano = dateStr ? new Date(dateStr + 'T12:00:00').getFullYear() : null;
-        return ano === Number(anoFiltro);
+        const periodo = dateStr ? periodFromDate(dateStr, periodMode) : null;
+        return String(periodo) === String(anoFiltro);
       };
 
       const pid = p.id;
@@ -103,7 +103,7 @@ import { fmtBRL } from './helpers';
         return { ...c, metrica, metricaLabel };
       })
       .sort((a, b) => b.margem - a.margem);
-  }, [rawData, anoFiltro]);
+  }, [rawData, anoFiltro, periodMode]);
 
   if (dados.length === 0) return null;
 
@@ -213,5 +213,5 @@ import { fmtBRL } from './helpers';
       </AnimatePresence>
     </div>
   );
-}
+}
 export default RentabilidadePorCultura;

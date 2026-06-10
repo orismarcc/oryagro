@@ -1,9 +1,11 @@
 /** TabDRE — aba 1 (DRE) do FinanceiroPage. */
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { Download } from 'lucide-react';
 import { Card, SectionLabel, Spinner, EmptyState } from './ui';
-import { fmtBRL, fmtPct, getCultura, anoFromDate, buildDreMap } from './helpers';
+import { fmtBRL, fmtPct, getCultura, periodFromDate, buildDreMap } from './helpers';
 import { aggregateDreEntry } from '../../lib/financeiro';
+import { exportFinanceiroCsv } from '../../lib/exportCsv';
 import RentabilidadePorCultura from './RentabilidadePorCultura';
 import LoteCard from './LoteCard';
 
@@ -11,8 +13,18 @@ import LoteCard from './LoteCard';
   const [anoFiltro, setAnoFiltro] = useState('');
   const [propFiltro, setPropFiltro]       = useState('');
   const [culturaFiltro, setCulturaFiltro] = useState('');
+  const [periodMode, setPeriodMode]       = useState('ano'); // 'ano' civil | 'safra' agrícola
 
-  const dreMap = useMemo(() => (rawData ? buildDreMap(rawData) : {}), [rawData]);
+  const dreMap = useMemo(
+    () => (rawData ? buildDreMap(rawData, periodMode) : {}),
+    [rawData, periodMode]
+  );
+
+  // Troca de modo (ano/safra) invalida o filtro de período selecionado
+  const handlePeriodMode = (mode) => {
+    setPeriodMode(mode);
+    setAnoFiltro('');
+  };
 
   // Despesas indiretas da propriedade (sem plantio_id = custos indiretos)
   const despesasIndiretas = useMemo(
@@ -20,13 +32,14 @@ import LoteCard from './LoteCard';
     [rawData]
   );
 
-  // Anos disponíveis nos dados
+  // Períodos disponíveis nos dados (anos civis ou safras, conforme periodMode).
+  // Mantém o rótulo bruto ("2025" ou "2025/26") e ordena pelo ano inicial desc.
   const anosDisponiveis = useMemo(() => {
-    const anos = new Set();
+    const periodos = new Set();
     Object.values(dreMap).forEach((byAno) => {
-      Object.keys(byAno).forEach((ano) => anos.add(Number(ano)));
+      Object.keys(byAno).forEach((ano) => periodos.add(ano));
     });
-    return [...anos].sort((a, b) => b - a);
+    return [...periodos].sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
   }, [dreMap]);
 
   // Agrupar plantios por propriedade
@@ -82,7 +95,7 @@ import LoteCard from './LoteCard';
     let receita = 0, custo_insumos = 0, custo_despesas = 0, custo_mao_obra = 0;
     Object.entries(dreMap).forEach(([, byAno]) => {
       Object.entries(byAno).forEach(([ano, entry]) => {
-        if (anoFiltro && Number(ano) !== Number(anoFiltro)) return;
+        if (anoFiltro && String(ano) !== String(anoFiltro)) return;
         const agg = aggregateDreEntry(entry);
         receita        += agg.receita;
         custo_insumos  += agg.custoInsumos;
@@ -100,13 +113,46 @@ import LoteCard from './LoteCard';
   const totalDespesasIndiretas = useMemo(
     () =>
       despesasIndiretas
-        .filter((d) => !anoFiltro || String(anoFromDate(d.data)) === String(anoFiltro))
+        .filter((d) => !anoFiltro || String(periodFromDate(d.data, periodMode)) === String(anoFiltro))
         .reduce((s, d) => s + (d.valor ?? 0), 0),
-    [despesasIndiretas, anoFiltro]
+    [despesasIndiretas, anoFiltro, periodMode]
   );
 
   // Lucro líquido real = lucro dos lotes − custos indiretos da propriedade
   const lucroLiquido = totais.lucro - totalDespesasIndiretas;
+
+  // ── Exportação CSV (vendas + despesas) para o contador (IR/ITR) ──────────────
+  const plantioById = useMemo(() => {
+    const m = {};
+    plantios.forEach((p) => { m[String(p.id)] = p; });
+    return m;
+  }, [plantios]);
+
+  const nomePlantio = (pid) => plantioById[String(pid)]?.nome || '';
+
+  // plantios que passam no filtro de propriedade selecionado
+  const plantioNoFiltroProp = (pid) => {
+    if (!propFiltro) return true;
+    const p = plantioById[String(pid)];
+    const grp = p?.propriedade_id ? String(p.propriedade_id) : '__sem__';
+    return grp === propFiltro;
+  };
+
+  const noPeriodo = (data) =>
+    !anoFiltro || String(periodFromDate(data, periodMode)) === String(anoFiltro);
+
+  const handleExportCsv = () => {
+    const vendas = (rawData?.vendas || []).filter(
+      (v) => v.data && noPeriodo(v.data) && plantioNoFiltroProp(v.plantio_id),
+    );
+    // Inclui despesas diretas (com plantio) e indiretas (sem plantio).
+    const despesas = (rawData?.despesas || []).filter(
+      (d) => d.data && noPeriodo(d.data) && (!d.plantio_id || plantioNoFiltroProp(d.plantio_id)),
+    );
+    const sufixo = (anoFiltro ? String(anoFiltro) : (periodMode === 'safra' ? 'safras' : 'anos'))
+      .replace(/[^0-9a-zA-Z]+/g, '-');
+    exportFinanceiroCsv({ vendas, despesas, nomePlantio, sufixo });
+  };
 
   if (loading) return <Spinner />;
   if (anosDisponiveis.length === 0) return <EmptyState />;
@@ -115,16 +161,40 @@ import LoteCard from './LoteCard';
     <div className="px-4 pt-4 pb-8 flex flex-col gap-5">
       {/* Filtros */}
       <div className="flex flex-col gap-2">
+        {/* Modo de período: ano civil × safra agrícola */}
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold text-gray-500 w-16 flex-shrink-0">Ano:</span>
+          <span className="text-[11px] font-bold text-gray-500 w-16 flex-shrink-0">Período:</span>
+          <div className="flex-1 grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1">
+            {[
+              { id: 'ano', label: 'Ano civil' },
+              { id: 'safra', label: 'Safra' },
+            ].map((m) => (
+              <button
+                key={m.id}
+                onClick={() => handlePeriodMode(m.id)}
+                className={`rounded-lg px-3 py-1.5 text-[12px] font-bold transition-colors ${
+                  periodMode === m.id
+                    ? 'bg-white text-emerald-700 shadow-sm'
+                    : 'text-gray-500'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold text-gray-500 w-16 flex-shrink-0">
+            {periodMode === 'safra' ? 'Safra:' : 'Ano:'}
+          </span>
           <select
             value={anoFiltro}
             onChange={(e) => setAnoFiltro(e.target.value)}
             className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-700 outline-none"
           >
-            <option value="">Todos os anos</option>
+            <option value="">{periodMode === 'safra' ? 'Todas as safras' : 'Todos os anos'}</option>
             {anosDisponiveis.map((ano) => (
-              <option key={ano} value={ano}>{ano}</option>
+              <option key={ano} value={ano}>{periodMode === 'safra' ? `Safra ${ano}` : ano}</option>
             ))}
           </select>
         </div>
@@ -158,6 +228,15 @@ import LoteCard from './LoteCard';
             </select>
           </div>
         )}
+
+        {/* Exportar para o contador (IR/ITR) — respeita o período e a propriedade filtrados */}
+        <button
+          onClick={handleExportCsv}
+          className="mt-1 flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-bold text-emerald-700 active:scale-[0.99] transition-transform"
+        >
+          <Download size={14} />
+          Exportar CSV (vendas e despesas)
+        </button>
       </div>
 
       {/* Cards por propriedade */}
@@ -170,7 +249,7 @@ import LoteCard from './LoteCard';
           if (culturaFiltro && lote.cultura_id !== culturaFiltro) return false;
           const byAno = dreMap[String(lote.id)] || {};
           return Object.keys(byAno).some(
-            (ano) => !anoFiltro || Number(ano) === Number(anoFiltro)
+            (ano) => !anoFiltro || String(ano) === String(anoFiltro)
           );
         });
         if (lotesComDados.length === 0) return null;
@@ -204,7 +283,11 @@ import LoteCard from './LoteCard';
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, delay: 0.1 }}
       >
-        <SectionLabel>Total Consolidado {anoFiltro || '(todos os anos)'}</SectionLabel>
+        <SectionLabel>
+          Total Consolidado {anoFiltro
+            ? (periodMode === 'safra' ? `Safra ${anoFiltro}` : anoFiltro)
+            : (periodMode === 'safra' ? '(todas as safras)' : '(todos os anos)')}
+        </SectionLabel>
         <Card>
           <div className="grid grid-cols-2 gap-3 p-4">
             <div className="bg-green-50 rounded-xl px-3 py-2">
@@ -262,7 +345,7 @@ import LoteCard from './LoteCard';
       </motion.div>
 
       {/* UX 4: Rentabilidade por cultura — card colapsável complementar */}
-      <RentabilidadePorCultura rawData={rawData} anoFiltro={anoFiltro} />
+      <RentabilidadePorCultura rawData={rawData} anoFiltro={anoFiltro} periodMode={periodMode} />
     </div>
   );
 }

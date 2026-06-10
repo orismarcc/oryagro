@@ -11,15 +11,19 @@ import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../
 import { loadEstoque, addMovimento, deleteMovimentoByCronogramaAtividade } from '../hooks/useGestao';
 import { addEvento, syncCronogramaStatus, loadCronogramaAtividades } from '../hooks/useSupabaseSync';
 import { buildStatusFromDbRows, useCronogramaRealtime, makeStableId, makeCustomId } from '../hooks/useCronogramaSync';
+import { useWeather, sugerirAdiamento } from '../hooks/useWeather';
 import { logDbError } from '../lib/logger';
 import { TIPO_META, TIPOS, todayISO, formatDate, stepDate, formatStepDate, migrateLegacyStatus, parseNumericDose, scaleDose, isoToDate, dateToISO } from './cronograma/helpers';
 import { Toggle, LotePicker } from './cronograma/ui';
 
 // ── Main component ────────────────────────────────────────────────────────
 
-export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId = null }) {
+export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId = null, cidade = null, estado = null }) {
   const isCampo = cultura.tipo === 'campo';
   const cor = cultura.cor;
+
+  // Previsão do tempo para sugerir adiamento de etapas sensíveis a chuva.
+  const { data: forecast } = useWeather({ cidade, estado });
 
   // Lote selection
   const [selectedLoteId, setSelectedLoteId] = useState(null);
@@ -773,6 +777,17 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
           const stepDateStr = selectedLote ? formatStepDate(selectedLote.data_plantio, ev.dia) : null;
           const scaledDose  = ev._noScaleDose ? ev.dose : scaleDose(ev.dose, fator);
 
+          // 🌧️ Sugestão climática: cruza a data da etapa com a previsão de chuva.
+          // Só para etapas futuras/próximas não concluídas (forecast cobre 5 dias).
+          const sugestaoClima = (!isDone && selectedLote && forecast)
+            ? sugerirAdiamento({
+                tipo: ev.tipo,
+                etapa: ev.etapa,
+                dataPrevista: dateToISO(stepDate(selectedLote.data_plantio, ev.dia)),
+                forecast,
+              })
+            : null;
+
           return (
             <motion.div
               key={ev._id}
@@ -962,6 +977,25 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
 
                     {ev.forma && ev.forma !== '—' && (
                       <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{ev.forma}</p>
+                    )}
+
+                    {/* 🌧️ Alerta climático — sugere adiar se chuva ameaça a etapa */}
+                    {sugestaoClima && (
+                      <div
+                        className="mt-2 flex items-start gap-1.5 rounded-lg px-2.5 py-1.5"
+                        style={{
+                          background: sugestaoClima.nivel === 'critico' ? '#fef2f2' : '#fffbeb',
+                          border: `1px solid ${sugestaoClima.nivel === 'critico' ? '#fecaca' : '#fde68a'}`,
+                        }}
+                      >
+                        <span className="text-[12px] leading-none mt-0.5">🌧️</span>
+                        <span
+                          className="text-[11px] font-medium leading-snug"
+                          style={{ color: sugestaoClima.nivel === 'critico' ? '#b91c1c' : '#92400e' }}
+                        >
+                          {sugestaoClima.mensagem}
+                        </span>
+                      </div>
                     )}
                   </div>
 
