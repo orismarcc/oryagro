@@ -12,6 +12,7 @@ import { loadEstoque, addMovimento, deleteMovimentoByCronogramaAtividade } from 
 import { addEvento, syncCronogramaStatus, loadCronogramaAtividades } from '../hooks/useSupabaseSync';
 import { buildStatusFromDbRows, useCronogramaRealtime, makeStableId, makeCustomId } from '../hooks/useCronogramaSync';
 import { useWeather, sugerirAdiamento } from '../hooks/useWeather';
+import { montarPlanoAdubacao } from '../lib/analiseSolo';
 import { logDbError } from '../lib/logger';
 import { TIPO_META, TIPOS, todayISO, formatDate, stepDate, formatStepDate, migrateLegacyStatus, parseNumericDose, scaleDose, isoToDate, dateToISO } from './cronograma/helpers';
 import { Toggle, LotePicker } from './cronograma/ui';
@@ -305,10 +306,29 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
 
   const vivTemTransplante = etapasViveiro.some(e => e.tipo === 'especial');
 
+  // ── Plano de adubação a partir da análise de solo do lote (se houver) ───────
+  // Quando o lote tem análise, as etapas de adubo/calagem do cronograma padrão
+  // são SUBSTITUÍDAS pelas calculadas a partir da análise (método V%).
+  const planoSolo = (selectedLote?.analise_solo)
+    ? montarPlanoAdubacao({ analise: selectedLote.analise_solo, cultura, lote: selectedLote })
+    : null;
+
+  const soloSteps = planoSolo
+    ? planoSolo.etapas.map(e => ({
+        etapa: e.etapa, produto: e.produto, dose: e.dose, forma: e.forma,
+        descricao: e.descricao, tipo: e.tipo,
+        dia: diasViveiroAtual + e.offset,
+        _id: makeStableId('solo', e.etapa),
+        _custom: false, _solo: true, _noScaleDose: true,
+      }))
+    : [];
+
   const allEvents = [
-    ...etapasViveiro,
+    ...etapasViveiro.filter(e => !planoSolo || e.tipo !== 'adubo'),
+    ...soloSteps,
     ...cultura.cronograma
       .filter(e => !(vivTemTransplante && e.dia === 0 && e.tipo === 'plantio'))
+      .filter(e => !planoSolo || e.tipo !== 'adubo')
       .map(e => {
         const override = {};
         if (e.tipo === 'plantio' && e.dia === 0 && selectedLote && metodoObj) {
@@ -760,6 +780,11 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
           </div>
         </div>
       </div>
+
+      {/* ── Plano de adubação por análise de solo ── */}
+      {planoSolo && selectedLote && (
+        <PlanoAduboCard plano={planoSolo} lote={selectedLote} cultura={cultura} cor={cor} />
+      )}
 
       {/* ── Vertical Timeline ── */}
       <div className="flex flex-col">
@@ -1654,6 +1679,107 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
         </AnimatePresence>,
         document.body
       )}
+    </div>
+  );
+}
+
+// ── Card: Plano de adubação a partir da análise de solo ──────────────────────
+function PlanoAduboCard({ plano, lote, cultura, cor }) {
+  const [aberto, setAberto] = useState(true);
+  const idx = plano.interpretacao?.indices || {};
+  const fmt = (n, d = 1) => (n == null || !isFinite(n) ? '—' : n.toFixed(d).replace('.', ','));
+  const a = lote.analise_solo || {};
+
+  return (
+    <div className="mx-3 mb-3 rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${cor}33` }}>
+      <button
+        onClick={() => setAberto(v => !v)}
+        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left"
+        style={{ background: `${cor}10` }}
+      >
+        <span className="text-[16px] leading-none">🧪</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[12px] font-bold text-foreground leading-tight">Plano de adubação — sua análise de solo</p>
+          <p className="text-[10px] text-muted-foreground leading-tight">
+            {lote.tipo_solo ? `${lote.tipo_solo} · ` : ''}A adubação do cronograma foi montada por esta análise
+          </p>
+        </div>
+        <ChevronRight size={16} className="text-muted-foreground transition-transform"
+          style={{ transform: aberto ? 'rotate(90deg)' : 'none' }} />
+      </button>
+
+      <AnimatePresence initial={false}>
+        {aberto && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22 }} style={{ overflow: 'hidden' }}
+          >
+            <div className="p-3 space-y-3">
+              {/* Índices */}
+              <div className="grid grid-cols-4 gap-2 text-center">
+                {[
+                  ['CTC', fmt(idx.ctc, 2)],
+                  ['V%', fmt(idx.v) + '%'],
+                  ['Sat. Al', fmt(idx.m) + '%'],
+                  ['Calagem', plano.precisaCalagem ? `${fmt(plano.calagem.adotada)} t/ha` : '—'],
+                ].map(([l, v]) => (
+                  <div key={l} className="rounded-xl py-1.5" style={{ background: `${cor}0c` }}>
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider leading-none">{l}</p>
+                    <p className="text-[12px] font-bold text-foreground leading-tight mt-0.5">{v}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Diagnóstico */}
+              {plano.diagnostico?.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Diagnóstico</p>
+                  {plano.diagnostico.map((d, i) => (
+                    <div key={i} className="flex items-start gap-1.5 text-[11px] text-foreground/80 leading-snug">
+                      <span style={{ color: cor }}>•</span><span>{d}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Resumo de insumos */}
+              {plano.resumo?.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Resumo de insumos</p>
+                  <div className="rounded-xl overflow-hidden" style={{ border: '1px solid hsl(214 20% 90%)' }}>
+                    {plano.resumo.map((r, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-[11px]"
+                        style={{ background: i % 2 ? 'transparent' : 'hsl(210 16% 97%)' }}>
+                        <span className="font-semibold text-foreground truncate">{r.produto}</span>
+                        <span className="text-muted-foreground flex-shrink-0">{r.total}</span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                          style={{ background: `${cor}14`, color: cor }}>{r.momento}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Detalhes da análise */}
+              <details className="text-[10px] text-muted-foreground">
+                <summary className="cursor-pointer font-semibold">Ver valores da análise</summary>
+                <div className="grid grid-cols-3 gap-x-3 gap-y-0.5 mt-1.5">
+                  {[
+                    ['pH', a.ph], ['P', a.p], ['K', a.k], ['Ca', a.ca], ['Mg', a.mg],
+                    ['Al', a.al], ['H+Al', a.hAl], ['MO', a.mo], ['Zn', a.zn], ['Argila%', a.argila],
+                  ].filter(([, v]) => v != null).map(([l, v]) => (
+                    <span key={l}>{l}: <strong className="text-foreground">{String(v).replace('.', ',')}</strong></span>
+                  ))}
+                </div>
+              </details>
+
+              <p className="text-[10px] leading-snug" style={{ color: cor }}>
+                ⚠️ Sequência crítica: <strong>calagem → (30+ dias) → fosfatagem/cova → plantio</strong>. Nunca calcário e superfosfato no mesmo dia.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

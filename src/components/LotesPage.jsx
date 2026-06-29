@@ -5,6 +5,18 @@ import { calcularPlantas } from '../hooks/useSimulador';
 import { registrarPlantio, deleteLote, updateLoteMudas, preCarregarEtapasPadrao } from '../hooks/useSupabaseSync';
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
 import PropagacaoSelector from './PropagacaoSelector';
+import AnaliseSoloForm from './AnaliseSoloForm';
+
+/** Converte o painel de análise (strings do form) em números para o banco. */
+function sanitizeAnalise(analise) {
+  const out = {};
+  Object.entries(analise || {}).forEach(([k, v]) => {
+    if (v === '' || v == null) return;
+    const n = parseFloat(String(v).replace(',', '.'));
+    if (Number.isFinite(n)) out[k] = n;
+  });
+  return Object.keys(out).length ? out : null;
+}
 
 function today() {
   const d = new Date();
@@ -224,6 +236,7 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
   const [metodoPropagacao, setMetodoPropagacao] = useState(defaultMetodo);
   const [saving, setSaving]                     = useState(false);
   const [deletingId, setDeletingId]             = useState(null);
+  const [soloData, setSoloData]                 = useState({ ativo: false, tipoSolo: '', analise: {} });
 
   const calcValores = {
     comprimento: calc.comprimento,
@@ -297,6 +310,11 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
             largura_m: parseFloat(calc.largura) || cultura.canteiro.largura,
           }
       ),
+      // Análise de solo (opcional) — alimenta a adubação/calagem do cronograma
+      ...(soloData.tipoSolo ? { tipo_solo: soloData.tipoSolo } : {}),
+      ...(soloData.ativo && sanitizeAnalise(soloData.analise)
+        ? { analise_solo: sanitizeAnalise(soloData.analise) }
+        : {}),
     };
 
     const novo = await registrarPlantio(payload);
@@ -309,6 +327,7 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
       setDataPlantio(today());
       setUsaMudas(false);
       setMetodoPropagacao(defaultMetodo);
+      setSoloData({ ativo: false, tipoSolo: '', analise: {} });
       setShowForm(false);
     }
     setSaving(false);
@@ -517,6 +536,9 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
                   </p>
                 )}
               </div>
+
+              {/* Análise de solo (opcional) */}
+              <AnaliseSoloForm cultura={cultura} cor={cor} onChange={setSoloData} />
 
               {/* Resumo */}
               <div className="rounded-xl p-3 text-[11px]" style={{ background: `${cor}0a`, border: `1px solid ${cor}22` }}>
