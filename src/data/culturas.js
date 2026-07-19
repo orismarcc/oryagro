@@ -810,6 +810,12 @@ export const CULTURAS = {
     clima: 'Tropical quente / Sol pleno',
     area: { padrao: 1, unidade: 'ha' },
     espacamento: { linhas: 3.0, plantas: 4.0 },
+    // Cultura conduzida em espaldeira vertical — precisa de mourões (estacas).
+    espaldeira: {
+      estacasPorHa: 220,
+      espacamento: '4–5 m entre mourões',
+      descricao: 'Espaldeira vertical: mourões (estacas) a cada 4–5 m + 1 fio de arame liso nº12 a ~1,8–2,0 m.',
+    },
     metodosPropagacao: [
       {
         key: 'semente', label: 'Semente', saquinho: true, diasViveiro: 60,

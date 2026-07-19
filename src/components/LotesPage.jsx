@@ -134,9 +134,12 @@ function LoteCard({ lote, cultura, cor, isCampo, onDelete, deleting }) {
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className={`grid gap-2 ${lote.estacas ? 'grid-cols-4' : 'grid-cols-3'}`}>
         <Metric label={isCampo ? 'Área' : 'Dimensão'} value={dimensao} cor={cor} />
         <Metric label="Plantas" value={(lote.total_plantas || 0).toLocaleString('pt-BR')} cor={cor} />
+        {lote.estacas ? (
+          <Metric label="Estacas" value={lote.estacas.toLocaleString('pt-BR')} cor={cor} />
+        ) : null}
         <Metric label="Dias" value={diasDecorridos} cor={cor} />
       </div>
 
@@ -237,6 +240,8 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
   const [saving, setSaving]                     = useState(false);
   const [deletingId, setDeletingId]             = useState(null);
   const [soloData, setSoloData]                 = useState({ ativo: false, tipoSolo: '', analise: {} });
+  const [estacas, setEstacas]                   = useState('');
+  const [estacasTouched, setEstacasTouched]     = useState(false);
 
   const calcValores = {
     comprimento: calc.comprimento,
@@ -246,6 +251,14 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
     espacamentoPlantas: calc.plantas,
   };
   const dim = calcularPlantas(cultura, calcValores);
+
+  // Espaldeira: nº de estacas/mourões (pré-preenchido pelo padrão da cultura,
+  // editável). Recalcula o padrão conforme a área enquanto o usuário não edita.
+  const areaParaEstacas = isCampo ? (parseFloat(calc.area) || 0) : ((dim.area || 0) / 10000);
+  const estacasDefault = cultura.espaldeira
+    ? Math.max(1, Math.round(cultura.espaldeira.estacasPorHa * areaParaEstacas))
+    : null;
+  const estacasValor = estacasTouched ? estacas : (estacasDefault ?? '');
 
   const metodoObj = temMetodos
     ? cultura.metodosPropagacao.find(m => m.key === metodoPropagacao) || cultura.metodosPropagacao[0]
@@ -310,6 +323,8 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
             largura_m: parseFloat(calc.largura) || cultura.canteiro.largura,
           }
       ),
+      // Espaldeira: nº de estacas/mourões (culturas em espaldeira)
+      ...(cultura.espaldeira ? { estacas: parseInt(estacasValor, 10) || estacasDefault } : {}),
       // Análise de solo (opcional) — alimenta a adubação/calagem do cronograma
       ...(soloData.tipoSolo ? { tipo_solo: soloData.tipoSolo } : {}),
       ...(soloData.ativo && sanitizeAnalise(soloData.analise)
@@ -328,6 +343,7 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
       setUsaMudas(false);
       setMetodoPropagacao(defaultMetodo);
       setSoloData({ ativo: false, tipoSolo: '', analise: {} });
+      setEstacas(''); setEstacasTouched(false);
       setShowForm(false);
     }
     setSaving(false);
@@ -425,6 +441,39 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
           <p className="text-[11px] text-muted-foreground">
             {dim.linhas} linhas × {dim.porLinha} plantas — {dim.area?.toFixed(1)} m²
           </p>
+        )}
+
+        {cultura.espaldeira && (
+          <div className="rounded-xl p-3" style={{ background: `${cor}08`, border: `1px solid ${cor}22` }}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-base">🪵</span>
+              <p className="text-[11px] font-bold" style={{ color: cor }}>Espaldeira — estacas/mourões</p>
+            </div>
+            <div className="flex items-end gap-2">
+              <div className="flex-1 flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Quantidade de estacas
+                </label>
+                <input
+                  type="number" inputMode="numeric" min="1" value={estacasValor}
+                  onChange={e => { setEstacas(e.target.value); setEstacasTouched(true); }}
+                  className="px-3 py-2 rounded-xl text-[13px] font-semibold text-foreground outline-none"
+                  style={{ background: 'white', border: '1px solid hsl(214 20% 88%)' }}
+                />
+              </div>
+              {estacasTouched && estacasDefault != null && (
+                <button type="button" onClick={() => { setEstacas(''); setEstacasTouched(false); }}
+                  className="text-[11px] font-semibold px-2.5 py-2 rounded-xl"
+                  style={{ background: `${cor}14`, color: cor }}>
+                  Padrão
+                </button>
+              )}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1.5">
+              Padrão {cultura.espaldeira.estacasPorHa}/ha · {cultura.espaldeira.espacamento}.
+              {estacasDefault != null ? ` Sugerido p/ esta área: ${estacasDefault.toLocaleString('pt-BR')} estacas.` : ''}
+            </p>
+          </div>
         )}
 
         {isCampo && precisaSaquinho && (

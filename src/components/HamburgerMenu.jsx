@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Menu, X, Home, CalendarDays, BarChart2, Building2,
-  Package2, Calculator, Settings, DollarSign, Users,
+  Package2, Calculator, Settings, DollarSign, Users, TrendingUp,
 } from 'lucide-react';
 import Logo from './Logo';
 
@@ -11,6 +11,7 @@ const MENU_ITEMS = [
   { id: 'calendario',    label: 'Calendário',             icon: CalendarDays },
   { id: 'analise',       label: 'Análise',                icon: BarChart2,   requiresAdmin: true },
   { id: 'financeiro',    label: 'Financeiro',             icon: DollarSign,  requiresAdmin: true },
+  { id: 'simulador',     label: 'Simulador',              icon: TrendingUp },
   { id: 'propriedades',  label: 'Propriedades',           icon: Building2 },
   { id: 'compradores',   label: 'Compradores',            icon: Users,       requiresAdmin: true },
   { id: 'estoque',       label: 'Estoque',                icon: Package2,    requiresProp: true },
