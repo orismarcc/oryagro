@@ -27,7 +27,7 @@ const MetricRow = ({ label, value, highlight }) => (
     <span className="text-[12px] text-muted-foreground">{label}</span>
     <span
       className="text-[12px] font-semibold"
-      style={{ color: highlight ? 'hsl(157 68% 26%)' : 'hsl(153 24% 12%)' }}
+      style={{ color: highlight ? 'hsl(156 64% 31%)' : 'hsl(153 24% 12%)' }}
     >
       {value}
     </span>

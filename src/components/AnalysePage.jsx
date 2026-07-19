@@ -981,7 +981,7 @@ function AbaBar({ ativa, onChange }) {
             key={key}
             onClick={() => onChange(key)}
             className="relative flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold transition-colors"
-            style={{ color: isActive ? 'hsl(157 68% 26%)' : 'rgba(255,255,255,0.7)' }}
+            style={{ color: isActive ? 'hsl(156 64% 31%)' : 'rgba(255,255,255,0.7)' }}
           >
             {isActive && (
               <motion.span
@@ -1115,7 +1115,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
   // 10C: block technicians from the Analysis page
   if (userRole !== null && !can(userRole, FARM_ACTIONS.VIEW_ANALYSIS)) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4 px-8 text-center">
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 px-8 text-center">
         <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
           <BarChart2 size={28} className="text-gray-300" />
         </div>
@@ -1128,7 +1128,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* ── Hero header ── */}
       <div className="gradient-hero text-white px-4 pb-6 flex flex-col gap-4" style={{ paddingTop: 'var(--hero-pad-top)' }}>
         {/* Top bar — pr-24 para não sobrepor os botões flutuantes à direita */}
@@ -1214,7 +1214,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
               onClick={() => setSelectedLoteId(null)}
               className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all"
               style={!selectedLoteId
-                ? { background: 'rgba(255,255,255,0.9)', color: 'hsl(157 68% 26%)' }
+                ? { background: 'rgba(255,255,255,0.9)', color: 'hsl(156 64% 31%)' }
                 : { background: 'rgba(255,255,255,0.20)', color: 'rgba(255,255,255,0.75)' }}
             >
               Todos
@@ -1228,7 +1228,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
                   onClick={() => setSelectedLoteId(isActive ? null : String(l.id))}
                   className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all"
                   style={isActive
-                    ? { background: 'rgba(255,255,255,0.9)', color: c?.cor || 'hsl(157 68% 26%)' }
+                    ? { background: 'rgba(255,255,255,0.9)', color: c?.cor || 'hsl(156 64% 31%)' }
                     : { background: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.75)' }}
                 >
                   {c?.emoji && <span>{c.emoji}</span>}

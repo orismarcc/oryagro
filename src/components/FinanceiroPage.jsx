@@ -44,7 +44,7 @@ export default function FinanceiroPage({ onBack, propriedades = [] }) {
   useRealtimeSync('receitas', fetchData);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <div className="gradient-hero text-white px-5 pb-4 flex flex-col gap-4" style={{ paddingTop: 'var(--hero-pad-top)' }}>
         {/* Linha superior — pr-24 reserva espaço para os botões flutuantes (≡ e 🔔) */}
@@ -75,7 +75,7 @@ export default function FinanceiroPage({ onBack, propriedades = [] }) {
                 className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg transition-all text-[11px] font-bold"
                 style={
                   isActive
-                    ? { background: 'rgba(255,255,255,0.9)', color: 'hsl(157 68% 26%)' }
+                    ? { background: 'rgba(255,255,255,0.9)', color: 'hsl(156 64% 31%)' }
                     : { color: 'rgba(255,255,255,0.65)' }
                 }
               >

@@ -251,7 +251,7 @@ function CompradorFormModal({ onClose, onSaved, existing = null }) {
                 onClick={() => handleTipoDocToggle(k)}
                 className="py-2 rounded-xl text-[12px] font-bold transition-all"
                 style={tipoDoc === k
-                  ? { background: 'hsl(157 68% 26%)', color: 'white' }
+                  ? { background: 'hsl(156 64% 31%)', color: 'white' }
                   : { background: 'hsl(140 14% 94%)', color: 'hsl(150 8% 45%)' }}>
                 {l}
               </button>
@@ -372,7 +372,7 @@ function CompradorFormModal({ onClose, onSaved, existing = null }) {
           type="submit"
           disabled={saving || !nome.trim()}
           className="w-full py-3 rounded-xl text-[13px] font-bold text-white disabled:opacity-50"
-          style={{ background: 'hsl(157 68% 26%)' }}
+          style={{ background: 'hsl(156 64% 31%)' }}
         >
           {saving ? 'Salvando…' : isEdit ? 'Salvar alterações' : 'Adicionar comprador'}
         </button>
@@ -541,7 +541,7 @@ function HistoricoPanel({ comprador, onClose }) {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[14px] font-extrabold" style={{ color: 'hsl(157 68% 26%)' }}>
+                    <p className="text-[14px] font-extrabold" style={{ color: 'hsl(156 64% 31%)' }}>
                       {currencyBR(total)}
                     </p>
                     <p className="text-[10px] text-muted-foreground">{modoPagamento}</p>
@@ -746,7 +746,7 @@ function FilterChip({ label, active, onClick }) {
       onClick={onClick}
       className="px-3 py-1.5 rounded-full text-[11px] font-bold transition-all whitespace-nowrap"
       style={active
-        ? { background: 'hsl(157 68% 26%)', color: 'white' }
+        ? { background: 'hsl(156 64% 31%)', color: 'white' }
         : { background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 40%)' }}
     >
       {label}
@@ -859,7 +859,7 @@ export default function CompradoresPage({ onBack }) {
           <button
             onClick={() => setFormModal(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold text-white"
-            style={{ background: 'hsl(157 68% 26%)' }}
+            style={{ background: 'hsl(156 64% 31%)' }}
           >
             <Plus size={13} /> Novo comprador
           </button>

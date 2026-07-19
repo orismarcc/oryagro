@@ -331,7 +331,7 @@ export default function CalculadoraPage({ onBack }) {
   const [loadingLotes, setLoadingLotes] = useState(false);
 
   const cultura = culturaId ? CULTURAS[culturaId] : null;
-  const cor = 'hsl(157 68% 26%)';
+  const cor = 'hsl(156 64% 31%)';
 
   // Carrega propriedades ao montar
   useEffect(() => {

@@ -48,7 +48,7 @@ export default function App() {
     return (
       <ToastProvider>
         <div className="min-h-screen bg-background flex items-center justify-center">
-          <Loader2 size={28} className="animate-spin" style={{ color: 'hsl(157 68% 26%)' }} />
+          <Loader2 size={28} className="animate-spin" style={{ color: 'hsl(156 64% 31%)' }} />
         </div>
       </ToastProvider>
     );
@@ -459,7 +459,7 @@ function AppInner({ session, displayName, signOut }) {
           >
             <Suspense fallback={
               <div className="flex items-center justify-center py-24">
-                <Loader2 size={28} className="animate-spin" style={{ color: 'hsl(157 68% 26%)' }} />
+                <Loader2 size={28} className="animate-spin" style={{ color: 'hsl(156 64% 31%)' }} />
               </div>
             }>
             {mainView === 'dashboard' && (
@@ -573,7 +573,7 @@ function AppInner({ session, displayName, signOut }) {
               const propriedadesActive = value === 'propriedades' &&
                 (mainView === 'propriedades' || mainView === 'propriedade' || mainView === 'estoque');
               const isActive = mainView === value || dashboardActive || propriedadesActive;
-              const activeCor = isInCultura && value === 'dashboard' && activeCultura ? activeCultura.cor : 'hsl(157 68% 26%)';
+              const activeCor = isInCultura && value === 'dashboard' && activeCultura ? activeCultura.cor : 'hsl(156 64% 31%)';
 
               return (
                 <button

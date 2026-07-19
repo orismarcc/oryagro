@@ -220,8 +220,8 @@ function PropriedadeCard({ propriedade, lotes, alertasCount, onSelect, index }) 
     >
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{ background: 'hsl(157 68% 26% / 0.1)' }}>
-          <Building2 size={18} style={{ color: 'hsl(157 68% 26%)' }} />
+          style={{ background: 'hsl(156 64% 31% / 0.1)' }}>
+          <Building2 size={18} style={{ color: 'hsl(156 64% 31%)' }} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -259,7 +259,7 @@ function PropriedadeCard({ propriedade, lotes, alertasCount, onSelect, index }) 
               style={{ borderTop: '1px solid hsl(140 13% 93%)' }}>
               {areaTotal > 0 && (
                 <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                  <span style={{ color: 'hsl(157 68% 26%)' }}>⬛</span>
+                  <span style={{ color: 'hsl(156 64% 31%)' }}>⬛</span>
                   {areaTotal.toFixed(1)} ha cultivados
                 </span>
               )}
@@ -270,7 +270,7 @@ function PropriedadeCard({ propriedade, lotes, alertasCount, onSelect, index }) 
               )}
               {dataCadastro && (
                 <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                  <CalendarDays size={9} style={{ color: 'hsl(157 68% 26%)' }} />
+                  <CalendarDays size={9} style={{ color: 'hsl(156 64% 31%)' }} />
                   Desde {dataCadastro}
                 </span>
               )}
@@ -294,8 +294,8 @@ function EmptyLotes({ onAdd }) {
       className="card p-8 flex flex-col items-center gap-3 text-center"
     >
       <div className="icon-circle w-16 h-16 text-3xl"
-        style={{ background: 'hsl(157 68% 26% / 0.1)' }}>
-        <Layers size={24} style={{ color: 'hsl(157 68% 26%)' }} />
+        style={{ background: 'hsl(156 64% 31% / 0.1)' }}>
+        <Layers size={24} style={{ color: 'hsl(156 64% 31%)' }} />
       </div>
       <div>
         <p className="text-[14px] font-bold text-foreground">Nenhum lote cadastrado</p>
@@ -306,7 +306,7 @@ function EmptyLotes({ onAdd }) {
       <button
         onClick={onAdd}
         className="mt-1 flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[13px] font-bold text-white transition-all active:scale-[0.98]"
-        style={{ background: 'hsl(157 68% 26%)' }}
+        style={{ background: 'hsl(156 64% 31%)' }}
       >
         <Plus size={15} /> Novo Lote
       </button>
@@ -744,7 +744,7 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
           <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground text-[13px]">
             <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
               className="w-4 h-4 rounded-full border-2"
-              style={{ borderColor: 'hsl(157 68% 26% / 0.4)', borderTopColor: 'hsl(157 68% 26%)' }} />
+              style={{ borderColor: 'hsl(156 64% 31% / 0.4)', borderTopColor: 'hsl(156 64% 31%)' }} />
             Carregando…
           </div>
         ) : propriedades.length === 0 && lotes.length === 0 ? (

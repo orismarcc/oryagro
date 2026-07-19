@@ -120,7 +120,7 @@ export default function LoginPage() {
               onClick={() => reset(key)}
               className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-bold transition-all"
               style={mode === key
-                ? { background: 'white', color: 'hsl(157 68% 26%)', boxShadow: '0 1px 4px rgb(0 0 0 / 0.10)' }
+                ? { background: 'white', color: 'hsl(156 64% 31%)', boxShadow: '0 1px 4px rgb(0 0 0 / 0.10)' }
                 : { color: 'hsl(150 8% 50%)' }}
             >
               <Icon size={13} />
@@ -263,7 +263,7 @@ export default function LoginPage() {
                 type="submit"
                 disabled={loading || !email || !password || (mode === 'signup' && (!confirm || displayName.trim().length < 2))}
                 className="w-full py-3.5 rounded-2xl text-[14px] font-bold text-white transition-all active:scale-[0.98] disabled:opacity-50"
-                style={{ background: 'hsl(157 68% 26%)' }}
+                style={{ background: 'hsl(156 64% 31%)' }}
               >
                 {loading
                   ? (mode === 'login' ? 'Entrando…' : 'Criando conta…')

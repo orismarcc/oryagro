@@ -41,8 +41,8 @@ export default function MigrationWizard({ onComplete }) {
         style={{ background: '#fff' }}
       >
         <div className="flex flex-col items-center text-center mb-6">
-          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'hsl(157 68% 26% / 0.1)' }}>
-            <Building2 size={28} style={{ color: 'hsl(157 68% 26%)' }} />
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'hsl(156 64% 31% / 0.1)' }}>
+            <Building2 size={28} style={{ color: 'hsl(156 64% 31%)' }} />
           </div>
           <h2 className="font-display text-xl font-extrabold text-foreground">Organize seus lotes</h2>
           <p className="text-[13px] text-muted-foreground mt-2 leading-relaxed">
@@ -62,7 +62,7 @@ export default function MigrationWizard({ onComplete }) {
           <button
             type="submit" disabled={saving || !nome.trim()}
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[14px] font-bold text-white disabled:opacity-50 transition-all active:scale-[0.98]"
-            style={{ background: 'hsl(157 68% 26%)' }}
+            style={{ background: 'hsl(156 64% 31%)' }}
           >
             {saving ? 'Migrando…' : <><span>Continuar</span><ArrowRight size={16} /></>}
           </button>

@@ -348,7 +348,7 @@ function FarmMembersSection({ propriedade, userRole }) {
               type="submit"
               disabled={adding || !email.trim()}
               className="px-4 py-2.5 rounded-xl text-[13px] font-bold text-white disabled:opacity-50 transition-all active:scale-95"
-              style={{ background: 'hsl(157 68% 26%)' }}
+              style={{ background: 'hsl(156 64% 31%)' }}
             >
               {adding ? '…' : 'Adicionar'}
             </button>
@@ -378,7 +378,7 @@ function FarmMembersSection({ propriedade, userRole }) {
               <div key={m.id} className="flex items-center gap-3 px-4 py-3">
                 {/* Avatar */}
                 <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-bold text-white"
-                  style={{ background: isOwner ? 'hsl(157 68% 26%)' : 'hsl(150 8% 55%)' }}>
+                  style={{ background: isOwner ? 'hsl(156 64% 31%)' : 'hsl(150 8% 55%)' }}>
                   {getInitials(m.displayName, m.email)}
                 </div>
                 {/* Info */}

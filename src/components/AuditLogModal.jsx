@@ -93,7 +93,7 @@ export default function AuditLogModal({ onClose }) {
         initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
       >
         <div className="px-5 pt-5 pb-3 border-b border-border flex items-center gap-2 flex-shrink-0">
-          <History size={16} style={{ color: 'hsl(157 68% 26%)' }} />
+          <History size={16} style={{ color: 'hsl(156 64% 31%)' }} />
           <div className="flex-1">
             <h3 className="text-[15px] font-bold text-foreground">Histórico de Alterações</h3>
             <p className="text-[11px] text-muted-foreground mt-0.5">Quem mudou o quê e quando</p>

@@ -20,7 +20,7 @@ const MENU_ITEMS = [
 
 const SETTINGS_ITEM = { id: 'configuracoes', label: 'Configurações', icon: Settings };
 
-const GREEN = 'hsl(157 68% 26%)';
+const GREEN = 'hsl(156 64% 31%)';
 const GREEN_BG = 'hsl(152 40% 94%)';
 
 export default function HamburgerMenu({ currentView, onNavigate, hasPropriedade = false, isGlobalAdmin = true }) {

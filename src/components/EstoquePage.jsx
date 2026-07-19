@@ -201,9 +201,9 @@ function MovModal({ insumo, propriedadeId, onClose, onMoved, canEdit = false }) 
                 className="w-full mt-1 rounded-xl border px-3 py-2 text-[13px] outline-none"
                 style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }} />
               <div className="flex items-center justify-between mt-2 rounded-xl px-3 py-2"
-                style={{ background: 'hsl(157 68% 26% / 0.08)', border: '1px solid hsl(157 68% 26% / 0.2)' }}>
-                <span className="text-[11px] font-semibold" style={{ color: 'hsl(157 68% 26%)' }}>Preço unitário (automático)</span>
-                <span className="text-[13px] font-bold" style={{ color: 'hsl(157 68% 26%)' }}>
+                style={{ background: 'hsl(156 64% 31% / 0.08)', border: '1px solid hsl(156 64% 31% / 0.2)' }}>
+                <span className="text-[11px] font-semibold" style={{ color: 'hsl(156 64% 31%)' }}>Preço unitário (automático)</span>
+                <span className="text-[13px] font-bold" style={{ color: 'hsl(156 64% 31%)' }}>
                   {precoUnitEntrada !== null
                     ? `R$ ${precoUnitEntrada.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ${insumo.unidade}`
                     : '—'}
@@ -439,9 +439,9 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
               className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
               style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }} />
             <div className="flex items-center justify-between mt-2 rounded-xl px-3 py-2"
-              style={{ background: 'hsl(157 68% 26% / 0.08)', border: '1px solid hsl(157 68% 26% / 0.2)' }}>
-              <span className="text-[11px] font-semibold" style={{ color: 'hsl(157 68% 26%)' }}>Preço unitário (automático)</span>
-              <span className="text-[13px] font-bold" style={{ color: 'hsl(157 68% 26%)' }}>
+              style={{ background: 'hsl(156 64% 31% / 0.08)', border: '1px solid hsl(156 64% 31% / 0.2)' }}>
+              <span className="text-[11px] font-semibold" style={{ color: 'hsl(156 64% 31%)' }}>Preço unitário (automático)</span>
+              <span className="text-[13px] font-bold" style={{ color: 'hsl(156 64% 31%)' }}>
                 {precoCalculado > 0
                   ? `R$ ${precoCalculado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ${unidade}`
                   : '—'}
@@ -455,7 +455,7 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
 
         <button type="submit" disabled={saving || !nome}
           className="w-full py-3 rounded-xl text-[13px] font-bold text-white disabled:opacity-50"
-          style={{ background: 'hsl(157 68% 26%)' }}>
+          style={{ background: 'hsl(156 64% 31%)' }}>
           {saving ? 'Salvando…' : isEdit ? 'Salvar alterações' : 'Adicionar insumo'}
         </button>
       </form>
@@ -563,7 +563,7 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
           <button
             onClick={() => setAddModal(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold text-white"
-            style={{ background: 'hsl(157 68% 26%)' }}
+            style={{ background: 'hsl(156 64% 31%)' }}
           >
             <Plus size={13} /> Adicionar insumo
           </button>
