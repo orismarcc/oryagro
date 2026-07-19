@@ -23,11 +23,11 @@ function CountUpBRL({ value, duration = 0.9 }) {
 }
 
 const MetricRow = ({ label, value, highlight }) => (
-  <div className="flex items-center justify-between py-2.5" style={{ borderBottom: '1px solid hsl(214 20% 93%)' }}>
+  <div className="flex items-center justify-between py-2.5" style={{ borderBottom: '1px solid hsl(140 13% 93%)' }}>
     <span className="text-[12px] text-muted-foreground">{label}</span>
     <span
       className="text-[12px] font-semibold"
-      style={{ color: highlight ? 'hsl(157 68% 26%)' : 'hsl(222 47% 11%)' }}
+      style={{ color: highlight ? 'hsl(157 68% 26%)' : 'hsl(153 24% 12%)' }}
     >
       {value}
     </span>
@@ -190,7 +190,7 @@ export default function ResultadoPanel({ resultado, cultura }) {
                 <stop offset="100%" stopColor={cor} stopOpacity={0.02} />
               </linearGradient>
             </defs>
-            <XAxis dataKey="name" tick={{ fontSize: 9, fill: 'hsl(215 16% 40%)' }} axisLine={false} tickLine={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 9, fill: 'hsl(150 8% 40%)' }} axisLine={false} tickLine={false} />
             <Area type="monotone" dataKey="v" stroke={cor} strokeWidth={2} fill={`url(#grad-${cultura.id})`} dot={{ fill: cor, r: 3 }} />
             <Tooltip content={<CustomTooltip formatBRL={formatBRL} />} />
           </AreaChart>

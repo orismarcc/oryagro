@@ -72,7 +72,7 @@ export default function AnaliseSoloForm({ cultura, cor = '#16a34a', onChange }) 
           </p>
         </div>
         <span className="flex items-center gap-1">
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: ativo ? `${cor}1a` : 'hsl(210 16% 92%)', color: ativo ? cor : 'hsl(215 16% 50%)' }}>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: ativo ? `${cor}1a` : 'hsl(140 14% 92%)', color: ativo ? cor : 'hsl(150 8% 50%)' }}>
             {ativo ? 'Ativa' : 'Desativada'}
           </span>
           {aberto ? <ChevronUp size={15} className="text-muted-foreground" /> : <ChevronDown size={15} className="text-muted-foreground" />}
@@ -93,13 +93,13 @@ export default function AnaliseSoloForm({ cultura, cor = '#16a34a', onChange }) 
                   type="text" value={tipoSolo} onChange={e => setTipoSolo(e.target.value)}
                   placeholder="Ex.: Franco-Arenoso"
                   className="w-full px-3 py-2 rounded-xl text-[13px] outline-none"
-                  style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 88%)' }}
+                  style={{ background: 'hsl(140 14% 96%)', border: '1px solid hsl(140 13% 88%)' }}
                 />
                 <div className="flex flex-wrap gap-1 mt-0.5">
                   {TIPOS_SOLO.map(t => (
                     <button key={t} type="button" onClick={() => setTipoSolo(t)}
                       className="text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors"
-                      style={tipoSolo === t ? { background: cor, color: '#fff' } : { background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }}>
+                      style={tipoSolo === t ? { background: cor, color: '#fff' } : { background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 45%)' }}>
                       {t}
                     </button>
                   ))}
@@ -118,7 +118,7 @@ export default function AnaliseSoloForm({ cultura, cor = '#16a34a', onChange }) 
                       value={analise[c.key] ?? ''} onChange={e => set(c.key, e.target.value)}
                       placeholder={c.opcional ? 'opcional' : '—'}
                       className="px-2.5 py-1.5 rounded-lg text-[13px] font-semibold outline-none"
-                      style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 88%)' }}
+                      style={{ background: 'hsl(140 14% 96%)', border: '1px solid hsl(140 13% 88%)' }}
                     />
                     <span className="text-[9px] text-muted-foreground leading-tight">{c.hint}</span>
                   </div>

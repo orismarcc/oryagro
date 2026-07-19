@@ -256,7 +256,7 @@ export default function NotificacoesBell({
           background: 'rgba(255,255,255,0.92)',
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
-          border: '1px solid hsl(214 20% 88%)',
+          border: '1px solid hsl(140 13% 88%)',
           boxShadow: '0 4px 14px -2px rgb(0 0 0 / 0.12)',
         }}
         aria-label="Notificações"
@@ -304,17 +304,17 @@ export default function NotificacoesBell({
                 // (iPhone SE 320px). Antes era w-80 fixo → overflow em <344px.
                 width: 'min(20rem, calc(100vw - 24px))',
                 background: '#ffffff',
-                border: '1px solid hsl(214 20% 90%)',
+                border: '1px solid hsl(140 13% 90%)',
                 boxShadow: '0 8px 40px -4px rgb(0 0 0 / 0.18)',
               }}
             >
               {/* Header do painel */}
               <div
                 className="flex items-center justify-between px-4 py-3 flex-shrink-0"
-                style={{ borderBottom: '1px solid hsl(214 20% 92%)' }}
+                style={{ borderBottom: '1px solid hsl(140 13% 92%)' }}
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-[15px] font-bold" style={{ color: 'hsl(215 16% 18%)' }}>
+                  <span className="text-[15px] font-bold" style={{ color: 'hsl(150 8% 18%)' }}>
                     Notificações
                   </span>
                   {count > 0 && (
@@ -330,7 +330,7 @@ export default function NotificacoesBell({
                   whileTap={{ scale: 0.85 }}
                   onClick={handleClose}
                   className="w-7 h-7 rounded-xl flex items-center justify-center"
-                  style={{ color: 'hsl(215 16% 50%)' }}
+                  style={{ color: 'hsl(150 8% 50%)' }}
                   aria-label="Fechar notificações"
                 >
                   <X size={15} />
@@ -342,12 +342,12 @@ export default function NotificacoesBell({
 
                 {/* ── Seção 1: Etapas do Cronograma ── */}
                 <div className="px-4 pt-3 pb-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'hsl(215 16% 55%)' }}>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'hsl(150 8% 55%)' }}>
                     Etapas do Cronograma · próx. 7 dias
                   </p>
 
                   {etapasVencendo.length === 0 ? (
-                    <p className="text-[13px] py-2 pb-3" style={{ color: 'hsl(215 16% 50%)' }}>
+                    <p className="text-[13px] py-2 pb-3" style={{ color: 'hsl(150 8% 50%)' }}>
                       Nenhuma etapa vencendo nos próximos 7 dias
                     </p>
                   ) : (
@@ -372,13 +372,13 @@ export default function NotificacoesBell({
                             <div className="flex-1 min-w-0">
                               <p
                                 className="text-[12px] font-semibold truncate"
-                                style={{ color: 'hsl(215 16% 22%)' }}
+                                style={{ color: 'hsl(150 8% 22%)' }}
                               >
                                 {lote.nome ?? `Lote #${lote.id}`}
                               </p>
                               <p
                                 className="text-[11px] truncate"
-                                style={{ color: 'hsl(215 16% 45%)' }}
+                                style={{ color: 'hsl(150 8% 45%)' }}
                               >
                                 {etapa.etapa}
                               </p>
@@ -392,20 +392,20 @@ export default function NotificacoesBell({
                 </div>
 
                 {/* Separador */}
-                <div className="mx-4 my-1" style={{ height: 1, background: 'hsl(214 20% 92%)' }} />
+                <div className="mx-4 my-1" style={{ height: 1, background: 'hsl(140 13% 92%)' }} />
 
                 {/* ── Seção 2: Cobranças vencendo ── */}
                 <div className="px-4 pt-2 pb-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'hsl(215 16% 55%)' }}>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'hsl(150 8% 55%)' }}>
                     Cobranças vencendo
                   </p>
 
                   {loadingCobr ? (
-                    <p className="text-[13px] py-2" style={{ color: 'hsl(215 16% 60%)' }}>
+                    <p className="text-[13px] py-2" style={{ color: 'hsl(150 8% 60%)' }}>
                       Carregando...
                     </p>
                   ) : cobrancasVencendo.length === 0 ? (
-                    <p className="text-[13px] py-2" style={{ color: 'hsl(215 16% 50%)' }}>
+                    <p className="text-[13px] py-2" style={{ color: 'hsl(150 8% 50%)' }}>
                       Nenhuma cobrança vencendo
                     </p>
                   ) : (
@@ -427,14 +427,14 @@ export default function NotificacoesBell({
                           <div className="flex-1 min-w-0">
                             <p
                               className="text-[12px] font-semibold truncate"
-                              style={{ color: 'hsl(215 16% 22%)' }}
+                              style={{ color: 'hsl(150 8% 22%)' }}
                             >
                               Parcela {parcela.numero ?? idx + 1}
                               {parcela.nomeComprador ? ` — ${parcela.nomeComprador}` : parcela.venda_id ? ` — Venda` : ''}
                             </p>
                             <p
                               className="text-[11px]"
-                              style={{ color: 'hsl(215 16% 45%)' }}
+                              style={{ color: 'hsl(150 8% 45%)' }}
                             >
                               {formatBRL(parcela.valor)} · vence {formatDate(parcela.data_vencimento)}
                             </p>

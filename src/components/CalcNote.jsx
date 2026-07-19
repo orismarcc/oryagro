@@ -32,7 +32,7 @@ export default function CalcNote({ title = 'Como é calculado', cor = 'hsl(157 6
       {open && (
         <ul
           className="mt-1.5 flex flex-col gap-1 rounded-xl px-3 py-2 text-[11px] leading-snug text-muted-foreground list-disc list-inside"
-          style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 90%)' }}
+          style={{ background: 'hsl(140 14% 96%)', border: '1px solid hsl(140 13% 90%)' }}
         >
           {children}
         </ul>

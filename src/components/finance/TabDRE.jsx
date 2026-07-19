@@ -162,7 +162,7 @@ import LoteCard from './LoteCard';
   if (anosDisponiveis.length === 0) return <EmptyState />;
 
   return (
-    <div className="px-4 pt-4 pb-8 flex flex-col gap-5">
+    <div className="page-body pt-4 pb-8 flex flex-col gap-5">
       {/* Filtros */}
       <div className="flex flex-col gap-2">
         {/* Modo de período: ano civil × safra agrícola */}
@@ -322,7 +322,7 @@ import LoteCard from './LoteCard';
             </div>
           </div>
           {totalDespesasIndiretas > 0 && (
-            <div className="flex justify-between items-center py-2 px-4 border-t" style={{ borderColor: 'hsl(214 20% 90%)' }}>
+            <div className="flex justify-between items-center py-2 px-4 border-t" style={{ borderColor: 'hsl(140 13% 90%)' }}>
               <span className="text-[12px] text-muted-foreground font-medium text-gray-500">Custos indiretos (propriedade)</span>
               <span className="text-[13px] font-bold text-orange-600">{fmtBRL(totalDespesasIndiretas)}</span>
             </div>

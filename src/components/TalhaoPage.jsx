@@ -93,7 +93,7 @@ function SafraCard({ safra, cultura, onSelectSafra, index }) {
         )}
       </div>
       {isAtiva && progresso !== null && (
-        <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'hsl(210 16% 93%)' }}>
+        <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'hsl(140 14% 93%)' }}>
           <div
             className="h-full rounded-full transition-all duration-700"
             style={{ width: `${progresso}%`, background: cor }}
@@ -287,7 +287,7 @@ export default function TalhaoPage({ talhao, onBack, onSelectLote }) {
       </div>
 
       {/* ── Content ── */}
-      <div className="flex flex-col gap-5 px-4 pt-5 pb-8 flex-1">
+      <div className="page-body flex flex-col gap-5 pt-5 pb-8 flex-1">
 
         {/* Botão nova safra */}
         <button
@@ -392,7 +392,7 @@ export default function TalhaoPage({ talhao, onBack, onSelectLote }) {
                   <button
                     onClick={() => setConfirmDelete(false)}
                     className="text-[11px] font-medium px-2.5 py-1 rounded-lg"
-                    style={{ background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }}>
+                    style={{ background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 45%)' }}>
                     Cancelar
                   </button>
                 </div>

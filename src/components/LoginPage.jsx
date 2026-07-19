@@ -110,7 +110,7 @@ export default function LoginPage() {
 
       {/* ── Mode toggle ── */}
       <div className="px-6 pt-6 max-w-sm mx-auto w-full">
-        <div className="flex rounded-2xl p-1 gap-1" style={{ background: 'hsl(210 16% 95%)' }}>
+        <div className="flex rounded-2xl p-1 gap-1" style={{ background: 'hsl(140 14% 95%)' }}>
           {[
             { key: 'login',  label: 'Entrar',       Icon: LogIn },
             { key: 'signup', label: 'Criar conta',  Icon: UserPlus },
@@ -121,7 +121,7 @@ export default function LoginPage() {
               className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-bold transition-all"
               style={mode === key
                 ? { background: 'white', color: 'hsl(157 68% 26%)', boxShadow: '0 1px 4px rgb(0 0 0 / 0.10)' }
-                : { color: 'hsl(215 16% 50%)' }}
+                : { color: 'hsl(150 8% 50%)' }}
             >
               <Icon size={13} />
               {label}
@@ -163,7 +163,7 @@ export default function LoginPage() {
                       required
                       minLength={2}
                       className="w-full pl-9 pr-3 py-3 rounded-xl text-[14px] outline-none"
-                      style={{ background: 'hsl(210 16% 96%)', border: '1.5px solid hsl(214 20% 88%)', color: 'hsl(215 20% 16%)' }}
+                      style={{ background: 'hsl(140 14% 96%)', border: '1.5px solid hsl(140 13% 88%)', color: 'hsl(215 20% 16%)' }}
                     />
                   </div>
                 </Field>
@@ -180,7 +180,7 @@ export default function LoginPage() {
                     placeholder="seu@email.com"
                     required
                     className="w-full pl-9 pr-3 py-3 rounded-xl text-[14px] outline-none"
-                    style={{ background: 'hsl(210 16% 96%)', border: '1.5px solid hsl(214 20% 88%)', color: 'hsl(215 20% 16%)' }}
+                    style={{ background: 'hsl(140 14% 96%)', border: '1.5px solid hsl(140 13% 88%)', color: 'hsl(215 20% 16%)' }}
                   />
                 </div>
               </Field>
@@ -196,7 +196,7 @@ export default function LoginPage() {
                     placeholder="••••••••"
                     required
                     className="w-full pl-9 pr-9 py-3 rounded-xl text-[14px] outline-none"
-                    style={{ background: 'hsl(210 16% 96%)', border: '1.5px solid hsl(214 20% 88%)', color: 'hsl(215 20% 16%)' }}
+                    style={{ background: 'hsl(140 14% 96%)', border: '1.5px solid hsl(140 13% 88%)', color: 'hsl(215 20% 16%)' }}
                   />
                   <button
                     type="button"
@@ -221,7 +221,7 @@ export default function LoginPage() {
                       placeholder="••••••••"
                       required
                       className="w-full pl-9 pr-3 py-3 rounded-xl text-[14px] outline-none"
-                      style={{ background: 'hsl(210 16% 96%)', border: '1.5px solid hsl(214 20% 88%)', color: 'hsl(215 20% 16%)' }}
+                      style={{ background: 'hsl(140 14% 96%)', border: '1.5px solid hsl(140 13% 88%)', color: 'hsl(215 20% 16%)' }}
                     />
                   </div>
                 </Field>

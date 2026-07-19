@@ -843,7 +843,7 @@ function CustoProducaoCard({ lotes, todasVendas }) {
               </div>
 
               {lote.total_plantas > 0 && custoTotal > 0 && (
-                <div className="flex justify-between text-[11px] mt-1 pt-1 border-t" style={{ borderColor: 'hsl(214 20% 91%)' }}>
+                <div className="flex justify-between text-[11px] mt-1 pt-1 border-t" style={{ borderColor: 'hsl(140 13% 91%)' }}>
                   <span className="text-muted-foreground font-semibold">Custo por planta</span>
                   <span className="font-bold" style={{ color: cor || '#16a34a' }}>
                     {fmtBRL(custoTotal / lote.total_plantas)}

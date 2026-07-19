@@ -56,7 +56,7 @@ function ExportarTab({ propriedade }) {
       <p className="text-[13px] text-muted-foreground leading-relaxed">
         Faça o download de todos os dados desta propriedade (lotes, estoque, cronograma,
         eventos, diário e vendas) em um arquivo{' '}
-        <span className="font-mono text-[12px] px-1 py-0.5 rounded" style={{ background: 'hsl(210 16% 93%)' }}>.oryagro</span>{' '}
+        <span className="font-mono text-[12px] px-1 py-0.5 rounded" style={{ background: 'hsl(140 14% 93%)' }}>.oryagro</span>{' '}
         que pode ser restaurado posteriormente.
       </p>
 
@@ -194,15 +194,15 @@ function ImportarTab() {
         onDrop={handleDrop}
         className="rounded-2xl flex flex-col items-center justify-center gap-2 py-8 cursor-pointer transition-all"
         style={{
-          border: `2px dashed ${dragging ? 'hsl(160 84% 35%)' : 'hsl(214 20% 80%)'}`,
-          background: dragging ? 'hsl(160 50% 97%)' : 'hsl(210 16% 98%)',
+          border: `2px dashed ${dragging ? 'hsl(160 84% 35%)' : 'hsl(140 13% 80%)'}`,
+          background: dragging ? 'hsl(160 50% 97%)' : 'hsl(140 14% 98%)',
         }}
       >
-        <Upload size={22} style={{ color: dragging ? 'hsl(160 84% 35%)' : 'hsl(215 16% 55%)' }} />
-        <p className="text-[13px] font-semibold" style={{ color: 'hsl(215 16% 40%)' }}>
+        <Upload size={22} style={{ color: dragging ? 'hsl(160 84% 35%)' : 'hsl(150 8% 55%)' }} />
+        <p className="text-[13px] font-semibold" style={{ color: 'hsl(150 8% 40%)' }}>
           Clique ou arraste um arquivo aqui
         </p>
-        <p className="text-[11px]" style={{ color: 'hsl(215 16% 60%)' }}>
+        <p className="text-[11px]" style={{ color: 'hsl(150 8% 60%)' }}>
           Aceita arquivos <span className="font-mono">.oryagro</span> ou <span className="font-mono">.json</span>
         </p>
       </div>
@@ -223,7 +223,7 @@ function ImportarTab() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             className="rounded-2xl p-4 flex flex-col gap-3"
-            style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 88%)' }}
+            style={{ background: 'hsl(140 14% 96%)', border: '1px solid hsl(140 13% 88%)' }}
           >
             <div className="flex items-center gap-2">
               <div className="flex-1 min-w-0">
@@ -342,7 +342,7 @@ export default function BackupModal({ propriedade, onClose }) {
         >
           {/* Header */}
           <div className="flex items-start justify-between px-5 pt-5 pb-4 flex-shrink-0"
-            style={{ borderBottom: '1px solid hsl(214 20% 92%)' }}>
+            style={{ borderBottom: '1px solid hsl(140 13% 92%)' }}>
             <div>
               <h2 className="font-display text-[17px] font-extrabold text-foreground leading-tight">
                 Backup da Propriedade
@@ -368,7 +368,7 @@ export default function BackupModal({ propriedade, onClose }) {
                 className="px-4 py-2 rounded-xl text-[13px] font-bold capitalize transition-all"
                 style={activeTab === tab
                   ? { background: 'hsl(157 68% 26%)', color: '#fff' }
-                  : { background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }
+                  : { background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 45%)' }
                 }
               >
                 {tab === 'exportar' ? 'Exportar' : 'Importar'}

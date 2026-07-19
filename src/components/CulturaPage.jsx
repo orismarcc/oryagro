@@ -113,11 +113,11 @@ export default function CulturaPage({ cultura, onBack, autoOpenLoteForm = false,
         className="sticky top-0 z-20 px-4 py-2.5"
         style={{
           background: 'rgb(244, 246, 248)',
-          borderBottom: '1px solid hsl(214 20% 88%)',
+          borderBottom: '1px solid hsl(140 13% 88%)',
           transform: 'translateZ(0)',
         }}
       >
-        <div className="inline-flex gap-0.5 p-0.5 rounded-xl" style={{ background: 'hsl(210 16% 93%)' }}>
+        <div className="inline-flex gap-0.5 p-0.5 rounded-xl" style={{ background: 'hsl(140 14% 93%)' }}>
           {TABS.map(({ value, label, Icon }) => {
             const isActive = tab === value;
             return (
@@ -125,7 +125,7 @@ export default function CulturaPage({ cultura, onBack, autoOpenLoteForm = false,
                 key={value}
                 onClick={() => setTab(value)}
                 className="relative flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] text-[12px] font-semibold outline-none transition-colors duration-150"
-                style={{ color: isActive ? '#fff' : 'hsl(215 16% 40%)' }}
+                style={{ color: isActive ? '#fff' : 'hsl(150 8% 40%)' }}
               >
                 {isActive && (
                   <motion.div

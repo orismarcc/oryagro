@@ -455,7 +455,7 @@ function TabDespesas({ lote, cor, canDelete }) {
                   </span>
                   <span
                     className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                    style={{ background: 'hsl(210 16% 94%)', color: 'hsl(215 16% 40%)' }}
+                    style={{ background: 'hsl(140 14% 94%)', color: 'hsl(150 8% 40%)' }}
                   >
                     {r.categoria}
                   </span>

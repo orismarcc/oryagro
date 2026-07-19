@@ -154,7 +154,7 @@ function CalculadoraCore({ cultura, loteId, initialParams }) {
       ).toFixed(1)} m² · fator ${scale.toFixed(2)}× do padrão`;
 
   return (
-    <div className="px-4 pt-5 pb-8 max-w-2xl mx-auto">
+    <div className="page-body pt-5 pb-8">
 
       {/* Dimensões editáveis */}
       <div className="card p-4 mb-5">
@@ -223,7 +223,7 @@ function CalculadoraCore({ cultura, loteId, initialParams }) {
             <div
               key={item.key}
               className="flex items-center gap-3 px-4 py-3"
-              style={{ borderBottom: idx < insumoItems.length - 1 ? '1px solid hsl(214 20% 91%)' : undefined }}
+              style={{ borderBottom: idx < insumoItems.length - 1 ? '1px solid hsl(140 13% 91%)' : undefined }}
             >
               <div className="flex-1 min-w-0">
                 <p className="text-[13px] font-semibold text-foreground truncate">{item.label}</p>
@@ -250,7 +250,7 @@ function CalculadoraCore({ cultura, loteId, initialParams }) {
         {/* Sementes */}
         <div
           className="flex items-center gap-3 px-4 py-3"
-          style={{ borderTop: '1px solid hsl(214 20% 91%)', background: 'hsl(210 16% 97%)' }}
+          style={{ borderTop: '1px solid hsl(140 13% 91%)', background: 'hsl(140 14% 97%)' }}
         >
           <div className="flex-1 min-w-0">
             <p className="text-[13px] font-semibold text-foreground">Sementes</p>
@@ -275,7 +275,7 @@ function CalculadoraCore({ cultura, loteId, initialParams }) {
         {/* Mão de obra */}
         <div
           className="px-4 py-3"
-          style={{ borderTop: '1px solid hsl(214 20% 91%)', background: 'hsl(210 16% 97%)' }}
+          style={{ borderTop: '1px solid hsl(140 13% 91%)', background: 'hsl(140 14% 97%)' }}
         >
           <div className="flex items-center gap-3">
             <div className="flex-1 min-w-0">
@@ -458,7 +458,7 @@ export default function CalculadoraPage({ onBack }) {
       </div>
 
       {/* ── Seletores ── */}
-      <div className="px-4 pt-5 pb-2 max-w-2xl mx-auto">
+      <div className="page-body pt-5 pb-2">
 
         {/* Cultura (obrigatório) */}
         <div className="card p-4 mb-4">
@@ -564,14 +564,14 @@ export default function CalculadoraPage({ onBack }) {
       {cultura && (
         <div className="px-4 max-w-2xl mx-auto">
           <div className="flex items-center gap-3 my-4">
-            <div className="flex-1 h-px" style={{ background: 'hsl(214 20% 88%)' }} />
+            <div className="flex-1 h-px" style={{ background: 'hsl(140 13% 88%)' }} />
             <div
               className="flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-bold"
               style={{ background: `${cultura.cor}15`, color: cultura.cor }}
             >
               {cultura.emoji} {cultura.nome}
             </div>
-            <div className="flex-1 h-px" style={{ background: 'hsl(214 20% 88%)' }} />
+            <div className="flex-1 h-px" style={{ background: 'hsl(140 13% 88%)' }} />
           </div>
         </div>
       )}
@@ -594,7 +594,7 @@ export default function CalculadoraPage({ onBack }) {
         <div className="px-4 pb-16 max-w-2xl mx-auto">
           <div
             className="flex flex-col items-center gap-3 text-center py-16 rounded-2xl"
-            style={{ background: 'hsl(210 16% 97%)', border: '1px dashed hsl(214 20% 85%)' }}
+            style={{ background: 'hsl(140 14% 97%)', border: '1px dashed hsl(140 13% 85%)' }}
           >
             <Calculator size={36} className="opacity-20" style={{ color: cor }} />
             <p className="text-[14px] font-bold text-foreground">Selecione uma cultura</p>

@@ -29,7 +29,7 @@ export default function PropagacaoSelector({ metodos, selected, onChange, cor })
             className="px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all"
             style={selected === m.key
               ? { background: cor, color: '#fff' }
-              : { background: 'hsl(210 16% 94%)', color: 'hsl(215 16% 40%)' }}
+              : { background: 'hsl(140 14% 94%)', color: 'hsl(150 8% 40%)' }}
           >
             {m.label}
             {m.diasViveiro > 0 && (

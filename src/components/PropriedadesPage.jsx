@@ -26,7 +26,7 @@ function PropriedadeForm({ initial, onSave, onCancel, saving }) {
           type="text" value={nome} onChange={e => setNome(e.target.value)}
           placeholder="Ex: Sítio Portuga" required
           className="w-full mt-1 px-3 py-2.5 rounded-xl text-[13px] outline-none"
-          style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 88%)' }}
+          style={{ background: 'hsl(140 14% 96%)', border: '1px solid hsl(140 13% 88%)' }}
         />
       </div>
       <div>
@@ -35,13 +35,13 @@ function PropriedadeForm({ initial, onSave, onCancel, saving }) {
           type="text" value={desc} onChange={e => setDesc(e.target.value)}
           placeholder="Ex: 5 ha, Mato Grosso"
           className="w-full mt-1 px-3 py-2.5 rounded-xl text-[13px] outline-none"
-          style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 88%)' }}
+          style={{ background: 'hsl(140 14% 96%)', border: '1px solid hsl(140 13% 88%)' }}
         />
       </div>
       <div className="flex gap-2">
         <button type="button" onClick={onCancel}
           className="flex-1 py-2.5 rounded-xl text-[12px] font-semibold border"
-          style={{ borderColor: 'hsl(214 20% 88%)', color: 'hsl(215 16% 45%)' }}>
+          style={{ borderColor: 'hsl(140 13% 88%)', color: 'hsl(150 8% 45%)' }}>
           Cancelar
         </button>
         <button type="submit" disabled={saving || !nome.trim()}
@@ -132,7 +132,7 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade, onRefres
         </div>
       </div>
 
-      <div className="px-4 pt-5 pb-32 max-w-2xl mx-auto space-y-3">
+      <div className="page-body pt-5 pb-32 space-y-3">
         {loading ? (
           <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-20 rounded-2xl bg-muted animate-pulse" />)}</div>
         ) : (
@@ -192,7 +192,7 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade, onRefres
                             <button
                               onClick={() => setConfirmDeleteId(null)}
                               className="text-[10px] font-medium px-2 py-1 rounded-lg"
-                              style={{ background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }}>
+                              style={{ background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 45%)' }}>
                               Cancelar
                             </button>
                           </div>

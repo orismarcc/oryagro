@@ -56,7 +56,7 @@ function Section({ icon: Icon, title, accent, defaultOpen = false, children }) {
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
             style={{ overflow: 'hidden' }}
           >
-            <div style={{ borderTop: '1px solid hsl(214 20% 88%)', padding: '0 1rem 1rem' }}>
+            <div style={{ borderTop: '1px solid hsl(140 13% 88%)', padding: '0 1rem 1rem' }}>
               {children}
             </div>
           </motion.div>
@@ -68,7 +68,7 @@ function Section({ icon: Icon, title, accent, defaultOpen = false, children }) {
 
 function InfoRow({ label, value, highlight }) {
   return (
-    <div className="flex justify-between items-start py-2.5" style={{ borderBottom: '1px solid hsl(214 20% 93%)' }}>
+    <div className="flex justify-between items-start py-2.5" style={{ borderBottom: '1px solid hsl(140 13% 93%)' }}>
       <span className="text-[12px] text-muted-foreground">{label}</span>
       <span className={`text-[12px] font-semibold text-right max-w-[55%] leading-relaxed ${highlight ? '' : 'text-foreground'}`}
         style={highlight ? { color: highlight } : {}}>
@@ -147,14 +147,14 @@ export default function ManejoAdubacao({ cultura, calc }) {
             value={`${scale(ins.ureia.padrao, 0)} ${ins.ureia.unidade}`}
             highlight={isScaled ? cor : null} />
           {ins.ureia.parcelamento?.length > 0 && (
-            <div className="mt-3 overflow-hidden rounded-xl" style={{ border: '1px solid hsl(214 20% 88%)' }}>
+            <div className="mt-3 overflow-hidden rounded-xl" style={{ border: '1px solid hsl(140 13% 88%)' }}>
               <div className="grid grid-cols-3 px-3 py-2"
                 style={{ background: `${cor}12`, color: cor, fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
                 <span>Aplicação</span><span>Dia</span><span>Dose</span>
               </div>
               {ins.ureia.parcelamento.map((p, i) => (
                 <div key={i} className="grid grid-cols-3 px-3 py-2 text-[12px]"
-                  style={{ background: i % 2 === 0 ? 'white' : 'hsl(210 16% 98%)', borderTop: '1px solid hsl(214 20% 93%)' }}>
+                  style={{ background: i % 2 === 0 ? 'white' : 'hsl(140 14% 98%)', borderTop: '1px solid hsl(140 13% 93%)' }}>
                   <span className="font-medium">{i + 1}ª cobertura</span>
                   <span className="text-muted-foreground">D{p.dia}{p.nota ? ` (${p.nota})` : ''}</span>
                   <span className="font-semibold" style={isScaled ? { color: cor } : {}}>
@@ -185,7 +185,7 @@ export default function ManejoAdubacao({ cultura, calc }) {
         <div className="pt-3 space-y-2.5">
           {pragas.map((p, i) => (
             <div key={i} className="rounded-xl p-3"
-              style={{ background: 'hsl(210 16% 98%)', border: '1px solid hsl(214 20% 90%)' }}>
+              style={{ background: 'hsl(140 14% 98%)', border: '1px solid hsl(140 13% 90%)' }}>
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: cor }} />
                 <span className="text-[12px] font-bold text-foreground">{p.praga}</span>

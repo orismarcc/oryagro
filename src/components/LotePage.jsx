@@ -230,7 +230,7 @@ function TabColheita({ cultura, lote }) {
 
   if (colheitas.length === 0) {
     return (
-      <div className="px-4 pt-5 pb-8 max-w-2xl mx-auto">
+      <div className="page-body pt-5 pb-8">
         <div className="text-center py-16">
           <TrendingUp size={36} className="mx-auto mb-3 opacity-20" style={{ color: COLHEITA_COR }} />
           <p className="text-[14px] font-bold text-foreground mb-1">Nenhuma colheita no cronograma</p>
@@ -244,7 +244,7 @@ function TabColheita({ cultura, lote }) {
   }
 
   return (
-    <div className="px-4 pt-5 pb-8 max-w-2xl mx-auto">
+    <div className="page-body pt-5 pb-8">
 
       {/* ── Summary banner ── */}
       <motion.div
@@ -265,12 +265,12 @@ function TabColheita({ cultura, lote }) {
           </div>
           <div>
             <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">Pendentes</p>
-            <p className="text-[20px] font-black leading-none" style={{ color: pendingCount > 0 ? '#d97706' : 'hsl(215 16% 55%)' }}>{pendingCount}</p>
+            <p className="text-[20px] font-black leading-none" style={{ color: pendingCount > 0 ? '#d97706' : 'hsl(150 8% 55%)' }}>{pendingCount}</p>
           </div>
         </div>
 
         {/* Progress bar */}
-        <div className="h-2 rounded-full overflow-hidden mb-2" style={{ background: 'hsl(210 16% 93%)' }}>
+        <div className="h-2 rounded-full overflow-hidden mb-2" style={{ background: 'hsl(140 14% 93%)' }}>
           <div
             className="h-full rounded-full transition-all duration-700"
             style={{ width: `${colheitas.length > 0 ? (doneCount / colheitas.length) * 100 : 0}%`, background: '#16a34a' }}
@@ -409,7 +409,7 @@ function TabColheita({ cultura, lote }) {
       {/* Hint */}
       <div
         className="mt-5 flex items-start gap-2.5 px-4 py-3 rounded-2xl"
-        style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 90%)' }}
+        style={{ background: 'hsl(140 14% 96%)', border: '1px solid hsl(140 13% 90%)' }}
       >
         <span className="text-base flex-shrink-0">💡</span>
         <p className="text-[12px] text-muted-foreground leading-relaxed">
@@ -735,13 +735,13 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
         className="sticky top-0 z-20 px-4 py-2.5"
         style={{
           background: 'rgb(244, 246, 248)',
-          borderBottom: '1px solid hsl(214 20% 88%)',
+          borderBottom: '1px solid hsl(140 13% 88%)',
           transform: 'translateZ(0)',
         }}
       >
         <div
           className="flex gap-0.5 p-0.5 rounded-xl overflow-x-auto"
-          style={{ background: 'hsl(210 16% 93%)', scrollbarWidth: 'none' }}
+          style={{ background: 'hsl(140 14% 93%)', scrollbarWidth: 'none' }}
         >
           {TABS.map(({ value, label, Icon }) => {
             const isActive = tab === value;
@@ -750,7 +750,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
                 key={value}
                 onClick={() => setTab(value)}
                 className="relative flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] text-[12px] font-semibold outline-none transition-colors duration-150"
-                style={{ color: isActive ? '#fff' : 'hsl(215 16% 40%)' }}
+                style={{ color: isActive ? '#fff' : 'hsl(150 8% 40%)' }}
               >
                 {isActive && (
                   <motion.div

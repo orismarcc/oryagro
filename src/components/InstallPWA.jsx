@@ -91,7 +91,7 @@ export default function InstallPWA() {
             className="flex items-center gap-3 rounded-2xl shadow-lg p-3"
             style={{
               background: 'white',
-              border: '1px solid hsl(214 20% 88%)',
+              border: '1px solid hsl(140 13% 88%)',
             }}
           >
             <div

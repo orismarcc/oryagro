@@ -862,7 +862,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                 </div>
                 {!isLast && (
                   <div className="w-0.5 flex-1 mt-1 mb-1 min-h-[20px]"
-                    style={{ background: isDone ? `${meta.color}50` : 'hsl(214 20% 88%)' }} />
+                    style={{ background: isDone ? `${meta.color}50` : 'hsl(140 13% 88%)' }} />
                 )}
               </div>
 
@@ -882,7 +882,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                       ? `${meta.color}50`
                       : isTomorrow
                       ? '#93c5fd50'
-                      : 'hsl(214 20% 88%)',
+                      : 'hsl(140 13% 88%)',
                     background: isDone ? meta.bg : isPast ? '#fff5f5' : isTomorrow ? '#f0f9ff' : '#fff',
                     boxShadow: isDone ? 'none' : '0 1px 4px rgba(0,0,0,0.05)',
                   }}
@@ -958,7 +958,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                               <button
                                 onClick={e => { e.stopPropagation(); setRemovingId(null); }}
                                 className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                                style={{ background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 40%)' }}
+                                style={{ background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 40%)' }}
                               >
                                 Não
                               </button>
@@ -1175,8 +1175,8 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                                 style={{
                                   background: stockDebit.enabled
                                     ? `${meta.color}0d`
-                                    : 'hsl(214 20% 97%)',
-                                  border: `1px solid ${stockDebit.enabled ? `${meta.color}33` : 'hsl(214 20% 90%)'}`,
+                                    : 'hsl(140 13% 97%)',
+                                  border: `1px solid ${stockDebit.enabled ? `${meta.color}33` : 'hsl(140 13% 90%)'}`,
                                   transition: 'background 0.2s, border-color 0.2s',
                                 }}
                               >
@@ -1261,7 +1261,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                                 setHarvestData({ enabled: false, qtd: '', unidade: 'kg', polpa: false, qtdPolpa: '', unidadePolpa: 'kg' });
                               }}
                               className="flex-1 py-2 rounded-xl text-[12px] font-semibold border transition-colors"
-                              style={{ borderColor: 'hsl(214 20% 88%)', color: 'hsl(215 16% 45%)' }}
+                              style={{ borderColor: 'hsl(140 13% 88%)', color: 'hsl(150 8% 45%)' }}
                             >
                               Cancelar
                             </button>
@@ -1322,9 +1322,9 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                       }}
                       className="w-full flex items-center justify-between px-4 py-3 text-[12px] font-semibold transition-colors"
                       style={{
-                        background: isPast ? '#fee2e215' : 'hsl(210 16% 97%)',
-                        color: isPast ? '#dc2626' : 'hsl(215 16% 42%)',
-                        borderTop: '1px solid hsl(214 20% 91%)',
+                        background: isPast ? '#fee2e215' : 'hsl(140 14% 97%)',
+                        color: isPast ? '#dc2626' : 'hsl(150 8% 42%)',
+                        borderTop: '1px solid hsl(140 13% 91%)',
                       }}
                     >
                       <span className="flex items-center gap-2">
@@ -1669,7 +1669,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                 <button
                   onClick={() => setDescricaoStep(null)}
                   className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full"
-                  style={{ background: 'hsl(210 16% 93%)' }}
+                  style={{ background: 'hsl(140 14% 93%)' }}
                 >
                   <X size={14} />
                 </button>
@@ -1746,10 +1746,10 @@ function PlanoAduboCard({ plano, lote, cultura, cor }) {
               {plano.resumo?.length > 0 && (
                 <div className="space-y-1">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Resumo de insumos</p>
-                  <div className="rounded-xl overflow-hidden" style={{ border: '1px solid hsl(214 20% 90%)' }}>
+                  <div className="rounded-xl overflow-hidden" style={{ border: '1px solid hsl(140 13% 90%)' }}>
                     {plano.resumo.map((r, i) => (
                       <div key={i} className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-[11px]"
-                        style={{ background: i % 2 ? 'transparent' : 'hsl(210 16% 97%)' }}>
+                        style={{ background: i % 2 ? 'transparent' : 'hsl(140 14% 97%)' }}>
                         <span className="font-semibold text-foreground truncate">{r.produto}</span>
                         <span className="text-muted-foreground flex-shrink-0">{r.total}</span>
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"

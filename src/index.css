@@ -16,18 +16,18 @@
 
 /* ── Tailwind theme tokens ───────────────────────────────── */
 @theme {
-  --color-background:        hsl(210 20% 98%);
-  --color-foreground:        hsl(222 47% 11%);
+  --color-background:        hsl(140 16% 98%);
+  --color-foreground:        hsl(153 24% 12%);
   --color-card:              hsl(0 0% 100%);
-  --color-card-foreground:   hsl(222 47% 11%);
+  --color-card-foreground:   hsl(153 24% 12%);
   --color-primary:           hsl(157 68% 26%);
   --color-primary-foreground: hsl(0 0% 100%);
   --color-secondary:         hsl(221 83% 53%);
   --color-secondary-foreground: hsl(0 0% 100%);
-  --color-muted:             hsl(210 16% 95%);
-  --color-muted-foreground:  hsl(215 16% 32%);
-  --color-border:            hsl(214 20% 88%);
-  --color-input:             hsl(214 20% 88%);
+  --color-muted:             hsl(140 14% 95%);
+  --color-muted-foreground:  hsl(150 8% 32%);
+  --color-border:            hsl(140 13% 88%);
+  --color-input:             hsl(140 13% 88%);
   --color-ring:              hsl(157 68% 26%);
   --color-destructive:       hsl(4 86% 58%);
   --color-destructive-foreground: hsl(0 0% 100%);
@@ -39,9 +39,9 @@
 /* ── Design tokens ───────────────────────────────────────── */
 :root {
   /* Surfaces */
-  --bg:            hsl(210 20% 98%);
+  --bg:            hsl(140 16% 98%);
   --bg-card:       hsl(0 0% 100%);
-  --fg:            hsl(222 47% 11%);
+  --fg:            hsl(153 24% 12%);
 
   /* Webapp: env(safe-area-inset-top) retorna 0 no browser — sem padding extra. */
   --safe-top: env(safe-area-inset-top, 0px);
@@ -130,8 +130,8 @@ html.native {
 
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: hsl(214 20% 88%); border-radius: 99px; }
-  ::-webkit-scrollbar-thumb:hover { background: hsl(215 16% 70%); }
+  ::-webkit-scrollbar-thumb { background: hsl(140 13% 88%); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(150 8% 70%); }
 
   :focus-visible { outline: 2px solid hsl(157 68% 26%); outline-offset: 2px; }
 
@@ -200,7 +200,7 @@ html.native {
     background: var(--bg-card);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-md);
-    border: 1px solid hsl(214 20% 88%);
+    border: 1px solid hsl(140 13% 88%);
     transition: box-shadow 0.2s ease, transform 0.2s ease;
   }
 
@@ -208,7 +208,7 @@ html.native {
     background: var(--bg-card);
     border-radius: var(--radius);
     box-shadow: var(--shadow-card);
-    border: 1px solid hsl(214 20% 88%);
+    border: 1px solid hsl(140 13% 88%);
     transition: box-shadow 0.25s ease, transform 0.25s ease;
     cursor: pointer;
   }
@@ -260,9 +260,9 @@ html.native {
     font-weight: 600;
     padding: 0.125rem 0.625rem;
     border-radius: 9999px;
-    background: hsl(210 16% 95%);
-    color: hsl(215 16% 40%);
-    border: 1px solid hsl(214 20% 88%);
+    background: hsl(140 14% 95%);
+    color: hsl(150 8% 40%);
+    border: 1px solid hsl(140 13% 88%);
   }
 
   /* Staggered entrance animations */
@@ -274,7 +274,7 @@ html.native {
 
   /* Shimmer skeleton */
   .shimmer {
-    background: linear-gradient(90deg, hsl(210 16% 95%) 0%, hsl(214 20% 88%) 50%, hsl(210 16% 95%) 100%);
+    background: linear-gradient(90deg, hsl(140 14% 95%) 0%, hsl(140 13% 88%) 50%, hsl(140 14% 95%) 100%);
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite;
   }
@@ -286,6 +286,30 @@ html.native {
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: hsl(157 34% 34%);
+  }
+
+  /* ── Padrão de layout de página (alinhamento único em todo o app) ──────────
+     Todo conteúdo de corpo de página usa .page-body: mesmo respiro lateral
+     (20px) e mesma largura máxima centralizada. Os heroes seguem full-bleed. */
+  .page-body {
+    width: 100%;
+    max-width: 560px;
+    margin-inline: auto;
+    padding-inline: 20px;
+  }
+  /* Respiro lateral padrão do conteúdo interno do hero */
+  .hero-x { padding-inline: 20px; }
+
+  /* Acento dourado (colheita) */
+  .text-accent      { color: var(--accent); }
+  .bg-accent        { background: var(--accent); }
+  .bg-accent-soft   { background: hsl(36 92% 50% / 0.14); }
+  .ring-accent      { box-shadow: 0 0 0 1px hsl(36 92% 50% / 0.45); }
+  .badge-gold {
+    font-size: 0.75rem; font-weight: 700;
+    padding: 0.125rem 0.625rem; border-radius: 9999px;
+    background: hsl(36 92% 50% / 0.16); color: hsl(30 80% 30%);
+    border: 1px solid hsl(36 92% 50% / 0.35);
   }
 }
 

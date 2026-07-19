@@ -46,7 +46,7 @@ export default function FinanceiroPage({ onBack, propriedades = [] }) {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
-      <div className="gradient-hero text-white px-4 pb-4 flex flex-col gap-4" style={{ paddingTop: 'var(--hero-pad-top)' }}>
+      <div className="gradient-hero text-white px-5 pb-4 flex flex-col gap-4" style={{ paddingTop: 'var(--hero-pad-top)' }}>
         {/* Linha superior — pr-24 reserva espaço para os botões flutuantes (≡ e 🔔) */}
         <div className="flex items-center gap-3 pr-24">
           {onBack && (

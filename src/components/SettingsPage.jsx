@@ -17,7 +17,7 @@ function Toggle({ label, description }) {
       </div>
       <div
         className="w-10 h-6 rounded-full flex-shrink-0 relative opacity-40 cursor-not-allowed"
-        style={{ background: 'hsl(214 20% 88%)' }}
+        style={{ background: 'hsl(140 13% 88%)' }}
       >
         <div
           className="absolute top-1 left-1 w-4 h-4 rounded-full"
@@ -172,8 +172,8 @@ function PerfilSection() {
               minLength={2}
               className="w-full px-3 py-3 rounded-xl text-[14px] outline-none"
               style={{
-                background: 'hsl(210 16% 96%)',
-                border: '1.5px solid hsl(214 20% 88%)',
+                background: 'hsl(140 14% 96%)',
+                border: '1.5px solid hsl(140 13% 88%)',
                 color: 'hsl(215 20% 16%)',
               }}
             />
@@ -220,8 +220,8 @@ function PerfilSection() {
                   required
                   className="w-full pl-3 pr-9 py-3 rounded-xl text-[14px] outline-none"
                   style={{
-                    background: 'hsl(210 16% 96%)',
-                    border: '1.5px solid hsl(214 20% 88%)',
+                    background: 'hsl(140 14% 96%)',
+                    border: '1.5px solid hsl(140 13% 88%)',
                     color: 'hsl(215 20% 16%)',
                   }}
                 />
@@ -310,13 +310,13 @@ function NotificacoesSection() {
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all text-left"
               style={config.provider === p.key
                 ? { background: '#f0fdf4', borderColor: '#86efac' }
-                : { background: 'transparent', borderColor: 'hsl(214 20% 91%)' }}
+                : { background: 'transparent', borderColor: 'hsl(140 13% 91%)' }}
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-[12px] font-bold text-foreground">{p.label}</span>
                   <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
-                    style={{ background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }}>
+                    style={{ background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 45%)' }}>
                     {p.badge}
                   </span>
                 </div>
@@ -325,7 +325,7 @@ function NotificacoesSection() {
               <div className="w-4 h-4 rounded-full border-2 flex-shrink-0"
                 style={config.provider === p.key
                   ? { borderColor: '#16a34a', background: '#16a34a' }
-                  : { borderColor: 'hsl(214 20% 78%)' }} />
+                  : { borderColor: 'hsl(140 13% 78%)' }} />
             </button>
           ))}
         </div>
@@ -409,7 +409,7 @@ function NotificacoesSection() {
       {config.enabled && (
         <div className="card p-5">
           <p className="text-[13px] font-bold text-foreground mb-3">Tipos de Alerta</p>
-          <div className="divide-y" style={{ borderColor: 'hsl(214 20% 92%)' }}>
+          <div className="divide-y" style={{ borderColor: 'hsl(140 13% 92%)' }}>
             {[
               { field: 'notif_cronograma', label: '🌱 Cronograma',  desc: 'Etapas previstas nos próximos dias' },
               { field: 'notif_colheita',   label: '🌾 Colheita',    desc: 'Lotes prontos para colheita' },
@@ -425,7 +425,7 @@ function NotificacoesSection() {
                   onClick={() => toggle(field)}
                   className="w-10 h-5.5 rounded-full relative transition-colors flex-shrink-0"
                   style={{
-                    background: config[field] ? '#16a34a' : 'hsl(214 20% 78%)',
+                    background: config[field] ? '#16a34a' : 'hsl(140 13% 78%)',
                     minWidth: 40, minHeight: 22,
                   }}
                 >
@@ -442,7 +442,7 @@ function NotificacoesSection() {
 
       {/* Info / guia */}
       <div className="flex items-start gap-3 px-4 py-3.5 rounded-2xl"
-        style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 90%)' }}>
+        style={{ background: 'hsl(140 14% 96%)', border: '1px solid hsl(140 13% 90%)' }}>
         <span className="text-base flex-shrink-0 mt-0.5">📘</span>
         <p className="text-[11px] text-muted-foreground leading-relaxed">
           Para instruções detalhadas de configuração de cada provider, consulte o arquivo
@@ -496,7 +496,7 @@ export default function SettingsPage({ onBack }) {
       </div>
 
       {/* ── Content ── */}
-      <div className="px-4 pt-5 pb-32 max-w-2xl mx-auto">
+      <div className="page-body pt-5 pb-32">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}

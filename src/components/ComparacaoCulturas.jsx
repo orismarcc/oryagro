@@ -281,8 +281,8 @@ function EditField({ label, value, onChange, prefix, suffix }) {
           onChange={e => onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
           className={`w-full rounded-xl border text-[12px] font-semibold py-2 outline-none focus:ring-1 ${prefix ? 'pl-7' : 'pl-3'} ${suffix ? 'pr-7' : 'pr-3'}`}
           style={{
-            background: 'hsl(210 16% 96%)',
-            borderColor: 'hsl(214 20% 87%)',
+            background: 'hsl(140 14% 96%)',
+            borderColor: 'hsl(140 13% 87%)',
           }}
         />
         {suffix && (
@@ -300,7 +300,7 @@ function EditField({ label, value, onChange, prefix, suffix }) {
 function SectionLabel({ children, color }) {
   return (
     <div className="col-span-2 mt-1.5 mb-0.5">
-      <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: color || 'hsl(215 16% 50%)' }}>
+      <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: color || 'hsl(150 8% 50%)' }}>
         {children}
       </p>
     </div>
@@ -311,7 +311,7 @@ function SectionLabel({ children, color }) {
 
 function CostBreakdown({ composicao, custoTotal, cor }) {
   return (
-    <div className="col-span-2 rounded-xl p-3 mb-1" style={{ background: 'hsl(210 16% 97%)' }}>
+    <div className="col-span-2 rounded-xl p-3 mb-1" style={{ background: 'hsl(140 14% 97%)' }}>
       <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
         Composição do custo ({fmtBRL(custoTotal)})
       </p>
@@ -381,7 +381,7 @@ function ModalInstrucoes({ onClose }) {
         </div>
 
         {/* Header */}
-        <div className="px-5 pt-2 pb-4 flex items-center justify-between sticky top-0 bg-white z-10 border-b" style={{ borderColor: 'hsl(214 20% 92%)' }}>
+        <div className="px-5 pt-2 pb-4 flex items-center justify-between sticky top-0 bg-white z-10 border-b" style={{ borderColor: 'hsl(140 13% 92%)' }}>
           <div>
             <h2 className="font-display text-[17px] font-extrabold text-foreground">Como os cálculos funcionam</h2>
             <p className="text-[11px] text-muted-foreground mt-0.5">Metodologia e referências — Mato Grosso 2024/25</p>
@@ -389,7 +389,7 @@ function ModalInstrucoes({ onClose }) {
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground"
-            style={{ background: 'hsl(210 16% 95%)' }}
+            style={{ background: 'hsl(140 14% 95%)' }}
           >
             <X size={15} />
           </button>
@@ -432,7 +432,7 @@ function ModalInstrucoes({ onClose }) {
           {/* ── Preços de insumos ── */}
           <section>
             <h3 className="section-label mb-2">Preços de insumos — médias MT</h3>
-            <div className="rounded-2xl overflow-hidden border" style={{ borderColor: 'hsl(214 20% 90%)' }}>
+            <div className="rounded-2xl overflow-hidden border" style={{ borderColor: 'hsl(140 13% 90%)' }}>
               {[
                 ['Calcário dolomítico', 'R$ 0,25/kg', 'R$ 200–300/t a granel'],
                 ['Esterco (canteiro)', 'R$ 0,20/kg', 'Curtido/compostado R$200/t'],
@@ -443,7 +443,7 @@ function ModalInstrucoes({ onClose }) {
                 ['Nitrato de Cálcio', 'R$ 5,00/kg', 'R$ 4.000–6.000/t'],
                 ['Mulching plástico', 'R$ 2,00/m²', 'Rolo 30 µm'],
               ].map(([insumo, preco, obs], i) => (
-                <div key={insumo} className="flex items-center px-3 py-2.5 gap-2" style={{ background: i % 2 === 0 ? 'white' : 'hsl(210 16% 98%)' }}>
+                <div key={insumo} className="flex items-center px-3 py-2.5 gap-2" style={{ background: i % 2 === 0 ? 'white' : 'hsl(140 14% 98%)' }}>
                   <span className="text-[11px] text-foreground flex-1">{insumo}</span>
                   <span className="text-[11px] font-bold text-foreground whitespace-nowrap">{preco}</span>
                   <span className="text-[10px] text-muted-foreground whitespace-nowrap hidden sm:block">{obs}</span>
@@ -456,23 +456,23 @@ function ModalInstrucoes({ onClose }) {
           <section>
             <h3 className="section-label mb-2">Custos operacionais</h3>
             <div className="space-y-3 text-[12px] leading-relaxed text-foreground">
-              <div className="rounded-xl p-3.5" style={{ background: 'hsl(210 16% 97%)' }}>
+              <div className="rounded-xl p-3.5" style={{ background: 'hsl(140 14% 97%)' }}>
                 <p className="font-bold mb-1">Mão de obra</p>
                 <p className="text-muted-foreground">Estimativa de diárias totais no ciclo completo × R$130/dia (média diarista MT 2024). Inclui preparo do solo, plantio/transplante, capinas, adubações de cobertura e colheita. Campo inclui meses de colheita contínua (quiabo) ou manutenção perene (acerola, banana).</p>
               </div>
-              <div className="rounded-xl p-3.5" style={{ background: 'hsl(210 16% 97%)' }}>
+              <div className="rounded-xl p-3.5" style={{ background: 'hsl(140 14% 97%)' }}>
                 <p className="font-bold mb-1">Transporte</p>
                 <p className="text-muted-foreground">Frete médio para levar a produção ao ponto de venda (feira, CEASA, intermediário). Para canteiros: fração de um frete compartilhado (R$6–12/canteiro/ciclo). Para campo: cargas completas ao longo do ciclo (R$500–1.200/ha).</p>
               </div>
-              <div className="rounded-xl p-3.5" style={{ background: 'hsl(210 16% 97%)' }}>
+              <div className="rounded-xl p-3.5" style={{ background: 'hsl(140 14% 97%)' }}>
                 <p className="font-bold mb-1">Embalagem</p>
                 <p className="text-muted-foreground">Sacolas, caixas plásticas, bandejas ou big bags conforme a cultura. Para alface: ~100 sacos por canteiro. Para quiabo/mandioca: caixas de 20 kg reutilizáveis amortizadas por ciclo.</p>
               </div>
-              <div className="rounded-xl p-3.5" style={{ background: 'hsl(210 16% 97%)' }}>
+              <div className="rounded-xl p-3.5" style={{ background: 'hsl(140 14% 97%)' }}>
                 <p className="font-bold mb-1">Defensivos</p>
                 <p className="text-muted-foreground">Fungicidas, inseticidas e/ou herbicidas no ciclo. Canteiros de folhosas usam principalmente produtos biológicos (R$8–20). Campo utiliza herbicidas pré/pós emergência e inseticidas conforme necessidade (R$300–1.500/ha dependendo da cultura e pressão de pragas).</p>
               </div>
-              <div className="rounded-xl p-3.5" style={{ background: 'hsl(210 16% 97%)' }}>
+              <div className="rounded-xl p-3.5" style={{ background: 'hsl(140 14% 97%)' }}>
                 <p className="font-bold mb-1">Energia / Irrigação</p>
                 <p className="text-muted-foreground">Custo de energia elétrica para bomba de irrigação (micro-aspersão, gotejamento ou aspersão). Para canteiros: R$10–18/ciclo (bomba de 0,5–1 CV em tempo parcial). Para campo: R$150–500/ha dependendo do sistema e duração do ciclo.</p>
               </div>
@@ -587,11 +587,11 @@ function CulturaRow({ cultura, rank, areaHa }) {
 
         {/* ── Metrics ── */}
         <div className="grid grid-cols-2 gap-2 mb-2">
-          <div className="rounded-xl p-3 text-center" style={{ background: 'hsl(210 16% 97%)' }}>
+          <div className="rounded-xl p-3 text-center" style={{ background: 'hsl(140 14% 97%)' }}>
             <p className="section-label mb-0.5">Custo / {areaHa} ha</p>
             <p className="text-[12px] font-bold text-foreground">{fmtBRL(custoHa)}</p>
           </div>
-          <div className="rounded-xl p-3 text-center" style={{ background: 'hsl(210 16% 97%)' }}>
+          <div className="rounded-xl p-3 text-center" style={{ background: 'hsl(140 14% 97%)' }}>
             <p className="section-label mb-0.5">Receita / {areaHa} ha</p>
             <p className="text-[12px] font-bold text-foreground">{fmtBRL(receitaHa)}</p>
           </div>
@@ -763,7 +763,7 @@ function CulturaRow({ cultura, rank, areaHa }) {
               <button
                 onClick={() => setOverrides({})}
                 className="col-span-2 text-[11px] font-semibold text-muted-foreground py-1.5 rounded-xl transition-colors hover:text-foreground mt-1"
-                style={{ background: 'hsl(210 16% 94%)' }}
+                style={{ background: 'hsl(140 14% 94%)' }}
               >
                 Restaurar padrões
               </button>

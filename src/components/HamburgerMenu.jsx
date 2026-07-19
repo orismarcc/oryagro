@@ -45,7 +45,7 @@ export default function HamburgerMenu({ currentView, onNavigate, hasPropriedade 
           background: 'rgba(255,255,255,0.92)',
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
-          border: '1px solid hsl(214 20% 88%)',
+          border: '1px solid hsl(140 13% 88%)',
           boxShadow: '0 4px 14px -2px rgb(0 0 0 / 0.12)',
         }}
         aria-label="Abrir menu"
@@ -88,7 +88,7 @@ export default function HamburgerMenu({ currentView, onNavigate, hasPropriedade 
               {/* Header */}
               <div
                 className="flex items-center justify-between px-5 py-4 flex-shrink-0"
-                style={{ borderBottom: '1px solid hsl(214 20% 92%)' }}
+                style={{ borderBottom: '1px solid hsl(140 13% 92%)' }}
               >
                 <div className="flex items-center gap-2.5">
                   <Logo size={32} style={{ borderRadius: 8 }} />
@@ -98,7 +98,7 @@ export default function HamburgerMenu({ currentView, onNavigate, hasPropriedade 
                   whileTap={{ scale: 0.85 }}
                   onClick={() => setOpen(false)}
                   className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
-                  style={{ color: 'hsl(215 16% 50%)' }}
+                  style={{ color: 'hsl(150 8% 50%)' }}
                   aria-label="Fechar menu"
                 >
                   <X size={18} />
@@ -128,8 +128,8 @@ export default function HamburgerMenu({ currentView, onNavigate, hasPropriedade 
                         color: isActive
                           ? GREEN
                           : isDisabled
-                            ? 'hsl(215 16% 70%)'
-                            : 'hsl(215 16% 28%)',
+                            ? 'hsl(150 8% 70%)'
+                            : 'hsl(150 8% 28%)',
                         cursor: isDisabled ? 'not-allowed' : 'pointer',
                         opacity: isDisabled ? 0.55 : 1,
                       }}
@@ -147,7 +147,7 @@ export default function HamburgerMenu({ currentView, onNavigate, hasPropriedade 
                       {isDisabledProp && (
                         <span
                           className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                          style={{ background: 'hsl(214 20% 92%)', color: 'hsl(215 16% 55%)' }}
+                          style={{ background: 'hsl(140 13% 92%)', color: 'hsl(150 8% 55%)' }}
                         >
                           sem prop.
                         </span>
@@ -155,7 +155,7 @@ export default function HamburgerMenu({ currentView, onNavigate, hasPropriedade 
                       {isDisabledAdmin && (
                         <span
                           className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                          style={{ background: 'hsl(214 20% 92%)', color: 'hsl(215 16% 55%)' }}
+                          style={{ background: 'hsl(140 13% 92%)', color: 'hsl(150 8% 55%)' }}
                         >
                           só gestor
                         </span>
@@ -167,7 +167,7 @@ export default function HamburgerMenu({ currentView, onNavigate, hasPropriedade 
                 {/* Separador antes de Configurações */}
                 <div
                   className="mx-5 my-2"
-                  style={{ height: 1, background: 'hsl(214 20% 92%)' }}
+                  style={{ height: 1, background: 'hsl(140 13% 92%)' }}
                 />
 
                 {/* Configurações */}
@@ -183,7 +183,7 @@ export default function HamburgerMenu({ currentView, onNavigate, hasPropriedade 
                       className="w-full flex items-center gap-3 px-5 py-3 text-left transition-colors"
                       style={{
                         background: isActive ? GREEN_BG : 'transparent',
-                        color: isActive ? GREEN : 'hsl(215 16% 28%)',
+                        color: isActive ? GREEN : 'hsl(150 8% 28%)',
                       }}
                     >
                       <Icon size={18} strokeWidth={isActive ? 2.5 : 1.75} />
@@ -201,7 +201,7 @@ export default function HamburgerMenu({ currentView, onNavigate, hasPropriedade 
               {/* Footer */}
               <div
                 className="px-5 py-4 flex-shrink-0"
-                style={{ borderTop: '1px solid hsl(214 20% 92%)' }}
+                style={{ borderTop: '1px solid hsl(140 13% 92%)' }}
               >
                 <p className="text-[11px] text-muted-foreground text-center">
                   OryAgro · Gestão Agrícola

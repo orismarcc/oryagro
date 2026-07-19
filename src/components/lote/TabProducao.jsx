@@ -169,16 +169,16 @@ export default function TabProducao({ lote, cultura }) {
                     <stop offset="95%" stopColor={cor} stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(214 20% 93%)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(140 13% 93%)" vertical={false} />
                 <XAxis
                   dataKey="data"
-                  tick={{ fontSize: 9, fill: 'hsl(215 16% 55%)' }}
+                  tick={{ fontSize: 9, fill: 'hsl(150 8% 55%)' }}
                   axisLine={false} tickLine={false}
                   tickFormatter={fmtDateShort}
                   interval={6}
                 />
                 <YAxis
-                  tick={{ fontSize: 9, fill: 'hsl(215 16% 55%)' }}
+                  tick={{ fontSize: 9, fill: 'hsl(150 8% 55%)' }}
                   axisLine={false} tickLine={false}
                   tickFormatter={v => v > 0 ? `${v}kg` : ''}
                 />

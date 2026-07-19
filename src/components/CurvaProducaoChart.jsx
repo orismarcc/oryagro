@@ -154,17 +154,17 @@ export default function CurvaProducaoChart({
                 <stop offset="95%" stopColor={culturaCor} stopOpacity={0.02} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(214 20% 91%)" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(140 13% 91%)" vertical={false} />
             <XAxis
               dataKey="label"
-              tick={{ fontSize: 10, fill: 'hsl(215 16% 55%)' }}
+              tick={{ fontSize: 10, fill: 'hsl(150 8% 55%)' }}
               axisLine={false}
               tickLine={false}
               tickFormatter={(v) => v.replace('Ano ', 'A')}
             />
             <YAxis
               domain={[0, 100]}
-              tick={{ fontSize: 10, fill: 'hsl(215 16% 55%)' }}
+              tick={{ fontSize: 10, fill: 'hsl(150 8% 55%)' }}
               axisLine={false}
               tickLine={false}
               tickFormatter={(v) => `${v}%`}
@@ -243,7 +243,7 @@ export default function CurvaProducaoChart({
       {producaoPlena && (
         <div
           className="mt-3 pt-3 rounded-xl px-3 py-2.5"
-          style={{ borderTop: '1px solid hsl(214 20% 91%)', background: `${culturaCor}06` }}
+          style={{ borderTop: '1px solid hsl(140 13% 91%)', background: `${culturaCor}06` }}
         >
           <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-1.5">
             Como é calculada

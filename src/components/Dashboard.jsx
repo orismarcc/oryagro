@@ -135,7 +135,7 @@ function LoteCard({ lote, onSelect, index, doneStatus = {} }) {
       </div>
 
       {/* Progress bar */}
-      <div className="h-2 rounded-full overflow-hidden" style={{ background: 'hsl(210 16% 93%)' }}>
+      <div className="h-2 rounded-full overflow-hidden" style={{ background: 'hsl(140 14% 93%)' }}>
         <div
           className="h-full rounded-full transition-all duration-700"
           style={{ width: `${progresso}%`, background: prontoParaColheita ? '#16a34a' : cor }}
@@ -148,7 +148,7 @@ function LoteCard({ lote, onSelect, index, doneStatus = {} }) {
         if (!atrasadas && !hoje && !amanha && !proxima) return null;
         return (
           <div className="mt-2.5 pt-2.5 flex flex-wrap gap-1.5"
-            style={{ borderTop: '1px solid hsl(214 20% 92%)' }}>
+            style={{ borderTop: '1px solid hsl(140 13% 92%)' }}>
             {atrasadas > 0 && (
               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
                 style={{ background: '#fee2e2', color: '#dc2626' }}>
@@ -169,7 +169,7 @@ function LoteCard({ lote, onSelect, index, doneStatus = {} }) {
             )}
             {!hoje && !amanha && proxima && (
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                style={{ background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }}>
+                style={{ background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 45%)' }}>
                 <ArrowRight size={9} /> {proxima.etapa} · D{proxima.dia}
               </span>
             )}
@@ -256,7 +256,7 @@ function PropriedadeCard({ propriedade, lotes, alertasCount, onSelect, index }) 
           {/* Property info grid */}
           {lotesDaProp.length > 0 && (
             <div className="mt-2 pt-2 flex flex-wrap gap-x-3 gap-y-1"
-              style={{ borderTop: '1px solid hsl(214 20% 93%)' }}>
+              style={{ borderTop: '1px solid hsl(140 13% 93%)' }}>
               {areaTotal > 0 && (
                 <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
                   <span style={{ color: 'hsl(157 68% 26%)' }}>⬛</span>
@@ -605,7 +605,7 @@ function EstaSemanaSection({ lotes, statusByLote = {} }) {
               Nenhuma atividade nos próximos 7 dias
             </p>
           ) : (
-            <div className="divide-y" style={{ divideColor: 'hsl(214 20% 92%)' }}>
+            <div className="divide-y" style={{ divideColor: 'hsl(140 13% 92%)' }}>
               {itens.map((item, idx) => {
                 const diasRestam = Math.ceil((item.data - hoje) / 86_400_000);
                 const isHoje = diasRestam === 0;
@@ -614,7 +614,7 @@ function EstaSemanaSection({ lotes, statusByLote = {} }) {
                 return (
                   <div key={`${item.lote.id}_${item.etapa}_${idx}`}
                     className="flex items-center gap-3 px-4 py-3"
-                    style={{ borderBottom: idx < itens.length - 1 ? '1px solid hsl(214 20% 92%)' : 'none' }}
+                    style={{ borderBottom: idx < itens.length - 1 ? '1px solid hsl(140 13% 92%)' : 'none' }}
                   >
                     <span className="text-[18px] flex-shrink-0">{item.cultura.emoji}</span>
                     <div className="flex-1 min-w-0">
@@ -739,7 +739,7 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
       </div>
 
       {/* ── Content ── */}
-      <div className="px-4 pt-5 pb-4 max-w-2xl mx-auto">
+      <div className="page-body pt-5 pb-4">
         {loading ? (
           <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground text-[13px]">
             <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}

@@ -231,7 +231,7 @@ function AtividadeCard({ ativ, isHoje, onClick }) {
       className="flex items-start gap-3 p-3 rounded-xl mb-2 cursor-pointer active:scale-[0.98] transition-transform"
       style={{
         background: ativ.done ? '#f0fdf4' : (isHoje ? `${cor}10` : 'white'),
-        border: `1px solid ${ativ.done ? '#bbf7d0' : (isHoje ? cor+'40' : 'hsl(214 20% 91%)')}`,
+        border: `1px solid ${ativ.done ? '#bbf7d0' : (isHoje ? cor+'40' : 'hsl(140 13% 91%)')}`,
         opacity: ativ.done ? 0.75 : 1,
       }}
     >
@@ -311,7 +311,7 @@ function AtividadePopup({ ativ, onClose }) {
         <button
           onClick={onClose}
           className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center"
-          style={{ background: 'hsl(210 16% 93%)' }}
+          style={{ background: 'hsl(140 14% 93%)' }}
         >
           <X size={16} color="hsl(215 20% 35%)" />
         </button>
@@ -451,7 +451,7 @@ function SumarioMensal({ monthStart, atividadesPorDia, today, colheitaEventos, l
         {/* Atividades */}
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'hsl(210 16% 92%)' }}>
+            style={{ background: 'hsl(140 14% 92%)' }}>
             <CalendarDays size={14} color="hsl(215 20% 35%)" />
           </div>
           <div>
@@ -473,7 +473,7 @@ function SumarioMensal({ monthStart, atividadesPorDia, today, colheitaEventos, l
         {/* Atrasadas */}
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: atrasadas > 0 ? '#fee2e2' : 'hsl(210 16% 92%)' }}>
+            style={{ background: atrasadas > 0 ? '#fee2e2' : 'hsl(140 14% 92%)' }}>
             <AlertCircle size={14} color={atrasadas > 0 ? '#dc2626' : 'hsl(215 20% 55%)'} />
           </div>
           <div>
@@ -542,7 +542,7 @@ function MonthView({ monthStart, atividadesPorDia, today, selectedDay, setSelect
 
       {/* Calendar grid */}
       <div className="grid grid-cols-7 gap-px rounded-xl overflow-hidden"
-        style={{ background: 'hsl(214 20% 88%)' }}>
+        style={{ background: 'hsl(140 13% 88%)' }}>
         {cells.map(cell => {
           const iso = isoDate(cell);
           const inMonth = cell.getMonth() === month;
@@ -575,7 +575,7 @@ function MonthView({ monthStart, atividadesPorDia, today, selectedDay, setSelect
                     : {
                         color: inMonth
                           ? (isSelected ? '#16a34a' : 'hsl(215 20% 25%)')
-                          : 'hsl(215 16% 70%)',
+                          : 'hsl(150 8% 70%)',
                         opacity: inMonth ? 1 : 0.4,
                       }
                 }
@@ -612,7 +612,7 @@ function MonthView({ monthStart, atividadesPorDia, today, selectedDay, setSelect
                 {extra > 0 && (
                   <span
                     className="text-[8px] font-bold leading-none"
-                    style={{ color: inMonth ? 'hsl(215 20% 45%)' : 'hsl(215 16% 70%)', opacity: inMonth ? 1 : 0.4 }}
+                    style={{ color: inMonth ? 'hsl(215 20% 45%)' : 'hsl(150 8% 70%)', opacity: inMonth ? 1 : 0.4 }}
                   >
                     +{extra}
                   </span>
@@ -639,7 +639,7 @@ function MonthView({ monthStart, atividadesPorDia, today, selectedDay, setSelect
                 style={
                   selectedDay === today
                     ? { background: 'hsl(157 68% 26%)', color: 'white' }
-                    : { background: 'hsl(210 16% 92%)', color: 'hsl(215 20% 20%)' }
+                    : { background: 'hsl(140 14% 92%)', color: 'hsl(215 20% 20%)' }
                 }
               >
                 {new Date(selectedDay + 'T12:00:00').getDate()}
@@ -900,7 +900,7 @@ export default function CalendarioPage() {
       </div>
 
       {/* Content */}
-      <div className="px-4 pt-4 pb-32 max-w-2xl mx-auto">
+      <div className="page-body pt-4 pb-32">
         {loading ? (
           <div className="space-y-3 mt-2">
             {[1,2,3].map(i => <div key={i} className="h-16 rounded-xl bg-muted animate-pulse" />)}
@@ -931,11 +931,11 @@ export default function CalendarioPage() {
             return (
               <div key={iso} id={`day-${iso}`} className="mb-5">
                 <div className="flex items-center gap-2 mb-2 sticky top-14 z-10 py-1"
-                  style={{ background: 'hsl(210 16% 97%)' }}>
+                  style={{ background: 'hsl(140 14% 97%)' }}>
                   <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold"
                     style={isToday
                       ? { background: 'hsl(157 68% 26%)', color: 'white' }
-                      : { background: 'hsl(210 16% 92%)', color: isPast ? 'hsl(215 16% 60%)' : 'hsl(215 20% 20%)' }}>
+                      : { background: 'hsl(140 14% 92%)', color: isPast ? 'hsl(150 8% 60%)' : 'hsl(215 20% 20%)' }}>
                     {d.getDate()}
                   </div>
                   <div>
@@ -989,7 +989,7 @@ export default function CalendarioPage() {
               <button
                 onClick={() => setPopupParcela(null)}
                 className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center"
-                style={{ background: 'hsl(210 16% 93%)' }}
+                style={{ background: 'hsl(140 14% 93%)' }}
               ><X size={16} color="hsl(215 20% 35%)" /></button>
 
               <div className="flex items-center gap-3 mb-4 pr-10">

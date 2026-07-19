@@ -57,7 +57,7 @@ export default function MigrationWizard({ onComplete }) {
             placeholder="Nome da propriedade (ex: Sítio Portuga)"
             required autoFocus
             className="w-full px-4 py-3 rounded-2xl text-[14px] font-semibold outline-none"
-            style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 88%)' }}
+            style={{ background: 'hsl(140 14% 96%)', border: '1px solid hsl(140 13% 88%)' }}
           />
           <button
             type="submit" disabled={saving || !nome.trim()}

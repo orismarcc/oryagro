@@ -106,7 +106,7 @@ import { aggregateDreEntry } from '../../lib/financeiro';
   const cultura = getCultura(culturaSel);
 
   return (
-    <div className="px-4 pt-4 pb-8 flex flex-col gap-5">
+    <div className="page-body pt-4 pb-8 flex flex-col gap-5">
       {/* Filtros */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
@@ -270,5 +270,5 @@ import { aggregateDreEntry } from '../../lib/financeiro';
       )}
     </div>
   );
-}
+}
 export default TabComparativo;

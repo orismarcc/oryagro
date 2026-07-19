@@ -44,7 +44,7 @@ function LabelInput({ label, value, onChange, step = '1', min, suffix }) {
         min={min}
         onChange={e => onChange(e.target.value)}
         className="px-3 py-2 rounded-xl text-[13px] font-semibold text-foreground outline-none"
-        style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 88%)' }}
+        style={{ background: 'hsl(140 14% 96%)', border: '1px solid hsl(140 13% 88%)' }}
       />
     </div>
   );
@@ -159,7 +159,7 @@ function LoteCard({ lote, cultura, cor, isCampo, onDelete, deleting }) {
               {showMudasUpdate ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
             </button>
           </div>
-          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'hsl(210 16% 93%)' }}>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'hsl(140 14% 93%)' }}>
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${pctMudas}%` }}
@@ -177,7 +177,7 @@ function LoteCard({ lote, cultura, cor, isCampo, onDelete, deleting }) {
                     onChange={e => setNovaMudas(e.target.value)}
                     placeholder={`Total acumulado (máx. ${totalMudas})`}
                     className="flex-1 px-3 py-1.5 rounded-xl text-[12px] outline-none"
-                    style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 88%)' }} />
+                    style={{ background: 'hsl(140 14% 96%)', border: '1px solid hsl(140 13% 88%)' }} />
                   <button onClick={handleUpdateMudas} disabled={savingMudas || !novaMudas}
                     className="px-3 py-1.5 rounded-xl text-[11px] font-bold text-white disabled:opacity-50"
                     style={{ background: cor }}>
@@ -203,7 +203,7 @@ function LoteCard({ lote, cultura, cor, isCampo, onDelete, deleting }) {
             }
           </span>
         </div>
-        <div className="h-2 rounded-full overflow-hidden" style={{ background: 'hsl(210 16% 93%)' }}>
+        <div className="h-2 rounded-full overflow-hidden" style={{ background: 'hsl(140 14% 93%)' }}>
           <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${progresso}%` }}
@@ -357,7 +357,7 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
   };
 
   return (
-    <div className="px-4 pt-5 pb-6 max-w-2xl mx-auto space-y-4">
+    <div className="page-body pt-5 pb-6 space-y-4">
 
       {/* ── Lotes cadastrados (TOPO) ── */}
       <div>
@@ -458,7 +458,7 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
                   type="number" inputMode="numeric" min="1" value={estacasValor}
                   onChange={e => { setEstacas(e.target.value); setEstacasTouched(true); }}
                   className="px-3 py-2 rounded-xl text-[13px] font-semibold text-foreground outline-none"
-                  style={{ background: 'white', border: '1px solid hsl(214 20% 88%)' }}
+                  style={{ background: 'white', border: '1px solid hsl(140 13% 88%)' }}
                 />
               </div>
               {estacasTouched && estacasDefault != null && (
@@ -527,7 +527,7 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
                 value={nome}
                 onChange={e => setNome(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl text-[13px] outline-none"
-                style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 88%)' }}
+                style={{ background: 'hsl(140 14% 96%)', border: '1px solid hsl(140 13% 88%)' }}
               />
 
               {/* Método de propagação */}
@@ -541,15 +541,15 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
               ) : cultura.suportaMudas ? (
                 <div className="flex items-center justify-between py-1">
                   <span className="text-[12px] font-semibold text-foreground">Tipo de plantio</span>
-                  <div className="flex rounded-xl overflow-hidden" style={{ background: 'hsl(210 16% 93%)' }}>
+                  <div className="flex rounded-xl overflow-hidden" style={{ background: 'hsl(140 14% 93%)' }}>
                     <button type="button" onClick={() => setUsaMudas(false)}
                       className="px-3 py-1.5 text-[11px] font-semibold rounded-xl transition-all"
-                      style={!usaMudas ? { background: cor, color: '#fff' } : { color: 'hsl(215 16% 45%)' }}>
+                      style={!usaMudas ? { background: cor, color: '#fff' } : { color: 'hsl(150 8% 45%)' }}>
                       Direto
                     </button>
                     <button type="button" onClick={() => setUsaMudas(true)}
                       className="px-3 py-1.5 text-[11px] font-semibold rounded-xl transition-all"
-                      style={usaMudas ? { background: cor, color: '#fff' } : { color: 'hsl(215 16% 45%)' }}>
+                      style={usaMudas ? { background: cor, color: '#fff' } : { color: 'hsl(150 8% 45%)' }}>
                       Mudas
                     </button>
                   </div>
@@ -577,7 +577,7 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
                   value={dataPlantio}
                   onChange={e => setDataPlantio(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl text-[13px] outline-none"
-                  style={{ background: 'hsl(210 16% 96%)', border: '1px solid hsl(214 20% 88%)' }}
+                  style={{ background: 'hsl(140 14% 96%)', border: '1px solid hsl(140 13% 88%)' }}
                 />
                 {diasViveiro > 0 && dataPlantio && (
                   <p className="text-[11px] text-muted-foreground">

@@ -53,7 +53,7 @@ function BottomSheet({ onClose, children, maxHeight = '92vh' }) {
       >
         {/* Drag handle */}
         <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 rounded-full" style={{ background: 'hsl(214 20% 88%)' }} />
+          <div className="w-10 h-1 rounded-full" style={{ background: 'hsl(140 13% 88%)' }} />
         </div>
         {children}
       </motion.div>
@@ -119,7 +119,7 @@ function MovModal({ insumo, propriedadeId, onClose, onMoved, canEdit = false }) 
 
   return (
     <BottomSheet onClose={onClose}>
-      <div className="px-5 pt-2 pb-3 flex items-center justify-between border-b" style={{ borderColor: 'hsl(214 20% 91%)' }}>
+      <div className="px-5 pt-2 pb-3 flex items-center justify-between border-b" style={{ borderColor: 'hsl(140 13% 91%)' }}>
         <div>
           <h3 className="font-bold text-[15px]">{insumo.nome}</h3>
           <p className="text-[11px] text-muted-foreground">
@@ -143,7 +143,7 @@ function MovModal({ insumo, propriedadeId, onClose, onMoved, canEdit = false }) 
                 className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-[12px] font-bold transition-all"
                 style={tipo === k
                   ? { background: k === 'entrada' ? '#dcfce7' : '#fee2e2', color: k === 'entrada' ? '#16a34a' : '#dc2626', border: `1.5px solid ${k === 'entrada' ? '#86efac' : '#fca5a5'}` }
-                  : { background: 'hsl(210 16% 95%)', color: 'hsl(215 16% 45%)' }}>
+                  : { background: 'hsl(140 14% 95%)', color: 'hsl(150 8% 45%)' }}>
                 <Icon size={13} /> {l}
               </button>
             ))}
@@ -158,7 +158,7 @@ function MovModal({ insumo, propriedadeId, onClose, onMoved, canEdit = false }) 
                 value={loteSelecionado}
                 onChange={e => setLoteSelecionado(e.target.value)}
                 className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
-                style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }}
+                style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }}
               >
                 <option value="">— nenhum lote específico —</option>
                 {lotes.map(l => (
@@ -180,13 +180,13 @@ function MovModal({ insumo, propriedadeId, onClose, onMoved, canEdit = false }) 
               </label>
               <input type="number" min="0.01" step="0.01" value={qty} onChange={e => setQty(e.target.value)} required
                 className="w-full mt-1 rounded-xl border px-3 py-2 text-[13px] font-bold outline-none"
-                style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
+                style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }} />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Data</label>
               <input type="date" value={data} onChange={e => setData(e.target.value)}
                 className="w-full mt-1 rounded-xl border px-3 py-2 text-[13px] outline-none"
-                style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
+                style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }} />
             </div>
           </div>
 
@@ -199,7 +199,7 @@ function MovModal({ insumo, propriedadeId, onClose, onMoved, canEdit = false }) 
               <input type="number" min="0" step="0.01" value={valorPago} onChange={e => setValorPago(e.target.value)}
                 placeholder="0,00"
                 className="w-full mt-1 rounded-xl border px-3 py-2 text-[13px] outline-none"
-                style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
+                style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }} />
               <div className="flex items-center justify-between mt-2 rounded-xl px-3 py-2"
                 style={{ background: 'hsl(157 68% 26% / 0.08)', border: '1px solid hsl(157 68% 26% / 0.2)' }}>
                 <span className="text-[11px] font-semibold" style={{ color: 'hsl(157 68% 26%)' }}>Preço unitário (automático)</span>
@@ -219,7 +219,7 @@ function MovModal({ insumo, propriedadeId, onClose, onMoved, canEdit = false }) 
             <input type="text" value={obs} onChange={e => setObs(e.target.value)}
               placeholder="Ex: Compra na agropecuária"
               className="w-full mt-1 rounded-xl border px-3 py-2 text-[13px] outline-none"
-              style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
+              style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }} />
           </div>
 
           <button type="submit" disabled={saving || !qty}
@@ -336,7 +336,7 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
   return (
     <BottomSheet onClose={onClose}>
       <div className="px-5 pt-2 pb-3 border-b flex items-center justify-between"
-        style={{ borderColor: 'hsl(214 20% 91%)' }}>
+        style={{ borderColor: 'hsl(140 13% 91%)' }}>
         <h3 className="font-bold text-[15px]">
           {isEdit ? `Editar — ${existingInsumo.nome}` : 'Novo insumo'}
         </h3>
@@ -356,7 +356,7 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
               <button key={s.nome} type="button"
                 onClick={() => { setNome(s.nome); setUnidade(s.unidade); setMin(String(s.quantidade_minima)); }}
                 className="text-[11px] px-2.5 py-1 rounded-full font-semibold"
-                style={{ background: 'hsl(210 16% 94%)', color: 'hsl(215 16% 35%)' }}>
+                style={{ background: 'hsl(140 14% 94%)', color: 'hsl(150 8% 35%)' }}>
                 {s.nome}
               </button>
             ))}
@@ -375,7 +375,7 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
           <input type="text" value={nome} onChange={e => setNome(e.target.value)} required
             placeholder="Ex: Ureia 46%"
             className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
-            style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
+            style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }} />
         </div>
 
         {/* Unidade + Qtd mínima */}
@@ -386,7 +386,7 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
             </label>
             <select value={unidade} onChange={e => setUnidade(e.target.value)}
               className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
-              style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }}>
+              style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }}>
               {UNIDADES.map(u => <option key={u}>{u}</option>)}
             </select>
           </div>
@@ -397,7 +397,7 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
             <input type="number" min="0" step="0.1" value={min}
               onChange={e => setMin(e.target.value)} placeholder="0"
               className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
-              style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
+              style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }} />
           </div>
         </div>
 
@@ -411,7 +411,7 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
             <input type="number" min="0" step="0.01" value={qtdInicial}
               onChange={e => setQtdInicial(e.target.value)} placeholder="0"
               className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
-              style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
+              style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }} />
             <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
               Se você já tem este insumo, informe a quantidade atual. Será registrada como entrada inicial.
             </p>
@@ -427,7 +427,7 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
             <input type="number" min="0" step="0.01" value={preco}
               onChange={e => setPreco(e.target.value)} placeholder="0,00"
               className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
-              style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
+              style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }} />
           </div>
         ) : (
           <div>
@@ -437,7 +437,7 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
             <input type="number" min="0" step="0.01" value={valorPago}
               onChange={e => setValorPago(e.target.value)} placeholder="0,00"
               className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
-              style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }} />
+              style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }} />
             <div className="flex items-center justify-between mt-2 rounded-xl px-3 py-2"
               style={{ background: 'hsl(157 68% 26% / 0.08)', border: '1px solid hsl(157 68% 26% / 0.2)' }}>
               <span className="text-[11px] font-semibold" style={{ color: 'hsl(157 68% 26%)' }}>Preço unitário (automático)</span>
@@ -636,7 +636,7 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
                         <button
                           onClick={() => setEditModal(insumo)}
                           className="w-11 h-11 flex items-center justify-center rounded-lg transition-colors"
-                          style={{ color: 'hsl(215 16% 50%)' }}
+                          style={{ color: 'hsl(150 8% 50%)' }}
                           title="Editar"
                         >
                           <Pencil size={13} />
@@ -660,7 +660,7 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
                     </div>
                   </div>
                   {/* Progress bar */}
-                  <div className="mt-2.5 h-1 rounded-full overflow-hidden" style={{ background: 'hsl(210 16% 92%)' }}>
+                  <div className="mt-2.5 h-1 rounded-full overflow-hidden" style={{ background: 'hsl(140 14% 92%)' }}>
                     <div className="h-full rounded-full transition-all duration-700"
                       style={{ width: `${pct}%`, background: cor }} />
                   </div>

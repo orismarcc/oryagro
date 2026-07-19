@@ -180,7 +180,7 @@ function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete, doneS
       </div>
 
       {/* Progress bar */}
-      <div className="h-2 rounded-full overflow-hidden" style={{ background: 'hsl(210 16% 93%)' }}>
+      <div className="h-2 rounded-full overflow-hidden" style={{ background: 'hsl(140 14% 93%)' }}>
         <div className="h-full rounded-full transition-all duration-700"
           style={{ width: `${progresso}%`, background: prontoParaColheita ? '#16a34a' : cor }} />
       </div>
@@ -191,7 +191,7 @@ function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete, doneS
         if (!atrasadas && !hoje && !amanha && !proxima) return null;
         return (
           <div className="mt-2.5 pt-2.5 flex flex-wrap gap-1.5"
-            style={{ borderTop: '1px solid hsl(214 20% 92%)' }}>
+            style={{ borderTop: '1px solid hsl(140 13% 92%)' }}>
             {atrasadas > 0 && (
               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
                 style={{ background: '#fee2e2', color: '#dc2626' }}>
@@ -212,7 +212,7 @@ function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete, doneS
             )}
             {!hoje && !amanha && proxima && (
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                style={{ background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }}>
+                style={{ background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 45%)' }}>
                 <ArrowRight size={9} /> {proxima.etapa} · D{proxima.dia}
               </span>
             )}
@@ -223,7 +223,7 @@ function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete, doneS
 
       {/* Delete control */}
       {canDelete && (
-        <div className="mt-2.5 pt-2.5 flex justify-end" style={{ borderTop: '1px solid hsl(214 20% 92%)' }}>
+        <div className="mt-2.5 pt-2.5 flex justify-end" style={{ borderTop: '1px solid hsl(140 13% 92%)' }}>
           {confirmDelete ? (
             <div className="flex items-center gap-1">
               <span className="text-[11px] text-muted-foreground mr-1">Excluir lote?</span>
@@ -237,7 +237,7 @@ function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete, doneS
               <button
                 onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); }}
                 className="text-[10px] font-medium px-2.5 py-1 rounded-lg"
-                style={{ background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }}>
+                style={{ background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 45%)' }}>
                 Cancelar
               </button>
             </div>
@@ -332,14 +332,14 @@ function FarmMembersSection({ propriedade, userRole }) {
             placeholder="E-mail do usuário"
             required
             className="w-full px-3 py-2.5 rounded-xl text-[13px] outline-none"
-            style={{ background: 'hsl(210 16% 96%)', border: '1.5px solid hsl(214 20% 88%)', color: 'hsl(215 20% 16%)' }}
+            style={{ background: 'hsl(140 14% 96%)', border: '1.5px solid hsl(140 13% 88%)', color: 'hsl(215 20% 16%)' }}
           />
           <div className="flex gap-2">
             <select
               value={role}
               onChange={e => setRole(e.target.value)}
               className="flex-1 px-3 py-2.5 rounded-xl text-[13px] outline-none"
-              style={{ background: 'hsl(210 16% 96%)', border: '1.5px solid hsl(214 20% 88%)', color: 'hsl(215 20% 16%)' }}
+              style={{ background: 'hsl(140 14% 96%)', border: '1.5px solid hsl(140 13% 88%)', color: 'hsl(215 20% 16%)' }}
             >
               <option value="admin">Administrador</option>
               <option value="technician">Técnico</option>
@@ -370,7 +370,7 @@ function FarmMembersSection({ propriedade, userRole }) {
           <p className="text-[12px] text-muted-foreground">Nenhum membro adicionado ainda.</p>
         </div>
       ) : (
-        <div className="card divide-y" style={{ borderColor: 'hsl(214 20% 92%)' }}>
+        <div className="card divide-y" style={{ borderColor: 'hsl(140 13% 92%)' }}>
           {members.map(m => {
             const isOwner = m.user_id === propriedade.user_id;
             const isSelf = m.user_id === currentUserId;
@@ -378,7 +378,7 @@ function FarmMembersSection({ propriedade, userRole }) {
               <div key={m.id} className="flex items-center gap-3 px-4 py-3">
                 {/* Avatar */}
                 <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-bold text-white"
-                  style={{ background: isOwner ? 'hsl(157 68% 26%)' : 'hsl(215 16% 55%)' }}>
+                  style={{ background: isOwner ? 'hsl(157 68% 26%)' : 'hsl(150 8% 55%)' }}>
                   {getInitials(m.displayName, m.email)}
                 </div>
                 {/* Info */}
@@ -420,7 +420,7 @@ function FarmMembersSection({ propriedade, userRole }) {
                         </button>
                         <button onClick={() => setConfirmRemove(null)}
                           className="text-[10px] font-medium px-2 py-1 rounded-lg"
-                          style={{ background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }}>
+                          style={{ background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 45%)' }}>
                           Cancelar
                         </button>
                       </div>
@@ -508,7 +508,7 @@ function TalhaoCard({ talhao, onSelect, index, onDeleteTalhao, canDelete }) {
 
       {/* Delete control */}
       {canDelete && (
-        <div className="mt-2.5 pt-2.5 flex justify-end" style={{ borderTop: '1px solid hsl(214 20% 92%)' }}>
+        <div className="mt-2.5 pt-2.5 flex justify-end" style={{ borderTop: '1px solid hsl(140 13% 92%)' }}>
           {confirmDelete ? (
             <div className="flex items-center gap-1">
               <span className="text-[11px] text-muted-foreground mr-1">Excluir talhão?</span>
@@ -522,7 +522,7 @@ function TalhaoCard({ talhao, onSelect, index, onDeleteTalhao, canDelete }) {
               <button
                 onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); }}
                 className="text-[10px] font-medium px-2.5 py-1 rounded-lg"
-                style={{ background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }}>
+                style={{ background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 45%)' }}>
                 Cancelar
               </button>
             </div>
@@ -856,7 +856,7 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
         </div>
       </div>
 
-      <div className="px-4 pt-5 pb-32 max-w-2xl mx-auto flex flex-col gap-6">
+      <div className="page-body pt-5 pb-32 flex flex-col gap-6">
 
         {/* ── Talhões Perenes ─────────────────────────────────────────────── */}
         <div>
@@ -912,7 +912,7 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
             <button
               onClick={onAddLote}
               className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-xl"
-              style={{ background: 'hsl(210 16% 94%)', color: 'hsl(215 16% 35%)' }}
+              style={{ background: 'hsl(140 14% 94%)', color: 'hsl(150 8% 35%)' }}
             >
               <Plus size={11} /> Novo Lote
             </button>

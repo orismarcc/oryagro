@@ -18,7 +18,7 @@ export function Toggle({ enabled, onToggle, color, label }) {
       style={{ width: 40, height: 22 }}
     >
       <span className="absolute inset-0 rounded-full transition-colors"
-        style={{ background: enabled ? color : 'hsl(210 16% 88%)' }} />
+        style={{ background: enabled ? color : 'hsl(140 14% 88%)' }} />
       <span className="absolute top-[3px] w-[16px] h-[16px] rounded-full bg-white shadow transition-all"
         style={{ left: enabled ? 21 : 3 }} />
     </button>
@@ -40,7 +40,7 @@ export function LotePicker({ lotes, selectedId, onSelect, cor }) {
             className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold transition-all"
             style={selectedId === l.id
               ? { background: cor, color: '#fff' }
-              : { background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 40%)' }
+              : { background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 40%)' }
             }
           >
             <Layers size={10} />

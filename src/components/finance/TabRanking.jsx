@@ -89,7 +89,7 @@ function TabRanking({ rawData, loading }) {
   const maxReceita = Math.max(1, ...sorted.map((c) => c.receita));
 
   return (
-    <div className="px-4 pt-4 pb-8 flex flex-col gap-5">
+    <div className="page-body pt-4 pb-8 flex flex-col gap-5">
       {/* Botões de critério */}
       <div className="flex gap-2 flex-wrap">
         {RANKING_CRITERIOS.map(({ key, label }) => (

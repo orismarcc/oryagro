@@ -369,7 +369,7 @@ function TabReceitas({ cultura, lote, canDelete }) {
           <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-2">Pagamento</label>
           {/* Toggle */}
           <div className="flex gap-1 p-0.5 rounded-xl mb-3"
-            style={{ background: 'hsl(210 16% 93%)' }}>
+            style={{ background: 'hsl(140 14% 93%)' }}>
             {[['avista', 'À vista'], ['parcelado', 'Parcelado']].map(([v, l]) => (
               <button
                 key={v}
@@ -378,7 +378,7 @@ function TabReceitas({ cultura, lote, canDelete }) {
                 className="flex-1 py-1.5 rounded-[10px] text-[12px] font-bold transition-all"
                 style={tipoPagamento === v
                   ? { background: cor, color: 'white' }
-                  : { background: 'transparent', color: 'hsl(215 16% 40%)' }}
+                  : { background: 'transparent', color: 'hsl(150 8% 40%)' }}
               >
                 {l}
               </button>
@@ -443,12 +443,12 @@ function TabReceitas({ cultura, lote, canDelete }) {
               {parcelasEditaveis.length > 0 && (
                 <div className="rounded-xl overflow-hidden border border-input mb-1">
                   <p className="text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 text-muted-foreground"
-                    style={{ background: 'hsl(210 16% 97%)' }}>
+                    style={{ background: 'hsl(140 14% 97%)' }}>
                     Parcelas (editáveis)
                   </p>
                   {parcelasEditaveis.map((p, i) => (
                     <div key={i} className="flex items-center gap-2 px-3 py-2"
-                      style={{ borderTop: i > 0 ? '1px solid hsl(214 20% 91%)' : undefined }}>
+                      style={{ borderTop: i > 0 ? '1px solid hsl(140 13% 91%)' : undefined }}>
                       <span className="text-[11px] font-bold text-muted-foreground w-5 flex-shrink-0">{i+1}.</span>
                       <input
                         type="date"
@@ -558,7 +558,7 @@ function TabReceitas({ cultura, lote, canDelete }) {
                     className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg transition-colors flex-shrink-0"
                     style={confirmDeleteId === entry.id
                       ? { background: '#fee2e2', color: '#dc2626' }
-                      : { color: 'hsl(215 16% 50%)' }}
+                      : { color: 'hsl(150 8% 50%)' }}
                   >
                     <Trash2 size={14} />
                   </motion.button>

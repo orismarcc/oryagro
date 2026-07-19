@@ -157,7 +157,7 @@ function BottomSheet({ onClose, children, maxHeight = '92vh' }) {
         onClick={e => e.stopPropagation()}
       >
         <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 rounded-full" style={{ background: 'hsl(214 20% 88%)' }} />
+          <div className="w-10 h-1 rounded-full" style={{ background: 'hsl(140 13% 88%)' }} />
         </div>
         {children}
       </motion.div>
@@ -223,13 +223,13 @@ function CompradorFormModal({ onClose, onSaved, existing = null }) {
   };
 
   const inputCls = 'w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none';
-  const inputStyle = { background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' };
+  const inputStyle = { background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' };
   const labelCls = 'text-[10px] font-bold uppercase tracking-wider text-muted-foreground';
 
   return (
     <BottomSheet onClose={onClose}>
       <div className="px-5 pt-2 pb-3 border-b flex items-center justify-between"
-        style={{ borderColor: 'hsl(214 20% 91%)' }}>
+        style={{ borderColor: 'hsl(140 13% 91%)' }}>
         <h3 className="font-bold text-[15px]">
           {isEdit ? `Editar — ${existing.nome}` : 'Novo comprador'}
         </h3>
@@ -252,7 +252,7 @@ function CompradorFormModal({ onClose, onSaved, existing = null }) {
                 className="py-2 rounded-xl text-[12px] font-bold transition-all"
                 style={tipoDoc === k
                   ? { background: 'hsl(157 68% 26%)', color: 'white' }
-                  : { background: 'hsl(210 16% 94%)', color: 'hsl(215 16% 45%)' }}>
+                  : { background: 'hsl(140 14% 94%)', color: 'hsl(150 8% 45%)' }}>
                 {l}
               </button>
             ))}
@@ -343,8 +343,8 @@ function CompradorFormModal({ onClose, onSaved, existing = null }) {
                 style={status === k
                   ? k === 'ativo'
                     ? { background: '#dcfce7', color: '#15803d', border: '1.5px solid #86efac' }
-                    : { background: 'hsl(210 16% 92%)', color: 'hsl(215 16% 35%)', border: '1.5px solid hsl(214 20% 80%)' }
-                  : { background: 'hsl(210 16% 94%)', color: 'hsl(215 16% 50%)' }}>
+                    : { background: 'hsl(140 14% 92%)', color: 'hsl(150 8% 35%)', border: '1.5px solid hsl(140 13% 80%)' }
+                  : { background: 'hsl(140 14% 94%)', color: 'hsl(150 8% 50%)' }}>
                 {l}
               </button>
             ))}
@@ -436,14 +436,14 @@ function PagarParcelaModal({ parcela, onClose, onPago }) {
             value={dataPagamento}
             onChange={e => setDataPagamento(e.target.value)}
             className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
-            style={{ background: 'hsl(210 16% 96%)', borderColor: 'hsl(214 20% 88%)' }}
+            style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }}
           />
         </div>
 
         <div className="flex gap-2">
           <button onClick={onClose}
             className="flex-1 py-2.5 rounded-xl text-[12px] font-bold"
-            style={{ background: 'hsl(210 16% 94%)', color: 'hsl(215 16% 40%)' }}>
+            style={{ background: 'hsl(140 14% 94%)', color: 'hsl(150 8% 40%)' }}>
             Cancelar
           </button>
           <button onClick={handleConfirm} disabled={saving}
@@ -549,7 +549,7 @@ function HistoricoPanel({ comprador, onClose }) {
                 </div>
 
                 {totalP > 1 && (
-                  <div className="space-y-1 pt-1 border-t" style={{ borderColor: 'hsl(214 20% 91%)' }}>
+                  <div className="space-y-1 pt-1 border-t" style={{ borderColor: 'hsl(140 13% 91%)' }}>
                     {v.parcelas.map(p => (
                       <div key={p.id}
                         className="flex items-center justify-between text-[11px]">
@@ -659,7 +659,7 @@ function CobrancasPendentes({ riscoMap = {} }) {
                             ? '#fef2f2'
                             : isProxima
                             ? '#fefce8'
-                            : 'hsl(210 16% 97%)',
+                            : 'hsl(140 14% 97%)',
                         }}
                       >
                         <div className="flex-1 min-w-0">
@@ -747,7 +747,7 @@ function FilterChip({ label, active, onClick }) {
       className="px-3 py-1.5 rounded-full text-[11px] font-bold transition-all whitespace-nowrap"
       style={active
         ? { background: 'hsl(157 68% 26%)', color: 'white' }
-        : { background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 40%)' }}
+        : { background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 40%)' }}
     >
       {label}
     </button>
@@ -875,7 +875,7 @@ export default function CompradoresPage({ onBack }) {
             className="w-full rounded-xl border px-4 py-2.5 text-[13px] outline-none pl-4"
             style={{
               background: 'white',
-              borderColor: 'hsl(214 20% 88%)',
+              borderColor: 'hsl(140 13% 88%)',
               boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.05)',
             }}
           />
@@ -956,7 +956,7 @@ export default function CompradoresPage({ onBack }) {
                             className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                             style={c.status === 'ativo'
                               ? { background: '#dcfce7', color: '#15803d' }
-                              : { background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 40%)' }}
+                              : { background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 40%)' }}
                           >
                             {c.status === 'ativo' ? 'Ativo' : 'Inativo'}
                           </span>
@@ -1005,11 +1005,11 @@ export default function CompradoresPage({ onBack }) {
 
                     {/* Ações */}
                     <div className="flex items-center gap-2 pt-2 border-t"
-                      style={{ borderColor: 'hsl(214 20% 93%)' }}>
+                      style={{ borderColor: 'hsl(140 13% 93%)' }}>
                       <button
                         onClick={() => setEditModal(c)}
                         className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-colors"
-                        style={{ background: 'hsl(210 16% 94%)', color: 'hsl(215 16% 40%)' }}
+                        style={{ background: 'hsl(140 14% 94%)', color: 'hsl(150 8% 40%)' }}
                       >
                         <Pencil size={11} /> Editar
                       </button>

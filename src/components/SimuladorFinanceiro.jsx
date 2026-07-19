@@ -245,7 +245,7 @@ export default function SimuladorFinanceiro({ cultura }) {
                   valor={valores.nitratoCalcio} valorPadrao={ins.nitratoCalcio.padrao} params={scaledParams(ins.nitratoCalcio)} unidade={ins.nitratoCalcio.unidade} onChange={handleChange} />
 
                 {/* Editable prices */}
-                <div className="mt-4 pt-3" style={{ borderTop: '1px solid hsl(214 20% 90%)' }}>
+                <div className="mt-4 pt-3" style={{ borderTop: '1px solid hsl(140 13% 90%)' }}>
                   <p className="section-label mb-3" style={{ color: cor }}>Preço por unidade (R$)</p>
                   <div className="grid grid-cols-2 gap-3">
                     <NumField label="Calcário / kg"        field="precoCalcareo"  valores={valores} onChange={handleChange} prefix="R$" width="w-full" />
@@ -261,7 +261,7 @@ export default function SimuladorFinanceiro({ cultura }) {
               <div className="flex flex-col">
                 {insumoRows.map((row, i, arr) => (
                   <div key={row.label} className="flex items-center justify-between py-2.5"
-                    style={{ borderBottom: i < arr.length - 1 ? '1px solid hsl(214 20% 92%)' : 'none' }}>
+                    style={{ borderBottom: i < arr.length - 1 ? '1px solid hsl(140 13% 92%)' : 'none' }}>
                     <span className="text-[13px] text-muted-foreground">{row.label}</span>
                     <span className="font-display text-[15px] font-bold" style={{ color: cor }}>
                       {typeof row.value === 'number'

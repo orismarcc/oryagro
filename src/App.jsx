@@ -562,7 +562,7 @@ function AppInner({ session, displayName, signOut }) {
             background: 'rgba(255,255,255,0.92)',
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
-            borderColor: 'hsl(214 20% 88%)',
+            borderColor: 'hsl(140 13% 88%)',
             boxShadow: '0 10px 24px -4px rgb(0 0 0 / 0.11), 0 4px 8px -4px rgb(0 0 0 / 0.07)',
           }}
         >
@@ -580,7 +580,7 @@ function AppInner({ session, displayName, signOut }) {
                   key={value}
                   onClick={() => handleNav(value)}
                   className="relative flex flex-col items-center justify-center flex-1 h-full gap-0.5 rounded-xl mx-0.5 transition-all duration-200 active:scale-95"
-                  style={{ color: isActive ? activeCor : 'hsl(215 16% 40%)' }}
+                  style={{ color: isActive ? activeCor : 'hsl(150 8% 40%)' }}
                 >
                   {isActive && (
                     <motion.span

@@ -154,7 +154,7 @@ function TabInsumos({ cultura, lote }) {
             <div
               key={item.key}
               className="flex items-center gap-3 px-4 py-3"
-              style={{ borderBottom: idx < insumoItems.length - 1 ? '1px solid hsl(214 20% 91%)' : undefined }}
+              style={{ borderBottom: idx < insumoItems.length - 1 ? '1px solid hsl(140 13% 91%)' : undefined }}
             >
               {/* Label + qty */}
               <div className="flex-1 min-w-0">
@@ -189,7 +189,7 @@ function TabInsumos({ cultura, lote }) {
         {/* Sementes row */}
         <div
           className="flex items-center gap-3 px-4 py-3"
-          style={{ borderTop: '1px solid hsl(214 20% 91%)', background: 'hsl(210 16% 97%)' }}
+          style={{ borderTop: '1px solid hsl(140 13% 91%)', background: 'hsl(140 14% 97%)' }}
         >
           <div className="flex-1 min-w-0">
             <p className="text-[13px] font-semibold text-foreground">Sementes</p>
@@ -216,7 +216,7 @@ function TabInsumos({ cultura, lote }) {
         {/* Mão de obra row — editable, persisted to Supabase */}
         <div
           className="px-4 py-3"
-          style={{ borderTop: '1px solid hsl(214 20% 91%)', background: 'hsl(210 16% 97%)' }}
+          style={{ borderTop: '1px solid hsl(140 13% 91%)', background: 'hsl(140 14% 97%)' }}
         >
           <div className="flex items-center gap-3">
             <div className="flex-1 min-w-0">
