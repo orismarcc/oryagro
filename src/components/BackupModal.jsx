@@ -104,7 +104,7 @@ function ExportarTab({ propriedade }) {
         onClick={handleExport}
         disabled={loading}
         className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-[14px] font-bold text-white disabled:opacity-60 transition-all active:scale-[0.98]"
-        style={{ background: loading ? 'hsl(160 60% 36%)' : 'linear-gradient(135deg, hsl(160 84% 27%), hsl(150 72% 32%))' }}
+        style={{ background: loading ? 'hsl(160 60% 36%)' : 'linear-gradient(135deg, hsl(157 68% 26%), hsl(150 72% 32%))' }}
       >
         {loading
           ? <><Loader2 size={16} className="animate-spin" /> Exportando…</>
@@ -367,7 +367,7 @@ export default function BackupModal({ propriedade, onClose }) {
                 onClick={() => setActiveTab(tab)}
                 className="px-4 py-2 rounded-xl text-[13px] font-bold capitalize transition-all"
                 style={activeTab === tab
-                  ? { background: 'hsl(160 84% 27%)', color: '#fff' }
+                  ? { background: 'hsl(157 68% 26%)', color: '#fff' }
                   : { background: 'hsl(210 16% 93%)', color: 'hsl(215 16% 45%)' }
                 }
               >

@@ -14,7 +14,7 @@ import { Info, ChevronDown } from 'lucide-react';
  * @param {string} cor    - cor de destaque
  * @param {ReactNode} children - conteúdo (use <li> para itens; vira <ul>)
  */
-export default function CalcNote({ title = 'Como é calculado', cor = 'hsl(160 84% 27%)', children }) {
+export default function CalcNote({ title = 'Como é calculado', cor = 'hsl(157 68% 26%)', children }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="mt-2">

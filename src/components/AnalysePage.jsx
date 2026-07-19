@@ -981,7 +981,7 @@ function AbaBar({ ativa, onChange }) {
             key={key}
             onClick={() => onChange(key)}
             className="relative flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold transition-colors"
-            style={{ color: isActive ? 'hsl(160 84% 27%)' : 'rgba(255,255,255,0.7)' }}
+            style={{ color: isActive ? 'hsl(157 68% 26%)' : 'rgba(255,255,255,0.7)' }}
           >
             {isActive && (
               <motion.span
@@ -1214,7 +1214,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
               onClick={() => setSelectedLoteId(null)}
               className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all"
               style={!selectedLoteId
-                ? { background: 'rgba(255,255,255,0.9)', color: 'hsl(160 84% 27%)' }
+                ? { background: 'rgba(255,255,255,0.9)', color: 'hsl(157 68% 26%)' }
                 : { background: 'rgba(255,255,255,0.20)', color: 'rgba(255,255,255,0.75)' }}
             >
               Todos
@@ -1228,7 +1228,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
                   onClick={() => setSelectedLoteId(isActive ? null : String(l.id))}
                   className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all"
                   style={isActive
-                    ? { background: 'rgba(255,255,255,0.9)', color: c?.cor || 'hsl(160 84% 27%)' }
+                    ? { background: 'rgba(255,255,255,0.9)', color: c?.cor || 'hsl(157 68% 26%)' }
                     : { background: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.75)' }}
                 >
                   {c?.emoji && <span>{c.emoji}</span>}

@@ -20,7 +20,7 @@
   --color-foreground:        hsl(222 47% 11%);
   --color-card:              hsl(0 0% 100%);
   --color-card-foreground:   hsl(222 47% 11%);
-  --color-primary:           hsl(160 84% 27%);
+  --color-primary:           hsl(157 68% 26%);
   --color-primary-foreground: hsl(0 0% 100%);
   --color-secondary:         hsl(221 83% 53%);
   --color-secondary-foreground: hsl(0 0% 100%);
@@ -28,12 +28,12 @@
   --color-muted-foreground:  hsl(215 16% 32%);
   --color-border:            hsl(214 20% 88%);
   --color-input:             hsl(214 20% 88%);
-  --color-ring:              hsl(160 84% 27%);
+  --color-ring:              hsl(157 68% 26%);
   --color-destructive:       hsl(4 86% 58%);
   --color-destructive-foreground: hsl(0 0% 100%);
-  --color-accent:            hsl(174 72% 36%);
-  --color-accent-foreground: hsl(0 0% 100%);
-  --radius:                  1rem;
+  --color-accent:            hsl(36 92% 50%);
+  --color-accent-foreground: hsl(28 60% 16%);
+  --radius:                  1.15rem;
 }
 
 /* ── Design tokens ───────────────────────────────────────── */
@@ -53,12 +53,17 @@
   --hero-pad-top:         1rem;   /* 16px — alinha título com o centro dos botões */
   --hero-pad-top-no-btns: 1rem;  /* 16px — páginas sem hamburger */
 
-  /* Radius */
-  --radius-sm:  0.625rem;
-  --radius:     1rem;
-  --radius-lg:  1.25rem;
-  --radius-xl:  1.5rem;
+  /* Radius — cantos mais arredondados (identidade v2) */
+  --radius-sm:  0.75rem;
+  --radius:     1.15rem;
+  --radius-lg:  1.4rem;
+  --radius-xl:  1.65rem;
   --radius-full: 9999px;
+
+  /* Acento (destaque dourado — colheita/sol) */
+  --accent:      hsl(36 92% 50%);
+  --accent-soft: hsl(40 96% 62%);
+  --brand:       hsl(157 68% 26%);
 
   /* Shadows */
   --shadow-xs:   0 1px 2px 0 rgb(0 0 0 / 0.05);
@@ -128,9 +133,9 @@ html.native {
   ::-webkit-scrollbar-thumb { background: hsl(214 20% 88%); border-radius: 99px; }
   ::-webkit-scrollbar-thumb:hover { background: hsl(215 16% 70%); }
 
-  :focus-visible { outline: 2px solid hsl(160 84% 27%); outline-offset: 2px; }
+  :focus-visible { outline: 2px solid hsl(157 68% 26%); outline-offset: 2px; }
 
-  ::selection { background: hsl(160 84% 27% / 0.15); }
+  ::selection { background: hsl(157 68% 26% / 0.15); }
 
   input[type=number]::-webkit-inner-spin-button,
   input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
@@ -145,7 +150,7 @@ html.native {
 
   /* Shadows */
   .shadow-card    { box-shadow: var(--shadow-card); }
-  .shadow-primary { box-shadow: 0 4px 16px -2px hsl(160 84% 27% / 0.30); }
+  .shadow-primary { box-shadow: 0 4px 16px -2px hsl(157 68% 26% / 0.30); }
 
   /* Glassmorphism */
   .glass {
@@ -157,25 +162,27 @@ html.native {
 
   /* Gradient backgrounds */
   .gradient-hero {
-    background: linear-gradient(
-      145deg,
-      hsl(160 84% 10%) 0%,
-      hsl(162 75% 15%) 50%,
-      hsl(200 70% 14%) 100%
-    );
+    background:
+      radial-gradient(120% 90% at 88% -10%, hsl(36 92% 50% / 0.16) 0%, transparent 45%),
+      linear-gradient(
+        145deg,
+        hsl(158 74% 9%) 0%,
+        hsl(160 62% 16%) 48%,
+        hsl(190 66% 15%) 100%
+      );
   }
 
   .gradient-primary {
-    background: linear-gradient(135deg, hsl(160 84% 27%) 0%, hsl(158 64% 40%) 100%);
+    background: linear-gradient(135deg, hsl(157 68% 26%) 0%, hsl(158 64% 40%) 100%);
   }
 
   .gradient-card-primary {
-    background: linear-gradient(135deg, hsl(160 84% 27% / 0.07) 0%, hsl(160 84% 27% / 0.02) 100%);
+    background: linear-gradient(135deg, hsl(157 68% 26% / 0.07) 0%, hsl(157 68% 26% / 0.02) 100%);
   }
 
   /* Gradient text */
   .text-gradient-primary {
-    background: linear-gradient(135deg, hsl(160 84% 27%) 0%, hsl(158 64% 40%) 100%);
+    background: linear-gradient(135deg, hsl(157 68% 26%) 0%, hsl(158 64% 40%) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -185,8 +192,8 @@ html.native {
   .card {
     background: var(--bg-card);
     border-radius: var(--radius);
-    box-shadow: var(--shadow-card);
-    border: 1px solid hsl(214 20% 88%);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid hsl(150 16% 91%);
   }
 
   .card-elevated {
@@ -222,7 +229,7 @@ html.native {
     border-radius: 9999px;
     flex-shrink: 0;
   }
-  .icon-circle-primary   { background: hsl(160 84% 27% / 0.1); color: hsl(160 84% 27%); }
+  .icon-circle-primary   { background: hsl(157 68% 26% / 0.1); color: hsl(157 68% 26%); }
   .icon-circle-secondary { background: hsl(221 83% 53% / 0.1); color: hsl(221 83% 53%); }
   .icon-circle-success   { background: hsl(142 72% 30% / 0.1); color: hsl(142 72% 30%); }
   .icon-circle-danger    { background: hsl(4 86% 58% / 0.1);   color: hsl(4 86% 58%); }
@@ -275,10 +282,10 @@ html.native {
   /* Divider with label */
   .section-label {
     font-size: 0.6875rem;
-    font-weight: 700;
-    letter-spacing: 0.15em;
+    font-weight: 800;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: hsl(215 16% 40%);
+    color: hsl(157 34% 34%);
   }
 }
 

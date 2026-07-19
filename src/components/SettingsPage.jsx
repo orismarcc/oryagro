@@ -156,7 +156,7 @@ function PerfilSection() {
       {/* ── Nome ── */}
       <div className="card p-5">
         <div className="flex items-center gap-2 mb-4">
-          <User size={15} style={{ color: 'hsl(160 84% 27%)' }} />
+          <User size={15} style={{ color: 'hsl(157 68% 26%)' }} />
           <p className="text-[14px] font-bold text-foreground">Nome</p>
         </div>
         <form onSubmit={handleSaveName} className="space-y-3">
@@ -188,7 +188,7 @@ function PerfilSection() {
             type="submit"
             disabled={nameLoading || !nameValid}
             className="w-full py-3 rounded-2xl text-[13px] font-bold text-white transition-all active:scale-[0.98] disabled:opacity-50"
-            style={{ background: 'hsl(160 84% 27%)' }}
+            style={{ background: 'hsl(157 68% 26%)' }}
           >
             {nameLoading ? 'Salvando…' : 'Salvar nome'}
           </button>
@@ -198,7 +198,7 @@ function PerfilSection() {
       {/* ── Senha ── */}
       <div className="card p-5">
         <div className="flex items-center gap-2 mb-4">
-          <Lock size={15} style={{ color: 'hsl(160 84% 27%)' }} />
+          <Lock size={15} style={{ color: 'hsl(157 68% 26%)' }} />
           <p className="text-[14px] font-bold text-foreground">Alterar Senha</p>
         </div>
         <form onSubmit={handleChangePass} className="space-y-3">
@@ -243,7 +243,7 @@ function PerfilSection() {
             type="submit"
             disabled={passLoading || !currentPass || !newPass || !confirmPass}
             className="w-full py-3 rounded-2xl text-[13px] font-bold text-white transition-all active:scale-[0.98] disabled:opacity-50"
-            style={{ background: 'hsl(160 84% 27%)' }}
+            style={{ background: 'hsl(157 68% 26%)' }}
           >
             {passLoading ? 'Alterando…' : 'Alterar senha'}
           </button>
@@ -268,7 +268,7 @@ function NotificacoesSection() {
   const [testResult, setTestResult] = useState(null);
 
   if (loading || !config) return (
-    <div className="flex justify-center py-8"><Loader2 size={18} className="animate-spin" style={{ color: 'hsl(160 84% 27%)' }} /></div>
+    <div className="flex justify-center py-8"><Loader2 size={18} className="animate-spin" style={{ color: 'hsl(157 68% 26%)' }} /></div>
   );
 
   const handleTest = async () => {
@@ -291,7 +291,7 @@ function NotificacoesSection() {
       {/* ── Provider ── */}
       <div className="card p-5">
         <div className="flex items-center gap-2 mb-3">
-          <MessageCircle size={15} style={{ color: 'hsl(160 84% 27%)' }} />
+          <MessageCircle size={15} style={{ color: 'hsl(157 68% 26%)' }} />
           <p className="text-[14px] font-bold text-foreground">Notificações via WhatsApp</p>
           {config.enabled && (
             <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#16a34a' }}>

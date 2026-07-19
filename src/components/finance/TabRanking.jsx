@@ -99,7 +99,7 @@ function TabRanking({ rawData, loading }) {
             className="px-3 py-1.5 rounded-full text-[11px] font-bold transition-all"
             style={
               criterio === key
-                ? { background: 'hsl(160 84% 27%)', color: 'white' }
+                ? { background: 'hsl(157 68% 26%)', color: 'white' }
                 : { background: '#f3f4f6', color: '#6b7280' }
             }
           >
@@ -195,5 +195,5 @@ function TabRanking({ rawData, loading }) {
       </div>
     </div>
   );
-}
+}
 export default TabRanking;

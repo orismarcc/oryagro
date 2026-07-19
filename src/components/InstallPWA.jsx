@@ -99,7 +99,7 @@ export default function InstallPWA() {
               style={{
                 width: 40, height: 40,
                 background: 'hsl(142 60% 95%)',
-                color: 'hsl(160 84% 27%)',
+                color: 'hsl(157 68% 26%)',
               }}
             >
               <Download size={20} />
@@ -120,7 +120,7 @@ export default function InstallPWA() {
               <button
                 onClick={handleInstall}
                 className="px-3 py-2 rounded-xl text-[12px] font-bold text-white flex-shrink-0"
-                style={{ background: 'hsl(160 84% 27%)' }}
+                style={{ background: 'hsl(157 68% 26%)' }}
               >
                 Instalar
               </button>

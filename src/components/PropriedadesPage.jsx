@@ -46,7 +46,7 @@ function PropriedadeForm({ initial, onSave, onCancel, saving }) {
         </button>
         <button type="submit" disabled={saving || !nome.trim()}
           className="flex-1 py-2.5 rounded-xl text-[12px] font-bold text-white disabled:opacity-50"
-          style={{ background: 'hsl(160 84% 27%)' }}>
+          style={{ background: 'hsl(157 68% 26%)' }}>
           {saving ? 'Salvando…' : initial ? 'Salvar' : 'Criar'}
         </button>
       </div>
@@ -160,8 +160,8 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade, onRefres
                 return (
                   <motion.div key={p.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} transition={{ delay: i * 0.04, duration: 0.25 }}>
                     <button onClick={() => onSelectPropriedade(p)} className="card-interactive w-full text-left p-4 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: isMember ? 'hsl(217 91% 60% / 0.1)' : 'hsl(160 84% 27% / 0.1)' }}>
-                        <Building2 size={18} style={{ color: isMember ? 'hsl(217 91% 60%)' : 'hsl(160 84% 27%)' }} />
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: isMember ? 'hsl(217 91% 60% / 0.1)' : 'hsl(157 68% 26% / 0.1)' }}>
+                        <Building2 size={18} style={{ color: isMember ? 'hsl(217 91% 60%)' : 'hsl(157 68% 26%)' }} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -175,7 +175,7 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade, onRefres
                         </div>
                         {p.descricao && <p className="text-[11px] text-muted-foreground truncate mt-0.5">{p.descricao}</p>}
                         <div className="flex items-center gap-1 mt-1">
-                          <Layers size={10} style={{ color: isMember ? 'hsl(217 91% 60%)' : 'hsl(160 84% 27%)' }} />
+                          <Layers size={10} style={{ color: isMember ? 'hsl(217 91% 60%)' : 'hsl(157 68% 26%)' }} />
                           <span className="text-[11px] text-muted-foreground">{count} lote{count !== 1 ? 's' : ''}</span>
                         </div>
                       </div>
@@ -237,7 +237,7 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade, onRefres
             {!showForm && (
               <button onClick={() => { setShowForm(true); setEditingId(null); }}
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-[13px] font-semibold transition-all active:scale-[0.98]"
-                style={{ background: 'hsl(160 84% 27% / 0.08)', color: 'hsl(160 84% 27%)', border: '1.5px dashed hsl(160 84% 27% / 0.4)' }}>
+                style={{ background: 'hsl(157 68% 26% / 0.08)', color: 'hsl(157 68% 26%)', border: '1.5px dashed hsl(157 68% 26% / 0.4)' }}>
                 <Plus size={15} /> Nova Propriedade
               </button>
             )}

@@ -7,7 +7,7 @@ import { loadCronogramaAtividades } from '../hooks/useSupabaseSync';
 import { makeStableId } from '../hooks/useCronogramaSync';
 
 // ─── constants ────────────────────────────────────────────────────────────────
-const GREEN = 'hsl(160 84% 27%)';
+const GREEN = 'hsl(157 68% 26%)';
 
 function addDays(date, days) {
   const d = new Date(date);

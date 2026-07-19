@@ -638,7 +638,7 @@ function MonthView({ monthStart, atividadesPorDia, today, selectedDay, setSelect
                 className="w-8 h-8 rounded-xl flex items-center justify-center text-[12px] font-extrabold flex-shrink-0"
                 style={
                   selectedDay === today
-                    ? { background: 'hsl(160 84% 27%)', color: 'white' }
+                    ? { background: 'hsl(157 68% 26%)', color: 'white' }
                     : { background: 'hsl(210 16% 92%)', color: 'hsl(215 20% 20%)' }
                 }
               >
@@ -844,7 +844,7 @@ export default function CalendarioPage() {
               onClick={() => setCalView(v)}
               className="px-4 py-1.5 rounded-[10px] text-[12px] font-bold transition-all"
               style={calView === v
-                ? { background: 'white', color: 'hsl(160 84% 27%)' }
+                ? { background: 'white', color: 'hsl(157 68% 26%)' }
                 : { background: 'transparent', color: 'rgba(255,255,255,0.7)' }}
             >
               {v === 'month' ? 'Mês' : 'Semana'}
@@ -934,7 +934,7 @@ export default function CalendarioPage() {
                   style={{ background: 'hsl(210 16% 97%)' }}>
                   <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold"
                     style={isToday
-                      ? { background: 'hsl(160 84% 27%)', color: 'white' }
+                      ? { background: 'hsl(157 68% 26%)', color: 'white' }
                       : { background: 'hsl(210 16% 92%)', color: isPast ? 'hsl(215 16% 60%)' : 'hsl(215 20% 20%)' }}>
                     {d.getDate()}
                   </div>
@@ -1017,7 +1017,7 @@ export default function CalendarioPage() {
                 onClick={() => handleMarcarPago(popupParcela)}
                 disabled={pagandoParcela}
                 className="w-full py-3 rounded-2xl text-white font-bold text-[14px] transition-opacity disabled:opacity-60"
-                style={{ background: 'hsl(160 84% 27%)' }}
+                style={{ background: 'hsl(157 68% 26%)' }}
               >
                 {pagandoParcela ? 'Registrando...' : '✓ Marcar como pago (hoje)'}
               </button>
