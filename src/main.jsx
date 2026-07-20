@@ -28,28 +28,38 @@ if ('scrollRestoration' in history) {
   history.scrollRestoration = 'manual';
 }
 
-// ── Limpeza de Service Workers antigos ────────────────────────────────────────
-// O build anterior usava Vite 8 + rolldown que gerava código inválido causando
-// tela branca no mobile. O SW antigo serve esse bundle quebrado do cache.
-// Esta rotina desregistra todos os SWs órfãos na primeira execução após o update,
-// forçando o browser a baixar o bundle correto do servidor.
+// ── Service Worker: atualização automática e confiável ────────────────────────
+// Problema recorrente: o SW (workbox) servia o bundle ANTIGO em cache, então
+// novos deploys "não apareciam" até limpar o cache manualmente. Esta rotina
+// garante que uma versão publicada seja aplicada sozinha:
+//  - checa atualização ao abrir, ao focar o app e a cada 30 min (reg.update());
+//  - quando um SW NOVO assume o controle (skipWaiting + clientsClaim no build),
+//    recarrega a página UMA vez para servir o conteúdo novo.
 (async () => {
   if (!('serviceWorker' in navigator)) return;
   try {
     const regs = await navigator.serviceWorker.getRegistrations();
-    // Se há mais de 1 SW ativo ou o SW ativo tem hash antigo, limpa tudo
-    if (regs.length > 1) {
+    if (regs.length > 1) {                 // limpeza de SWs órfãos duplicados
       await Promise.all(regs.map(r => r.unregister()));
       window.location.reload();
       return;
     }
-    // Verificar se SW atual está servindo a versão correta
-    // (workbox gera service worker com precache atualizado — se o SW
-    // ainda não assumiu, forçar claim)
-    const sw = navigator.serviceWorker.controller;
-    if (sw && sw.scriptURL?.includes('sw.js')) {
-      // SW está ativo e é o correto — nada a fazer
-    }
+
+    let refreshing = false;
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      // Só recarrega quando um SW novo SUBSTITUI um antigo (atualização real),
+      // nunca na primeira instalação — evita reload desnecessário e loops.
+      if (refreshing || !hadController) return;
+      refreshing = true;
+      window.location.reload();
+    });
+
+    const checkUpdate = () =>
+      navigator.serviceWorker.ready.then(reg => reg.update()).catch(() => {});
+    checkUpdate();                                  // ao abrir
+    setInterval(checkUpdate, 30 * 60 * 1000);       // a cada 30 min
+    window.addEventListener('focus', checkUpdate);  // ao retornar ao app
   } catch { /* falha silenciosa — não bloqueia o app */ }
 })();
 

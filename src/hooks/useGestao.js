@@ -308,10 +308,11 @@ export async function loadMaoObraByLote(plantioId) {
     .select('*')
     .eq('plantio_id', plantioId)
     .eq('user_id', userId)
-    .order('data', { ascending: false });
+    .order('data_inicio', { ascending: false });
   if (error) logDbError('loadMaoObraByLote', error);
   const registros = data || [];
-  const total = registros.reduce((sum, r) => sum + (r.horas * r.valor_hora), 0);
+  // A coluna é `valor` (custo do registro) — não horas × valor_hora (schema antigo).
+  const total = registros.reduce((sum, r) => sum + (Number(r.valor) || 0), 0);
   return { registros, total };
 }
 

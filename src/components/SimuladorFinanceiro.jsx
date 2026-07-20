@@ -53,6 +53,10 @@ export default function SimuladorFinanceiro({ cultura }) {
       modObra: ins.modObra.padrao,
       precoVenda: cultura.venda.precoUnitario,
       sobrevivencia: cultura.venda.sobrevivencia,
+      // Espaldeira (maracujá, uva…): nº de estacas/mourões pré-preenchido
+      ...(cultura.espaldeira
+        ? { estacas: Math.round(cultura.espaldeira.estacasPorHa * (isCampo ? cultura.area.padrao : 1)) }
+        : {}),
       // Preços dos insumos — médias MT 2024/2025
       ...getPrecosPadrao(isCampo),
       // Custos operacionais — por cultura, médias MT
@@ -132,6 +136,14 @@ export default function SimuladorFinanceiro({ cultura }) {
   const resultado = useSimulador(cultura, valores);
   const dim = calcularPlantas(cultura, valores);
 
+  // Espaldeira: área (ha) atual e nº de estacas sugerido para essa área
+  const areaEspaldeira = isCampo
+    ? (parseFloat(valores.areaHa) || cultura.area?.padrao || 1)
+    : ((dim.area || 0) / 10000);
+  const estacasSugerido = cultura.espaldeira
+    ? Math.max(1, Math.round(cultura.espaldeira.estacasPorHa * areaEspaldeira))
+    : null;
+
   const insumoRows = [
     { label: 'Calcário',         value: valores.calcareo,      unit: ins.calcareo.unidade },
     { label: 'Esterco bovino',    value: valores.esterco,       unit: ins.esterco.unidade },
@@ -209,6 +221,23 @@ export default function SimuladorFinanceiro({ cultura }) {
                 </>
               )}
             </div>
+
+            {/* ── Espaldeira: estacas/mourões (maracujá, uva…) ── */}
+            {cultura.espaldeira && (
+              <div className="mt-3 rounded-xl px-4 py-3" style={{ background: `${cor}08`, border: `1px solid ${cor}22` }}>
+                <p className="text-[11px] font-bold mb-2 flex items-center gap-1.5" style={{ color: cor }}>
+                  🪵 Espaldeira — estacas/mourões
+                </p>
+                <div className="flex flex-wrap items-end gap-3">
+                  <NumField label="Estacas" field="estacas" valores={valores} onChange={handleChange} suffix="un" />
+                  <p className="text-[11px] leading-snug flex-1 min-w-[9rem]" style={{ color: `${cor}90` }}>
+                    Padrão {cultura.espaldeira.estacasPorHa}/ha · {cultura.espaldeira.espacamento}.<br />
+                    Sugerido p/ {areaEspaldeira.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha:{' '}
+                    <b>{estacasSugerido?.toLocaleString('pt-BR')}</b> estacas.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ── Insumos ── */}

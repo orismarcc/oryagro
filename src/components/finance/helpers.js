@@ -144,8 +144,8 @@ export function buildDreMap(rawData, periodMode = 'ano') {
     const temRegistros = registros.length > 0;
 
     if (temRegistros) {
-      // Fonte autoritativa: soma de horas * valor_hora
-      const totalMaoObra = registros.reduce((sum, r) => sum + (r.horas * r.valor_hora), 0);
+      // Fonte autoritativa: soma do `valor` de cada registro (custo da mão de obra).
+      const totalMaoObra = registros.reduce((sum, r) => sum + (Number(r.valor) || 0), 0);
       if (totalMaoObra <= 0) return;
       const ano = periodFromDate(p.data_plantio, periodMode);
       if (!ano) return;

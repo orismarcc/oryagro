@@ -86,24 +86,36 @@ export default function LoginPage() {
 
       {/* ── Hero ── */}
       <div className="gradient-hero relative overflow-hidden flex-shrink-0">
-        <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.06) 0%, transparent 70%)' }} />
-        <div className="absolute right-5 bottom-0 pointer-events-none select-none opacity-[0.05]">
-          <Sprout size={130} color="white" />
+        {/* Filete dourado no topo — assinatura da identidade */}
+        <div className="absolute top-0 left-0 right-0 h-[3px]"
+          style={{ background: 'linear-gradient(90deg, transparent, var(--accent) 35%, var(--accent-soft) 65%, transparent)' }} />
+        <div className="absolute right-6 -bottom-6 pointer-events-none select-none opacity-[0.06]">
+          <Sprout size={150} color="white" />
         </div>
 
         {/* pt combina safe-area + espaçamento: env() é 0 no web, status-bar height no APK */}
-        <div className="relative z-10 px-6 pb-10 text-center" style={{ paddingTop: 'calc(var(--safe-top) + 24px)' }}>
+        <div className="relative z-10 px-6 pb-9" style={{ paddingTop: 'calc(var(--safe-top) + 40px)' }}>
           <motion.div
-            initial={{ opacity: 0, y: -16 }}
+            initial={{ opacity: 0, y: -14 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
           >
-            <div className="inline-flex mb-4">
-              <Logo size={72} style={{ borderRadius: 16, boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }} />
+            {/* Lockup: logo + marca lado a lado */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center flex-shrink-0"
+                style={{ width: 50, height: 50, borderRadius: 15,
+                  background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.22)' }}>
+                <Logo size={32} style={{ borderRadius: 9 }} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] leading-none mb-1"
+                  style={{ color: 'var(--accent-soft)' }}>Gestão Agrícola</p>
+                <h1 className="font-display text-white text-[26px] font-black leading-none tracking-tight">OryAgro</h1>
+              </div>
             </div>
-            <h1 className="font-display text-white text-3xl font-extrabold leading-tight">OryAgro</h1>
-            <p className="text-white/55 text-sm mt-1">Guia Hortícola — Mato Grosso</p>
+            <p className="text-white/60 text-[13px] leading-snug mt-4 max-w-[19rem]">
+              Do plantio à colheita — propriedades, lotes, finanças e cronograma no seu bolso.
+            </p>
           </motion.div>
         </div>
       </div>
