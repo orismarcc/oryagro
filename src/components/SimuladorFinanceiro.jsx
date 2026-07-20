@@ -144,6 +144,14 @@ export default function SimuladorFinanceiro({ cultura }) {
     ? Math.max(1, Math.round(cultura.espaldeira.estacasPorHa * areaEspaldeira))
     : null;
 
+  // Pré-preenche o campo de estacas (se ainda vazio) com o valor sugerido.
+  useEffect(() => {
+    if (estacasSugerido != null && (valores.estacas == null || valores.estacas === '')) {
+      setValores(v => ({ ...v, estacas: estacasSugerido }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cultura.id]);
+
   const insumoRows = [
     { label: 'Calcário',         value: valores.calcareo,      unit: ins.calcareo.unidade },
     { label: 'Esterco bovino',    value: valores.esterco,       unit: ins.esterco.unidade },
