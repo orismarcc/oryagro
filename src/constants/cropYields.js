@@ -65,6 +65,15 @@ export const CROP_YIELDS = {
     safrasAno: 1,
     source: 'Embrapa Cerrados, 2022',
   },
+  uva: {
+    cropName: 'Uva (BRS Vitória)',
+    unit: 'per_hectare',
+    defaultYieldValue: 25_000,    // kg/ha/year (parreiral adulto, 2 safras)
+    yieldRangeMin: 18_000,
+    yieldRangeMax: 35_000,
+    safrasAno: 2,
+    source: 'Embrapa Uva e Vinho — BRS Vitória',
+  },
   alface: {
     cropName: 'Alface',
     unit: 'per_hectare',
