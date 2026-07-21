@@ -240,8 +240,8 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
   const [saving, setSaving]                     = useState(false);
   const [deletingId, setDeletingId]             = useState(null);
   const [soloData, setSoloData]                 = useState({ ativo: false, tipoSolo: '', analise: {} });
-  const [estacas, setEstacas]                   = useState('');
-  const [estacasTouched, setEstacasTouched]     = useState(false);
+  const [numLinhas, setNumLinhas]               = useState('');
+  const [espEstaca, setEspEstaca]               = useState('');
 
   const calcValores = {
     comprimento: calc.comprimento,
@@ -249,16 +249,11 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
     areaHa: calc.area,
     espacamentoLinhas: calc.linhas,
     espacamentoPlantas: calc.plantas,
+    numLinhas,
+    espEstaca: espEstaca || (cultura.espaldeira?.espacamentoMourao ?? ''),
   };
   const dim = calcularPlantas(cultura, calcValores);
-
-  // Espaldeira: nº de estacas/mourões (pré-preenchido pelo padrão da cultura,
-  // editável). Recalcula o padrão conforme a área enquanto o usuário não edita.
-  const areaParaEstacas = isCampo ? (parseFloat(calc.area) || 0) : ((dim.area || 0) / 10000);
-  const estacasDefault = cultura.espaldeira
-    ? Math.max(1, Math.round(cultura.espaldeira.estacasPorHa * areaParaEstacas))
-    : null;
-  const estacasValor = estacasTouched ? estacas : (estacasDefault ?? '');
+  const fmtNum = (n) => (n == null || !isFinite(n) ? '—' : Math.round(n).toLocaleString('pt-BR'));
 
   const metodoObj = temMetodos
     ? cultura.metodosPropagacao.find(m => m.key === metodoPropagacao) || cultura.metodosPropagacao[0]
@@ -323,8 +318,8 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
             largura_m: parseFloat(calc.largura) || cultura.canteiro.largura,
           }
       ),
-      // Espaldeira: nº de estacas/mourões (culturas em espaldeira)
-      ...(cultura.espaldeira ? { estacas: parseInt(estacasValor, 10) || estacasDefault } : {}),
+      // Espaldeira: nº de estacas/mourões (calculado pelas linhas × espaçamento)
+      ...(cultura.espaldeira ? { estacas: dim.estacas || null } : {}),
       // Análise de solo (opcional) — alimenta a adubação/calagem do cronograma
       ...(soloData.tipoSolo ? { tipo_solo: soloData.tipoSolo } : {}),
       ...(soloData.ativo && sanitizeAnalise(soloData.analise)
@@ -343,7 +338,7 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
       setUsaMudas(false);
       setMetodoPropagacao(defaultMetodo);
       setSoloData({ ativo: false, tipoSolo: '', analise: {} });
-      setEstacas(''); setEstacasTouched(false);
+      setNumLinhas(''); setEspEstaca('');
       setShowForm(false);
     }
     setSaving(false);
@@ -422,6 +417,8 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
                 onChange={v => onCalcChange(c => ({ ...c, linhas: v }))} />
               <LabelInput label="Esp. Plantas" suffix="m" value={calc.plantas} step="0.05" min="0.05"
                 onChange={v => onCalcChange(c => ({ ...c, plantas: v }))} />
+              <LabelInput label="Nº de linhas" suffix="un" value={numLinhas} step="1" min="1"
+                onChange={setNumLinhas} />
             </>
           ) : (
             <>
@@ -442,6 +439,11 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
             {dim.linhas} linhas × {dim.porLinha} plantas — {dim.area?.toFixed(1)} m²
           </p>
         )}
+        {isCampo && dim.numLinhas !== undefined && (
+          <p className="text-[11px] text-muted-foreground">
+            {fmtNum(dim.numLinhas)} linhas × ~{fmtNum(dim.comprimentoLinha)} m · {fmtNum(dim.plantasPorLinha)} pl/linha
+          </p>
+        )}
 
         {cultura.espaldeira && (
           <div className="rounded-xl p-3" style={{ background: `${cor}08`, border: `1px solid ${cor}22` }}>
@@ -449,29 +451,16 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
               <span className="text-base">🪵</span>
               <p className="text-[11px] font-bold" style={{ color: cor }}>Espaldeira — estacas/mourões</p>
             </div>
-            <div className="flex items-end gap-2">
-              <div className="flex-1 flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Quantidade de estacas
-                </label>
-                <input
-                  type="number" inputMode="numeric" min="1" value={estacasValor}
-                  onChange={e => { setEstacas(e.target.value); setEstacasTouched(true); }}
-                  className="px-3 py-2 rounded-xl text-[13px] font-semibold text-foreground outline-none"
-                  style={{ background: 'white', border: '1px solid hsl(140 13% 88%)' }}
-                />
-              </div>
-              {estacasTouched && estacasDefault != null && (
-                <button type="button" onClick={() => { setEstacas(''); setEstacasTouched(false); }}
-                  className="text-[11px] font-semibold px-2.5 py-2 rounded-xl"
-                  style={{ background: `${cor}14`, color: cor }}>
-                  Padrão
-                </button>
-              )}
+            <div className="grid grid-cols-2 gap-2">
+              <LabelInput label="Esp. estacas" suffix="m" value={espEstaca} step="0.5" min="1"
+                onChange={setEspEstaca} />
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1.5">
-              Padrão {cultura.espaldeira.estacasPorHa}/ha · {cultura.espaldeira.espacamento}.
-              {estacasDefault != null ? ` Sugerido p/ esta área: ${estacasDefault.toLocaleString('pt-BR')} estacas.` : ''}
+            <p className="text-[13px] font-bold mt-2" style={{ color: cor }}>
+              {fmtNum(dim.estacas)} estacas
+              <span className="font-normal text-muted-foreground"> ({fmtNum(dim.numLinhas)} linhas · 1 a cada {parseFloat(espEstaca) || cultura.espaldeira.espacamentoMourao || 5} m)</span>
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              Padrão: 1 mourão a cada {cultura.espaldeira.espacamentoMourao || 5} m ({cultura.espaldeira.espacamento}).
             </p>
           </div>
         )}

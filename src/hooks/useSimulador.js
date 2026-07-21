@@ -8,11 +8,34 @@ export function calcularPlantas(cultura, valores) {
   const isCampo = cultura.tipo === 'campo';
   if (isCampo) {
     const areaHa = parseFloat(valores.areaHa) || cultura.area.padrao;
+    const areaMq = areaHa * 10000;
     const spacingL = parseFloat(valores.espacamentoLinhas) || cultura.espacamento.linhas;
     const spacingP = parseFloat(valores.espacamentoPlantas) || cultura.espacamento.plantas;
     const plantasPorHa = spacingL > 0 && spacingP > 0 ? Math.floor(10000 / (spacingL * spacingP)) : 0;
     const totalPlantas = Math.round(plantasPorHa * areaHa);
-    return { isCampo, areaHa, areaMq: areaHa * 10000, plantasPorHa, totalPlantas };
+
+    // ── Layout em linhas ──────────────────────────────────────────────────
+    // Nº de linhas: informado pelo usuário ou estimado assumindo talhão ~quadrado.
+    // Comprimento de cada linha decorre da área: L = área / (nº linhas × esp. linhas).
+    const numLinhasDefault = spacingL > 0 ? Math.max(1, Math.round(Math.sqrt(areaMq) / spacingL)) : 1;
+    const numLinhas = Math.max(1, parseInt(valores.numLinhas, 10) || numLinhasDefault);
+    const comprimentoLinha = (numLinhas > 0 && spacingL > 0) ? (areaMq / (numLinhas * spacingL)) : 0;
+    const plantasPorLinha = spacingP > 0 ? Math.floor(comprimentoLinha / spacingP) : 0;
+
+    // ── Estacas/mourões da espaldeira ─────────────────────────────────────
+    // Uma linha de mourões por linha de plantas (mesmo esp. de entre-linhas).
+    let estacas = 0, espEstaca = 0;
+    if (cultura.espaldeira) {
+      espEstaca = parseFloat(valores.espEstaca) || cultura.espaldeira.espacamentoMourao || 5;
+      const mouroesPorLinha = espEstaca > 0 ? Math.floor(comprimentoLinha / espEstaca) + 1 : 0;
+      estacas = numLinhas * mouroesPorLinha;
+    }
+
+    return {
+      isCampo, areaHa, areaMq, plantasPorHa, totalPlantas,
+      numLinhas, numLinhasDefault, comprimentoLinha, plantasPorLinha,
+      estacas, espEstaca,
+    };
   } else {
     const comp = parseFloat(valores.comprimento) || cultura.canteiro.comprimento;
     const larg = parseFloat(valores.largura) || cultura.canteiro.largura;
@@ -51,7 +74,9 @@ export function useSimulador(cultura, valores) {
       custoNPK       = (parseFloat(valores.npk)           || ins.npk.padrao)           * ha * precoNPK;
       custoUreia     = (parseFloat(valores.ureia)         || ins.ureia.padrao)         * ha * precoUreia;
       custoNitratoCa = (parseFloat(valores.nitratoCalcio) || ins.nitratoCalcio.padrao) * ha * precoNitratoCa;
-      custoSementes  = ins.sementes.padrao * ha * precoSementes;
+      // Custo de mudas/sementes ligado à DENSIDADE real (nº de plantas), de modo
+      // que alterar o espaçamento altere o custo — antes era só por hectare.
+      custoSementes  = (dim.totalPlantas || 0) * precoSementes;
     } else {
       custoCalcareo  = (parseFloat(valores.calcareo)      || ins.calcareo.padrao)              * precoCalcareo;
       custoEsterco   = (parseFloat(valores.esterco)       || ins.esterco.padrao)               * precoEsterco;
@@ -67,6 +92,10 @@ export function useSimulador(cultura, valores) {
       : 0;
     const custoMOD = parseFloat(valores.modObra) || ins.modObra.padrao;
 
+    // ── Estacas/mourões da espaldeira (maracujá, uva…) ──
+    const valorEstaca = parseFloat(valores.valorEstaca) || ins.mouroes?.precoUnitario || 18;
+    const custoEstacas = cultura.espaldeira ? (dim.estacas || 0) * valorEstaca : 0;
+
     // ── Custos adicionais de produção ──
     const op = getOpCosts(cultura.id, isCampo);
     const custoEmbalagem   = parseFloat(valores.custoEmbalagem)  >= 0 ? parseFloat(valores.custoEmbalagem)  : op.embalagem;
@@ -76,6 +105,7 @@ export function useSimulador(cultura, valores) {
 
     const custoTotal = custoCalcareo + custoEsterco + custoNPK + custoUreia +
                        custoNitratoCa + custoSementes + custoMulching + custoMOD +
+                       custoEstacas +
                        custoEmbalagem + custoTransporte + custoDefensivos + custoEnergia;
 
     const precoVenda    = parseFloat(valores.precoVenda)    || cultura.venda.precoUnitario;
@@ -116,6 +146,7 @@ export function useSimulador(cultura, valores) {
       { name: 'NPK',            value: +custoNPK.toFixed(2),         fill: '#1e4d2b' },
       { name: 'Ureia',          value: +custoUreia.toFixed(2),       fill: '#40916c' },
       { name: 'Sementes/Mudas', value: +custoSementes.toFixed(2),    fill: '#d4a017' },
+      { name: 'Estacas',        value: +custoEstacas.toFixed(2),     fill: '#7b4f12' },
       { name: 'Mão de Obra',    value: +custoMOD.toFixed(2),         fill: '#b5451b' },
       { name: 'Mulching',       value: +custoMulching.toFixed(2),    fill: '#8e8e8e' },
       { name: 'Embalagem',      value: +custoEmbalagem.toFixed(2),   fill: '#7c3aed' },

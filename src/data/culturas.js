@@ -813,6 +813,7 @@ export const CULTURAS = {
     // Cultura conduzida em espaldeira vertical — precisa de mourões (estacas).
     espaldeira: {
       estacasPorHa: 220,
+      espacamentoMourao: 5,
       espacamento: '4–5 m entre mourões',
       descricao: 'Espaldeira vertical: mourões (estacas) a cada 4–5 m + 1 fio de arame liso nº12 a ~1,8–2,0 m.',
     },
@@ -929,6 +930,7 @@ export const CULTURAS = {
     // Cultura conduzida em espaldeira vertical — precisa de mourões (estacas).
     espaldeira: {
       estacasPorHa: 350,
+      espacamentoMourao: 5.5,
       espacamento: '5–6 m entre mourões',
       descricao: 'Espaldeira vertical: mourões (estacas) a cada 5–6 m + 2 a 3 fios de arame liso (o primeiro a ~0,9–1,1 m para o cordão; os demais acima para os ramos).',
     },

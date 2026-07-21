@@ -53,9 +53,16 @@ export default function SimuladorFinanceiro({ cultura }) {
       modObra: ins.modObra.padrao,
       precoVenda: cultura.venda.precoUnitario,
       sobrevivencia: cultura.venda.sobrevivencia,
-      // Espaldeira (maracujá, uva…): nº de estacas/mourões pré-preenchido
+      // Layout em linhas (campo): nº de linhas pré-preenchido (talhão ~quadrado)
+      ...(isCampo
+        ? { numLinhas: Math.max(1, Math.round(Math.sqrt(cultura.area.padrao * 10000) / cultura.espacamento.linhas)) }
+        : {}),
+      // Espaldeira (maracujá, uva…): espaçamento entre estacas + valor unitário
       ...(cultura.espaldeira
-        ? { estacas: Math.round(cultura.espaldeira.estacasPorHa * (isCampo ? cultura.area.padrao : 1)) }
+        ? {
+            espEstaca: cultura.espaldeira.espacamentoMourao || 5,
+            valorEstaca: cultura.insumos.mouroes?.precoUnitario || 18,
+          }
         : {}),
       // Preços dos insumos — médias MT 2024/2025
       ...getPrecosPadrao(isCampo),
@@ -135,22 +142,7 @@ export default function SimuladorFinanceiro({ cultura }) {
 
   const resultado = useSimulador(cultura, valores);
   const dim = calcularPlantas(cultura, valores);
-
-  // Espaldeira: área (ha) atual e nº de estacas sugerido para essa área
-  const areaEspaldeira = isCampo
-    ? (parseFloat(valores.areaHa) || cultura.area?.padrao || 1)
-    : ((dim.area || 0) / 10000);
-  const estacasSugerido = cultura.espaldeira
-    ? Math.max(1, Math.round(cultura.espaldeira.estacasPorHa * areaEspaldeira))
-    : null;
-
-  // Pré-preenche o campo de estacas (se ainda vazio) com o valor sugerido.
-  useEffect(() => {
-    if (estacasSugerido != null && (valores.estacas == null || valores.estacas === '')) {
-      setValores(v => ({ ...v, estacas: estacasSugerido }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cultura.id]);
+  const fmtNum = (n) => (n == null || !isFinite(n) ? '—' : Math.round(n).toLocaleString('pt-BR'));
 
   const insumoRows = [
     { label: 'Calcário',         value: valores.calcareo,      unit: ins.calcareo.unidade },
@@ -198,6 +190,7 @@ export default function SimuladorFinanceiro({ cultura }) {
                   <NumField label="Área (ha)"       field="areaHa"            valores={valores} onChange={handleChange} suffix="ha" />
                   <NumField label="Espaç. linhas"   field="espacamentoLinhas" valores={valores} onChange={handleChange} suffix="m"  />
                   <NumField label="Espaç. plantas"  field="espacamentoPlantas"valores={valores} onChange={handleChange} suffix="m"  />
+                  <NumField label="Nº de linhas"    field="numLinhas"         valores={valores} onChange={handleChange} suffix="un" />
                 </>
               ) : (
                 <>
@@ -215,6 +208,9 @@ export default function SimuladorFinanceiro({ cultura }) {
                     {dim.areaHa || 0} ha · {(parseFloat(valores.espacamentoLinhas) || cultura.espacamento.linhas).toFixed(2)} × {(parseFloat(valores.espacamentoPlantas) || cultura.espacamento.plantas).toFixed(2)} m
                   </p>
                   <p className="text-[13px] font-semibold" style={{ color: cor }}>
+                    {fmtNum(dim.numLinhas)} linhas × ~{fmtNum(dim.comprimentoLinha)} m · {fmtNum(dim.plantasPorLinha)} pl/linha
+                  </p>
+                  <p className="text-[12px] font-semibold mt-0.5" style={{ color: `${cor}b0` }}>
                     {(dim.plantasPorHa || 0).toLocaleString('pt-BR')} pl/ha → {(dim.totalPlantas || 0).toLocaleString('pt-BR')} plantas
                   </p>
                 </>
@@ -237,13 +233,14 @@ export default function SimuladorFinanceiro({ cultura }) {
                   🪵 Espaldeira — estacas/mourões
                 </p>
                 <div className="flex flex-wrap items-end gap-3">
-                  <NumField label="Estacas" field="estacas" valores={valores} onChange={handleChange} suffix="un" />
-                  <p className="text-[11px] leading-snug flex-1 min-w-[9rem]" style={{ color: `${cor}90` }}>
-                    Padrão {cultura.espaldeira.estacasPorHa}/ha · {cultura.espaldeira.espacamento}.<br />
-                    Sugerido p/ {areaEspaldeira.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha:{' '}
-                    <b>{estacasSugerido?.toLocaleString('pt-BR')}</b> estacas.
-                  </p>
+                  <NumField label="Espaç. estacas" field="espEstaca"   valores={valores} onChange={handleChange} suffix="m"  width="w-28" />
+                  <NumField label="Valor unitário" field="valorEstaca" valores={valores} onChange={handleChange} suffix="R$" width="w-28" />
                 </div>
+                <p className="text-[13px] font-semibold mt-2" style={{ color: cor }}>
+                  {fmtNum(dim.estacas)} estacas
+                  <span className="font-normal" style={{ color: `${cor}90` }}> ({fmtNum(dim.numLinhas)} linhas × 1 a cada {(parseFloat(valores.espEstaca) || cultura.espaldeira.espacamentoMourao || 5)} m)</span>
+                  {' '}· custo ≈ {resultado.formatBRL((dim.estacas || 0) * (parseFloat(valores.valorEstaca) || cultura.insumos.mouroes?.precoUnitario || 18))}
+                </p>
               </div>
             )}
           </div>
