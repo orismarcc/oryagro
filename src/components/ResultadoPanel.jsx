@@ -54,9 +54,10 @@ export default function ResultadoPanel({ resultado, cultura }) {
   const margemColor = margem >= 50 ? 'hsl(142 72% 30%)' : margem >= 20 ? 'hsl(38 92% 46%)' : 'hsl(4 86% 58%)';
   const cor = cultura.cor;
 
-  const plantasLabel = isCampo && cultura.venda.producaoKgPorHa ? 'Produção estimada' : isCampo ? 'Plantas viáveis' : 'Comercializáveis';
+  const periodoSuf = resultado.periodo ? `/${resultado.periodo}` : '';
+  const plantasLabel = isCampo && cultura.venda.producaoKgPorHa ? `Produção estimada${periodoSuf}` : isCampo ? 'Plantas viáveis' : 'Comercializáveis';
   const plantasValue = isCampo && cultura.venda.producaoKgPorHa
-    ? `${(cultura.venda.producaoKgPorHa * (resultado.areaHa || 1)).toLocaleString('pt-BR')} kg`
+    ? `${Math.round(resultado.producaoTotal || 0).toLocaleString('pt-BR')} kg`
     : plantasViaveis.toLocaleString('pt-BR');
 
   const sparkData = [
@@ -89,7 +90,7 @@ export default function ResultadoPanel({ resultado, cultura }) {
           className="text-[10px] font-bold uppercase tracking-widest mb-1.5"
           style={{ color: isProfit ? 'hsl(142 72% 30%)' : 'hsl(4 86% 58%)' }}
         >
-          {isProfit ? 'Lucro estimado' : 'Prejuízo estimado'}
+          {isProfit ? 'Lucro estimado' : 'Prejuízo estimado'}{resultado.periodo ? ` · por ${resultado.periodo}` : ''}
         </p>
 
         <div
@@ -142,8 +143,13 @@ export default function ResultadoPanel({ resultado, cultura }) {
         <MetricRow label={plantasLabel} value={plantasValue} />
         <MetricRow label="Custo total" value={formatBRL(custoTotal)} />
         <MetricRow label="Custo/unidade" value={formatBRL(custoPlanta)} />
-        <MetricRow label="Receita" value={formatBRL(receita)} highlight />
-        <MetricRow label="Ponto equilíbrio" value={`${pontoEquilibrio} un.`} />
+        <MetricRow label={`Receita${periodoSuf}`} value={formatBRL(receita)} highlight />
+        <MetricRow
+          label="Ponto de equilíbrio"
+          value={resultado.pontoEquilibrioPct != null
+            ? `${pontoEquilibrio.toLocaleString('pt-BR')} ${resultado.unidadeVenda} · ${resultado.pontoEquilibrioPct.toFixed(0)}% da produção`
+            : `${pontoEquilibrio.toLocaleString('pt-BR')} ${resultado.unidadeVenda}`}
+        />
       </motion.div>
 
       {/* ── Donut ── */}

@@ -72,6 +72,7 @@ export default function SimuladorFinanceiro({ cultura }) {
   }, [cultura, isCampo, ins]);
 
   const [valores, setValores] = useState(() => loadFromStorage(storageKey, getDefaults()));
+  const [metaLucro, setMetaLucro] = useState('');
   const [editInsumos, setEditInsumos] = useState(false);
   const [editPrecos, setEditPrecos] = useState(false);
   const [plantioDialog, setPlantioDialog] = useState(false);
@@ -143,6 +144,15 @@ export default function SimuladorFinanceiro({ cultura }) {
   const resultado = useSimulador(cultura, valores);
   const dim = calcularPlantas(cultura, valores);
   const fmtNum = (n) => (n == null || !isFinite(n) ? '—' : Math.round(n).toLocaleString('pt-BR'));
+
+  // ── Meta de lucro (goal-seek) ──
+  // Dado um lucro-alvo por período, estima quantas plantas/área seriam necessárias
+  // mantendo o mesmo espaçamento, preços e manejo (escala proporcional ao lucro).
+  const meta = parseFloat(metaLucro) || 0;
+  const metaViavel = meta > 0 && resultado.lucro > 0;
+  const fatorMeta = metaViavel ? meta / resultado.lucro : 0;
+  const metaPlantas = metaViavel ? Math.round((dim.totalPlantas || 0) * fatorMeta) : 0;
+  const metaArea = metaViavel ? (isCampo ? (dim.areaHa || 0) * fatorMeta : ((dim.area || 0) / 10000) * fatorMeta) : 0;
 
   const insumoRows = [
     { label: 'Calcário',         value: valores.calcareo,      unit: ins.calcareo.unidade },
@@ -242,6 +252,41 @@ export default function SimuladorFinanceiro({ cultura }) {
                   {' '}· custo ≈ {resultado.formatBRL((dim.estacas || 0) * (parseFloat(valores.valorEstaca) || cultura.insumos.mouroes?.precoUnitario || 18))}
                 </p>
               </div>
+            )}
+          </div>
+
+          {/* ── Meta de lucro (goal-seek) ── */}
+          <div className="card-elevated p-4">
+            <p className="section-label mb-3" style={{ color: cor }}>🎯 Meta de lucro (por {resultado.periodo})</p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Quero lucrar (R$/{resultado.periodo})
+                </label>
+                <input
+                  type="number" inputMode="numeric" min="0" value={metaLucro}
+                  onChange={e => setMetaLucro(e.target.value)}
+                  placeholder="ex.: 30000"
+                  className="w-40 px-3 py-2 rounded-xl text-[13px] font-semibold text-foreground outline-none"
+                  style={{ background: 'hsl(140 14% 96%)', border: '1px solid hsl(140 13% 88%)' }}
+                />
+              </div>
+            </div>
+            {metaViavel ? (
+              <p className="text-[12px] leading-snug mt-2" style={{ color: cor }}>
+                Para lucrar <b>{resultado.formatBRL(meta)}/{resultado.periodo}</b> — mantendo este espaçamento, preços e manejo —
+                você precisaria de aproximadamente <b>{fmtNum(metaPlantas)} plantas</b>
+                {isCampo ? <> (~<b>{metaArea.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha</b>)</> : null}.
+                {fatorMeta < 1 && <span className="text-muted-foreground"> Menos do que você tem agora — já supera a meta.</span>}
+              </p>
+            ) : meta > 0 ? (
+              <p className="text-[12px] mt-2 text-muted-foreground">
+                Ajuste os inputs para ter <b>lucro positivo</b> primeiro — aí calculo a área/plantas para a sua meta.
+              </p>
+            ) : (
+              <p className="text-[11px] mt-2 text-muted-foreground">
+                Informe um lucro-alvo e eu estimo quantas plantas/área você precisaria com os parâmetros atuais.
+              </p>
             )}
           </div>
 

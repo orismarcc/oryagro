@@ -55,6 +55,18 @@ export function useSimulador(cultura, valores) {
     const dim = calcularPlantas(cultura, valores);
     const ins = cultura.insumos;
 
+    // ── Modelo POR PLANTA ─────────────────────────────────────────────────
+    // As exigências das culturas são cadastradas por hectare no espaçamento
+    // PADRÃO. Convertemos para "por planta" dividindo pela densidade de
+    // referência (plantas/ha no espaçamento padrão) e re-escalamos pelo nº de
+    // plantas real. Assim adubação, mão de obra, insumos, PRODUÇÃO e custos
+    // acompanham a densidade — não apenas a área. `escala` é o nº de hectares
+    // "equivalentes em plantas": no espaçamento padrão, escala == área.
+    const densRefCampo = Math.max(1, Math.floor(
+      10000 / ((cultura.espacamento?.linhas || 1) * (cultura.espacamento?.plantas || 1)),
+    ));
+    const escala = isCampo ? ((dim.totalPlantas || 0) / densRefCampo) : ((dim.area || 32) / 32);
+
     // ── Preços por unidade (editáveis) ──
     const pp = getPrecosPadrao(isCampo);
     const precoCalcareo  = parseFloat(valores.precoCalcareo)  || pp.precoCalcareo;
@@ -68,14 +80,15 @@ export function useSimulador(cultura, valores) {
     let custoCalcareo, custoEsterco, custoNPK, custoUreia, custoNitratoCa, custoSementes;
 
     if (isCampo) {
-      const ha = dim.areaHa || 1;
-      custoCalcareo  = (parseFloat(valores.calcareo)      || ins.calcareo.padrao)      * ha * precoCalcareo;
-      custoEsterco   = (parseFloat(valores.esterco)       || ins.esterco.padrao)       * ha * precoEsterco;
-      custoNPK       = (parseFloat(valores.npk)           || ins.npk.padrao)           * ha * precoNPK;
-      custoUreia     = (parseFloat(valores.ureia)         || ins.ureia.padrao)         * ha * precoUreia;
-      custoNitratoCa = (parseFloat(valores.nitratoCalcio) || ins.nitratoCalcio.padrao) * ha * precoNitratoCa;
-      // Custo de mudas/sementes ligado à DENSIDADE real (nº de plantas), de modo
-      // que alterar o espaçamento altere o custo — antes era só por hectare.
+      // Escala por densidade de plantas (não só por área): adubação e insumos
+      // acompanham quantas plantas realmente existem.
+      const e = escala;
+      custoCalcareo  = (parseFloat(valores.calcareo)      || ins.calcareo.padrao)      * e * precoCalcareo;
+      custoEsterco   = (parseFloat(valores.esterco)       || ins.esterco.padrao)       * e * precoEsterco;
+      custoNPK       = (parseFloat(valores.npk)           || ins.npk.padrao)           * e * precoNPK;
+      custoUreia     = (parseFloat(valores.ureia)         || ins.ureia.padrao)         * e * precoUreia;
+      custoNitratoCa = (parseFloat(valores.nitratoCalcio) || ins.nitratoCalcio.padrao) * e * precoNitratoCa;
+      // Mudas/sementes: custo por planta × nº de plantas real.
       custoSementes  = (dim.totalPlantas || 0) * precoSementes;
     } else {
       custoCalcareo  = (parseFloat(valores.calcareo)      || ins.calcareo.padrao)              * precoCalcareo;
@@ -90,7 +103,8 @@ export function useSimulador(cultura, valores) {
     const custoMulching = (!isCampo && ins.mulching.multiplicador > 0)
       ? (dim.area || 0) * ins.mulching.multiplicador * (parseFloat(valores.precoMulching) || pp.precoMulching)
       : 0;
-    const custoMOD = parseFloat(valores.modObra) || ins.modObra.padrao;
+    // Mão de obra também escala com o nº de plantas (mais plantas = mais manejo).
+    const custoMOD = (parseFloat(valores.modObra) || ins.modObra.padrao) * (isCampo ? escala : 1);
 
     // ── Estacas/mourões da espaldeira (maracujá, uva…) ──
     const valorEstaca = parseFloat(valores.valorEstaca) || ins.mouroes?.precoUnitario || 18;
@@ -122,8 +136,10 @@ export function useSimulador(cultura, valores) {
     const v = cultura.venda;
 
     if (isCampo && (v.producaoKgPorHa || valores.producaoKgPorHa)) {
+      // Produção por PLANTA × nº de plantas (via escala), não só por área — assim
+      // um espaçamento maior (menos plantas) produz menos, e vice-versa.
       const baseKgHa = parseFloat(valores.producaoKgPorHa) || v.producaoKgPorHa || 0;
-      producaoTotal = baseKgHa * (dim.areaHa || 1) * (sobrevivencia / 100);
+      producaoTotal = baseKgHa * escala * (sobrevivencia / 100);
       receita       = producaoTotal * precoVenda;
     } else if (v.producaoBase != null || valores.producaoBase != null) {
       // producaoBase = total sellable units per canteiro at 100% (before sobrevivência)
@@ -138,7 +154,22 @@ export function useSimulador(cultura, valores) {
     const lucro   = receita - custoTotal;
     const margem  = receita > 0 ? (lucro / receita) * 100 : 0;
     const custoPlanta = dim.totalPlantas > 0 ? custoTotal / dim.totalPlantas : 0;
+
+    // ── Período do resultado ──
+    // Perenes (produção por ano) → "ano"; anuais → "ciclo/safra".
+    const periodo = cultura.tipoCultura === 'perene' ? 'ano' : 'ciclo';
+
+    // ── Ponto de equilíbrio ──
+    // Volume de produção (na mesma unidade da 'produção estimada') necessário
+    // para cobrir os custos, e a fração da produção que isso representa.
+    const unidadeVenda = cultura.venda?.unidade || 'un';
     const pontoEquilibrio = precoVenda > 0 ? Math.ceil(custoTotal / precoVenda) : 0;
+    const pontoEquilibrioPct = producaoTotal > 0 ? (pontoEquilibrio / producaoTotal) * 100 : null;
+
+    // ── Base para "meta de lucro" (goal-seek) ──
+    // Lucro por hectare-equivalente (por planta), usado para dimensionar quanto
+    // seria necessário para atingir uma meta de lucro/ano informada pelo usuário.
+    const lucroPorEscala = escala > 0 ? lucro / escala : 0;
 
     const composicaoCustos = [
       { name: 'Calcário',       value: +custoCalcareo.toFixed(2),    fill: '#52b788' },
@@ -161,7 +192,8 @@ export function useSimulador(cultura, valores) {
       producaoTotal,
       custoTotal, custoPlanta,
       receita, lucro, margem,
-      pontoEquilibrio,
+      pontoEquilibrio, pontoEquilibrioPct, unidadeVenda,
+      periodo, escala, densRef: densRefCampo, lucroPorEscala,
       composicaoCustos,
       formatBRL, isCampo,
     };
