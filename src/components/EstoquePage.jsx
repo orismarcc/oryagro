@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package2, Plus, TrendingUp, TrendingDown, X, Trash2, AlertTriangle, Pencil, ChevronLeft } from 'lucide-react';
+import { Package2, Plus, TrendingUp, TrendingDown, X, Trash2, AlertTriangle, Pencil, ChevronLeft, Wallet, Boxes } from 'lucide-react';
 import { loadEstoque, upsertInsumo, deleteInsumo, addMovimento, loadMovimentos, loadMovimentosBatch } from '../hooks/useGestao';
 import { loadLotesByPropriedade } from '../hooks/useSupabaseSync';
 import { logDbError } from '../lib/logger';
@@ -530,6 +530,12 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
 
   const alertas = insumos.filter(i => i.quantidade <= i.quantidade_minima && i.quantidade_minima > 0);
 
+  // Valor imobilizado em estoque (Σ quantidade × preço unitário, quando informado)
+  const valorEstoque = insumos.reduce(
+    (s, i) => s + (parseFloat(i.quantidade) || 0) * (parseFloat(i.preco_unitario) || 0), 0,
+  );
+  const fmtBRL = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
+
   const handleDelete = async (id) => {
     if (!window.confirm('Remover este insumo?')) return;
     await deleteInsumo(id);
@@ -555,22 +561,40 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
         </p>
       </div>
 
-      {/* Action bar */}
-      <div className="px-4 pt-4 pb-2 max-w-2xl mx-auto flex items-center justify-between">
-        <p className="section-label">Insumos cadastrados</p>
-        {/* I-09: only admin/owner can add insumos */}
-        {canEdit && (
-          <button
-            onClick={() => setAddModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold text-white"
-            style={{ background: 'hsl(156 64% 31%)' }}
-          >
-            <Plus size={13} /> Adicionar insumo
-          </button>
+      <div className="page-body pt-4 pb-32 space-y-4">
+        {/* ── Resumo do estoque ── */}
+        {!loading && insumos.length > 0 && (
+          <div className="grid grid-cols-3 gap-2.5">
+            {[
+              { icon: Boxes, label: 'Itens', value: insumos.length, cor: 'hsl(156 64% 31%)' },
+              { icon: AlertTriangle, label: 'Alertas', value: alertas.length, cor: alertas.length > 0 ? 'hsl(4 76% 50%)' : 'hsl(156 64% 31%)', destaca: alertas.length > 0 },
+              { icon: Wallet, label: 'Em estoque', value: valorEstoque > 0 ? fmtBRL(valorEstoque) : '—', cor: 'hsl(36 92% 42%)', destaca: valorEstoque > 0 },
+            ].map(({ icon: Icon, label, value, cor, destaca }) => (
+              <div key={label} className="card p-3">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Icon size={13} style={{ color: cor }} />
+                  <span className="text-[9.5px] font-bold uppercase tracking-wider text-muted-foreground truncate">{label}</span>
+                </div>
+                <p className="text-[17px] font-black leading-none tabular-nums" style={{ color: destaca ? cor : 'var(--fg)' }}>{value}</p>
+              </div>
+            ))}
+          </div>
         )}
-      </div>
 
-      <div className="px-4 pt-2 pb-32 max-w-2xl mx-auto space-y-4">
+        {/* Action bar */}
+        <div className="flex items-center justify-between">
+          <p className="section-label">Insumos cadastrados</p>
+          {/* I-09: only admin/owner can add insumos */}
+          {canEdit && (
+            <button
+              onClick={() => setAddModal(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold text-white"
+              style={{ background: 'hsl(156 64% 31%)', boxShadow: '0 8px 18px -8px hsl(156 64% 31%)' }}
+            >
+              <Plus size={13} /> Adicionar insumo
+            </button>
+          )}
+        </div>
         {/* Alertas */}
         {alertas.length > 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -596,13 +620,29 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
             {[1, 2, 3].map(i => <div key={i} className="h-16 rounded-xl bg-muted animate-pulse" />)}
           </div>
         ) : insumos.length === 0 ? (
-          <div className="text-center py-16">
-            <Package2 size={36} className="mx-auto mb-3 opacity-30" />
-            <p className="text-[13px] text-muted-foreground">Nenhum insumo cadastrado.</p>
-            <p className="text-[11px] text-muted-foreground mt-1">
-              Adicione os insumos que você usa na propriedade.
-            </p>
-          </div>
+          canEdit ? (
+            <button
+              onClick={() => setAddModal(true)}
+              className="w-full card p-6 flex flex-col items-center gap-2.5 text-center transition-transform active:scale-[0.98]"
+              style={{ borderStyle: 'dashed', borderColor: 'hsl(156 64% 31% / 0.4)' }}
+            >
+              <span className="flex items-center justify-center w-11 h-11 rounded-2xl" style={{ background: 'hsl(156 64% 31% / 0.1)', color: 'hsl(156 64% 31%)' }}>
+                <Package2 size={20} />
+              </span>
+              <p className="text-[13px] font-bold text-foreground">Cadastrar primeiro insumo</p>
+              <p className="text-[11px] text-muted-foreground max-w-[17rem] leading-snug">
+                Registre calcário, adubos e defensivos — o app baixa o estoque automaticamente conforme o cronograma é executado.
+              </p>
+              <span className="mt-1 text-[11px] font-bold px-3 py-1.5 rounded-xl" style={{ background: 'hsl(156 64% 31%)', color: '#fff' }}>
+                + Adicionar insumo
+              </span>
+            </button>
+          ) : (
+            <div className="text-center py-16">
+              <Package2 size={36} className="mx-auto mb-3 opacity-30" />
+              <p className="text-[13px] text-muted-foreground">Nenhum insumo cadastrado.</p>
+            </div>
+          )
         ) : (
           <div className="space-y-2">
             {insumos.map(insumo => {
