@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database, Loader2, History } from 'lucide-react';
+import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database, Loader2, History, Sprout, MapPin, Ruler } from 'lucide-react';
 import { loadLotesByPropriedade, deleteLoteCompleto, loadTalhoesPorPropriedade, criarTalhao, criarSafraDeTalhao, deleteTalhaoComSeguranca, preCarregarEtapasPadrao } from '../hooks/useSupabaseSync';
 import { useCronogramaStatusBatch, makeStableId } from '../hooks/useCronogramaSync';
 import { calcularPlantas } from '../hooks/useSimulador';
@@ -757,6 +757,58 @@ function NovaTalhaoDialog({ propriedadeId, onClose, onCreated }) {
   );
 }
 
+const BRAND = 'hsl(156 64% 31%)';
+const GOLD  = 'hsl(36 92% 42%)';
+
+/** Métrica compacta do resumo da propriedade. */
+function StatBox({ icon: Icon, label, value, accent = false }) {
+  return (
+    <div className="card p-3">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <Icon size={13} style={{ color: accent ? GOLD : BRAND }} />
+        <span className="text-[9.5px] font-bold uppercase tracking-wider text-muted-foreground truncate">{label}</span>
+      </div>
+      <p className="text-[19px] font-black leading-none tabular-nums" style={{ color: accent ? GOLD : 'var(--fg)' }}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+/** Tile de ação — primário (preenchido) para CTAs, secundário (card) para utilitários. */
+function ActionTile({ icon: Icon, label, sub, onClick, primary = false, badge = 0 }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative flex flex-col items-start gap-2.5 p-3 rounded-2xl text-left transition-transform active:scale-[0.97]"
+      style={primary
+        ? { background: BRAND, color: '#fff', boxShadow: `0 8px 18px -8px ${BRAND}` }
+        : { background: 'var(--bg-card)', color: 'var(--fg)', border: '1px solid hsl(150 16% 90%)' }}
+    >
+      <span className="flex items-center justify-center w-9 h-9 rounded-xl flex-shrink-0"
+        style={primary ? { background: 'rgba(255,255,255,0.22)' } : { background: `${BRAND}14`, color: BRAND }}>
+        <Icon size={17} />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[12.5px] font-bold leading-tight">{label}</p>
+        {sub && (
+          <p className="text-[10px] leading-tight mt-0.5"
+            style={{ color: primary ? 'rgba(255,255,255,0.78)' : 'hsl(150 8% 45%)' }}>
+            {sub}
+          </p>
+        )}
+      </div>
+      {badge > 0 && (
+        <span className="absolute top-2 right-2 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black flex items-center justify-center"
+          style={{ background: '#dc2626', color: '#fff' }}>
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export default function PropriedadePage({ propriedade, userRole, onBack, onSelectLote, onGoEstoque, onAddLote, onSelectTalhao }) {
   const [lotes, setLotes]         = useState([]);
   const [talhoes, setTalhoes]     = useState([]);
@@ -804,88 +856,111 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
 
   const canDeleteLote = can(userRole, FARM_ACTIONS.DELETE_ANY);
 
+  // ── Resumo da propriedade ──
+  const resumo = useMemo(() => {
+    const areaLotes   = lotes.reduce((s, l) => s + (parseFloat(l.area_ha) || 0), 0);
+    const areaTalhoes = talhoes.reduce((s, t) => s + (parseFloat(t.area_ha) || 0), 0);
+    const prontos = lotes.filter(l => {
+      const c = CULTURAS[l.cultura_id];
+      try { return c && resolveLifecycle(l, c).prontoParaColheita; } catch { return false; }
+    }).length;
+    const culturas = new Set([...lotes, ...talhoes].map(x => x.cultura_id).filter(Boolean));
+    return {
+      areaTotal: Math.round((areaLotes + areaTalhoes) * 100) / 100,
+      prontos,
+      nCulturas: culturas.size,
+      nPlantios: lotes.length + talhoes.length,
+    };
+  }, [lotes, talhoes]);
+
+  const localTxt = [propriedade.cidade, propriedade.estado].filter(Boolean).join(' · ');
+
   return (
     <div className="min-h-screen bg-background">
-      <div className="gradient-hero px-5 pb-6" style={{ paddingTop: 'var(--hero-pad-top)' }}>
+      <div className="gradient-hero px-5 pb-8" style={{ paddingTop: 'var(--hero-pad-top)' }}>
         <button onClick={onBack} className="flex items-center gap-1.5 text-white/60 text-[12px] font-medium mb-4 hover:text-white transition-colors">
           <ArrowLeft size={14} /> Propriedades
         </button>
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-2xl flex items-center justify-center border flex-shrink-0"
-              style={{ background: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.28)' }}>
-              <Building2 size={22} color="white" />
-            </div>
-            <div>
-              <h1 className="font-display text-white text-xl font-extrabold leading-tight">{propriedade.nome}</h1>
-              {propriedade.descricao && <p className="text-white/55 text-[12px] mt-0.5">{propriedade.descricao}</p>}
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="h-12 w-12 rounded-2xl flex items-center justify-center border flex-shrink-0"
+            style={{ background: 'rgba(255,255,255,0.16)', borderColor: 'rgba(255,255,255,0.26)' }}>
+            <Building2 size={22} color="white" />
           </div>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={onGoEstoque}
-            className="relative flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold"
-            style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)' }}>
-            <Package2 size={13} /> Estoque
-            {alertas > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center"
-                style={{ background: '#dc2626', color: '#fff' }}>
-                {alertas}
-              </span>
-            )}
-          </button>
-          <button onClick={onAddLote}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold"
-            style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)' }}>
-            <Plus size={13} /> Novo Lote
-          </button>
-          {canDeleteLote && (
-            <button onClick={() => setShowHistorico(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold"
-              style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)' }}>
-              <History size={13} /> Histórico
-            </button>
-          )}
-          {canDeleteLote && (
-            <button onClick={() => setShowBackup(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold"
-              style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)' }}>
-              <Database size={13} /> Backup
-            </button>
-          )}
+          <div className="min-w-0">
+            <h1 className="font-display text-white text-xl font-extrabold leading-tight truncate">{propriedade.nome}</h1>
+            <p className="text-white/60 text-[12px] mt-0.5 flex items-center gap-1.5 flex-wrap">
+              {localTxt && <span className="flex items-center gap-1"><MapPin size={11} /> {localTxt}</span>}
+              {localTxt && <span className="opacity-40">·</span>}
+              <span>{resumo.nPlantios} plantio{resumo.nPlantios !== 1 ? 's' : ''}</span>
+              <span className="opacity-40">·</span>
+              <span>{resumo.areaTotal.toLocaleString('pt-BR')} ha</span>
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="page-body pt-5 pb-32 flex flex-col gap-6">
+      <div className="page-body pt-4 pb-32 flex flex-col gap-5">
+
+        {/* ── Resumo ── */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 -mt-9">
+          <StatBox icon={Building2} label="Talhões" value={talhoes.length} />
+          <StatBox icon={Leaf} label="Lotes" value={lotes.length} />
+          <StatBox icon={Ruler} label="Área total" value={`${resumo.areaTotal.toLocaleString('pt-BR')} ha`} />
+          <StatBox icon={CheckCircle2} label="P/ colheita" value={resumo.prontos} accent={resumo.prontos > 0} />
+        </div>
+
+        {/* ── Ações ── */}
+        <div>
+          <p className="section-label mb-2.5">Ações</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <ActionTile icon={Plus}      label="Novo Lote"   sub="Cultura anual"   onClick={onAddLote}                primary />
+            <ActionTile icon={Sprout}    label="Novo Talhão" sub="Cultura perene"  onClick={() => setShowNovoTalhao(true)} primary />
+            <ActionTile icon={Package2}  label="Estoque"     sub="Insumos"         onClick={onGoEstoque}              badge={alertas} />
+            {canDeleteLote
+              ? <ActionTile icon={History} label="Histórico" sub="Auditoria" onClick={() => setShowHistorico(true)} />
+              : <div className="hidden sm:block" />}
+            {canDeleteLote && (
+              <ActionTile icon={Database} label="Backup" sub="Exportar dados" onClick={() => setShowBackup(true)} />
+            )}
+          </div>
+        </div>
+
 
         {/* ── Talhões Perenes ─────────────────────────────────────────────── */}
         <div>
-          <div className="flex items-center justify-between mb-3 px-1">
-            <div className="flex items-center gap-2">
-              <p className="section-label">Talhões Perenes</p>
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
-                style={{ background: '#f0fdf4', color: '#16a34a' }}>
-                Acerola · Banana · Cupuaçu…
-              </span>
+          <div className="flex items-center justify-between mb-2.5 px-0.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <p className="section-label">Talhões perenes</p>
+              <span className="text-[11px] text-muted-foreground flex-shrink-0">{talhoes.length}</span>
             </div>
             <button
               onClick={() => setShowNovoTalhao(true)}
-              className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-xl"
-              style={{ background: '#f0fdf4', color: '#16a34a' }}
+              className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-xl flex-shrink-0"
+              style={{ background: `${BRAND}14`, color: BRAND }}
             >
-              <Plus size={11} /> Novo Talhão
+              <Plus size={12} /> Novo
             </button>
           </div>
 
           {loading ? (
             <div className="space-y-2">{[1].map(i => <div key={i} className="h-16 rounded-2xl bg-muted animate-pulse" />)}</div>
           ) : talhoes.length === 0 ? (
-            <div className="card p-5 text-center" style={{ borderStyle: 'dashed', borderColor: '#86efac' }}>
-              <p className="text-[12px] text-muted-foreground">
-                Nenhum talhão perene. Culturas como <strong>acerola, banana e cupuaçu</strong> duram
-                décadas — use talhões para rastrear todas as safras da mesma planta.
+            <button
+              onClick={() => setShowNovoTalhao(true)}
+              className="w-full card p-6 flex flex-col items-center gap-2.5 text-center transition-transform active:scale-[0.98]"
+              style={{ borderStyle: 'dashed', borderColor: `${BRAND}55` }}
+            >
+              <span className="flex items-center justify-center w-11 h-11 rounded-2xl" style={{ background: `${BRAND}14`, color: BRAND }}>
+                <Sprout size={20} />
+              </span>
+              <p className="text-[13px] font-bold text-foreground">Criar primeiro talhão</p>
+              <p className="text-[11px] text-muted-foreground max-w-[17rem] leading-snug">
+                Culturas como <strong>acerola, uva, maracujá e cupuaçu</strong> duram anos — o talhão rastreia todas as safras da mesma planta.
               </p>
-            </div>
+              <span className="mt-1 text-[11px] font-bold px-3 py-1.5 rounded-xl" style={{ background: BRAND, color: '#fff' }}>
+                + Novo Talhão
+              </span>
+            </button>
           ) : (
             <div className="space-y-2">
               {talhoes.map((t, i) => (
@@ -904,28 +979,39 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
 
         {/* ── Lotes Anuais ────────────────────────────────────────────────── */}
         <div>
-          <div className="flex items-center justify-between mb-3 px-1">
-            <div className="flex items-center gap-2">
-              <p className="section-label">Lotes Anuais</p>
-              <span className="text-[11px] text-muted-foreground">{lotes.length} lote{lotes.length !== 1 ? 's' : ''}</span>
+          <div className="flex items-center justify-between mb-2.5 px-0.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <p className="section-label">Lotes anuais</p>
+              <span className="text-[11px] text-muted-foreground flex-shrink-0">{lotes.length}</span>
             </div>
             <button
               onClick={onAddLote}
-              className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-xl"
-              style={{ background: 'hsl(140 14% 94%)', color: 'hsl(150 8% 35%)' }}
+              className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-xl flex-shrink-0"
+              style={{ background: `${BRAND}14`, color: BRAND }}
             >
-              <Plus size={11} /> Novo Lote
+              <Plus size={12} /> Novo
             </button>
           </div>
 
           {loading ? (
             <div className="space-y-2">{[1,2].map(i => <div key={i} className="h-20 rounded-2xl bg-muted animate-pulse" />)}</div>
           ) : lotes.length === 0 ? (
-            <div className="card p-8 flex flex-col items-center gap-3 text-center">
-              <Leaf size={32} className="opacity-30" />
-              <p className="text-[14px] font-bold text-foreground">Nenhum lote anual</p>
-              <p className="text-[12px] text-muted-foreground">Adicione o primeiro lote clicando em "Novo Lote" acima.</p>
-            </div>
+            <button
+              onClick={onAddLote}
+              className="w-full card p-6 flex flex-col items-center gap-2.5 text-center transition-transform active:scale-[0.98]"
+              style={{ borderStyle: 'dashed', borderColor: `${BRAND}55` }}
+            >
+              <span className="flex items-center justify-center w-11 h-11 rounded-2xl" style={{ background: `${BRAND}14`, color: BRAND }}>
+                <Leaf size={20} />
+              </span>
+              <p className="text-[13px] font-bold text-foreground">Adicionar primeiro lote</p>
+              <p className="text-[11px] text-muted-foreground max-w-[17rem] leading-snug">
+                Culturas anuais (alface, quiabo, coentro…) de ciclo curto. Cadastre o lote para gerar o cronograma automático.
+              </p>
+              <span className="mt-1 text-[11px] font-bold px-3 py-1.5 rounded-xl" style={{ background: BRAND, color: '#fff' }}>
+                + Novo Lote
+              </span>
+            </button>
           ) : (
             <div className="space-y-3">
               {lotes.map((lote, i) => (

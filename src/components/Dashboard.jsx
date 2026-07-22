@@ -644,6 +644,41 @@ function EstaSemanaSection({ lotes, statusByLote = {} }) {
   );
 }
 
+const BRAND = 'hsl(156 64% 31%)';
+const GOLD  = 'hsl(36 92% 42%)';
+
+function StatCard({ icon: Icon, label, value, accent, danger }) {
+  const cor = danger ? 'hsl(4 76% 50%)' : accent ? GOLD : BRAND;
+  return (
+    <div className="card p-3">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <Icon size={13} style={{ color: cor }} />
+        <span className="text-[9.5px] font-bold uppercase tracking-wider text-muted-foreground truncate">{label}</span>
+      </div>
+      <p className="text-[20px] font-black leading-none tabular-nums" style={{ color: (accent || danger) ? cor : 'var(--fg)' }}>{value}</p>
+    </div>
+  );
+}
+
+function ActTile({ icon: Icon, label, sub, onClick, primary }) {
+  return (
+    <button type="button" onClick={onClick}
+      className="flex items-center gap-3 p-3 rounded-2xl text-left transition-transform active:scale-[0.97]"
+      style={primary
+        ? { background: BRAND, color: '#fff', boxShadow: `0 8px 18px -8px ${BRAND}` }
+        : { background: 'var(--bg-card)', color: 'var(--fg)', border: '1px solid hsl(150 16% 90%)' }}>
+      <span className="flex items-center justify-center w-10 h-10 rounded-xl flex-shrink-0"
+        style={primary ? { background: 'rgba(255,255,255,0.22)' } : { background: `${BRAND}14`, color: BRAND }}>
+        <Icon size={18} />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[13px] font-bold leading-tight">{label}</p>
+        {sub && <p className="text-[10.5px] leading-tight mt-0.5" style={{ color: primary ? 'rgba(255,255,255,0.78)' : 'hsl(150 8% 45%)' }}>{sub}</p>}
+      </div>
+    </button>
+  );
+}
+
 export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade, onManagePropriedades, onSignOut, onGoSettings, userName }) {
   const [lotes, setLotes]                   = useState([]);
   const [propriedades, setPropriedades]     = useState([]);
@@ -680,6 +715,17 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
 
   const lotesOrfaos = lotes.filter(l => !l.propriedade_id);
 
+  const prontos = useMemo(() => lotes.filter(l => {
+    const c = CULTURAS[l.cultura_id];
+    try { return c && resolveLifecycle(l, c).prontoParaColheita; } catch { return false; }
+  }).length, [lotes]);
+  const alertasTotal = useMemo(() => Object.values(alertasPorProp).reduce((s, n) => s + n, 0), [alertasPorProp]);
+  const temDados = propriedades.length > 0 || lotes.length > 0;
+
+  const hora = new Date().getHours();
+  const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+  const dataHoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+
   return (
     <div className="min-h-screen bg-background">
       {/* ── Hero ── */}
@@ -693,53 +739,41 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
         </div>
 
         {/* pt usa var(--hero-pad-top) para iniciar abaixo do hamburger + sino flutuantes */}
-        <div className="relative z-10 px-5 pb-6" style={{ paddingTop: 'var(--hero-pad-top)' }}>
-          <div className="flex items-center gap-3 mb-4 pr-24">
+        <div className="relative z-10 px-5 pb-10" style={{ paddingTop: 'var(--hero-pad-top)' }}>
+          <div className="flex items-center gap-3 pr-24">
             {/* pr-24 reserva espaço à direita para os botões flutuantes */}
             <Logo size={40} className="flex-shrink-0" style={{ borderRadius: 10 }} />
             <div className="min-w-0">
-              <p className="text-white/60 text-xs font-medium truncate">
-                {userName ? `Olá, ${userName}` : 'Guia Hortícola'}
+              <p className="text-white/60 text-[12px] font-medium truncate">
+                {saudacao}{userName ? `, ${userName}` : ''} 👋
               </p>
-              <h1 className="font-display text-white text-xl font-extrabold leading-tight">OryAgro</h1>
+              <h1 className="font-display text-white text-[22px] font-black leading-tight">OryAgro</h1>
             </div>
           </div>
-
-          {/* Stats */}
-          <div className="glass rounded-2xl p-4 mb-3" style={{ borderColor: 'rgba(255,255,255,0.18)' }}>
-            <div className="grid grid-cols-3 divide-x" style={{ divideColor: 'rgba(255,255,255,0.15)' }}>
-              <div className="pr-4">
-                <p className="font-display text-white text-2xl font-black leading-none">{loading ? '…' : propriedades.length}</p>
-                <p className="text-white/55 text-[10px] font-semibold uppercase tracking-widest mt-0.5">Propriedades</p>
-              </div>
-              <div className="px-4">
-                <p className="font-display text-white text-2xl font-black leading-none">{loading ? '…' : lotes.length}</p>
-                <p className="text-white/55 text-[10px] font-semibold uppercase tracking-widest mt-0.5">Lotes</p>
-              </div>
-              <div className="pl-4">
-                <p className="font-display text-white text-2xl font-black leading-none text-emerald-300">
-                  {loading ? '…' : lotes.filter(l => {
-                    const c = CULTURAS[l.cultura_id];
-                    return c && resolveLifecycle(l, c).prontoParaColheita;
-                  }).length}
-                </p>
-                <p className="text-white/55 text-[10px] font-semibold uppercase tracking-widest mt-0.5">P/ Colheita</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Manage properties */}
-          <button onClick={onManagePropriedades}
-            className="glass w-full flex items-center justify-center gap-2 py-3 rounded-xl transition-all active:scale-[0.98]"
-            style={{ borderColor: 'rgba(255,255,255,0.22)' }}>
-            <Building2 size={15} color="white" />
-            <span className="text-white text-[13px] font-bold">Gerenciar Propriedades</span>
-          </button>
+          <p className="text-white/55 text-[12px] mt-3 capitalize">{dataHoje}</p>
         </div>
       </div>
 
       {/* ── Content ── */}
-      <div className="page-body pt-5 pb-4">
+      <div className="page-body pt-4 pb-4">
+        {/* Resumo (cards sobrepostos ao hero) */}
+        {!loading && temDados && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 -mt-9 mb-4">
+            <StatCard icon={Building2} label="Propriedades" value={propriedades.length} />
+            <StatCard icon={Leaf} label="Lotes" value={lotes.length} />
+            <StatCard icon={CheckCircle2} label="P/ colheita" value={prontos} accent={prontos > 0} />
+            <StatCard icon={AlertTriangle} label="Alertas" value={alertasTotal} danger={alertasTotal > 0} />
+          </div>
+        )}
+
+        {/* Ações rápidas */}
+        {!loading && temDados && (
+          <div className="grid grid-cols-2 gap-2.5 mb-5">
+            <ActTile icon={Plus} label="Novo lote" sub="Registrar cultura" onClick={onAddLote} primary />
+            <ActTile icon={Building2} label="Propriedades" sub="Gerenciar" onClick={onManagePropriedades} />
+          </div>
+        )}
+
         {loading ? (
           <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground text-[13px]">
             <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
