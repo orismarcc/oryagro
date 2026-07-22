@@ -758,7 +758,7 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
       <div className="page-body pt-4 pb-4">
         {/* Resumo (cards sobrepostos ao hero) */}
         {!loading && temDados && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 -mt-9 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 -mt-7 mb-4">
             <StatCard icon={Building2} label="Propriedades" value={propriedades.length} />
             <StatCard icon={Leaf} label="Lotes" value={lotes.length} />
             <StatCard icon={CheckCircle2} label="P/ colheita" value={prontos} accent={prontos > 0} />
