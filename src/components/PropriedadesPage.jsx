@@ -138,11 +138,22 @@ export default function PropriedadesPage({ onBack, onSelectPropriedade, onRefres
         ) : (
           <>
             {propriedades.length === 0 && !showForm && (
-              <div className="card p-8 flex flex-col items-center gap-3 text-center">
-                <Building2 size={32} className="opacity-30" />
-                <p className="text-[14px] font-bold text-foreground">Nenhuma propriedade</p>
-                <p className="text-[12px] text-muted-foreground">Crie sua primeira propriedade para organizar seus lotes e estoque.</p>
-              </div>
+              <button
+                onClick={() => { setShowForm(true); setEditingId(null); }}
+                className="w-full card p-6 flex flex-col items-center gap-2.5 text-center transition-transform active:scale-[0.98]"
+                style={{ borderStyle: 'dashed', borderColor: 'hsl(156 64% 31% / 0.4)' }}
+              >
+                <span className="flex items-center justify-center w-11 h-11 rounded-2xl" style={{ background: 'hsl(156 64% 31% / 0.1)', color: 'hsl(156 64% 31%)' }}>
+                  <Building2 size={20} />
+                </span>
+                <p className="text-[13px] font-bold text-foreground">Criar primeira propriedade</p>
+                <p className="text-[11px] text-muted-foreground max-w-[17rem] leading-snug">
+                  A propriedade organiza seus lotes, talhões, estoque e finanças num só lugar.
+                </p>
+                <span className="mt-1 text-[11px] font-bold px-3 py-1.5 rounded-xl" style={{ background: 'hsl(156 64% 31%)', color: '#fff' }}>
+                  + Nova Propriedade
+                </span>
+              </button>
             )}
 
             <AnimatePresence>
