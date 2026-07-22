@@ -16,7 +16,7 @@
 
 /* ── Tailwind theme tokens ───────────────────────────────── */
 @theme {
-  --color-background:        hsl(150 10% 92%);
+  --color-background:        hsl(154 16% 88%);
   --color-foreground:        hsl(153 26% 12%);
   --color-card:              hsl(0 0% 100%);
   --color-card-foreground:   hsl(153 24% 12%);
@@ -24,7 +24,7 @@
   --color-primary-foreground: hsl(0 0% 100%);
   --color-secondary:         hsl(221 83% 53%);
   --color-secondary-foreground: hsl(0 0% 100%);
-  --color-muted:             hsl(150 12% 89%);
+  --color-muted:             hsl(152 14% 83%);
   --color-muted-foreground:  hsl(150 8% 32%);
   --color-border:            hsl(140 13% 88%);
   --color-input:             hsl(140 13% 88%);
@@ -39,7 +39,7 @@
 /* ── Design tokens ───────────────────────────────────────── */
 :root {
   /* Surfaces */
-  --bg:            hsl(150 10% 92%);
+  --bg:            hsl(154 16% 88%);
   --bg-card:       hsl(0 0% 100%);
   --fg:            hsl(153 26% 12%);
 
@@ -193,7 +193,7 @@ html.native {
     background: var(--bg-card);
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
-    border: 1px solid hsl(150 16% 91%);
+    border: 1px solid hsl(152 14% 84%);
   }
 
   .card-elevated {
