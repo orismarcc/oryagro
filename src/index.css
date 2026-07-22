@@ -16,7 +16,7 @@
 
 /* ── Tailwind theme tokens ───────────────────────────────── */
 @theme {
-  --color-background:        hsl(142 24% 95%);
+  --color-background:        hsl(150 10% 92%);
   --color-foreground:        hsl(153 26% 12%);
   --color-card:              hsl(0 0% 100%);
   --color-card-foreground:   hsl(153 24% 12%);
@@ -24,7 +24,7 @@
   --color-primary-foreground: hsl(0 0% 100%);
   --color-secondary:         hsl(221 83% 53%);
   --color-secondary-foreground: hsl(0 0% 100%);
-  --color-muted:             hsl(140 14% 95%);
+  --color-muted:             hsl(150 12% 89%);
   --color-muted-foreground:  hsl(150 8% 32%);
   --color-border:            hsl(140 13% 88%);
   --color-input:             hsl(140 13% 88%);
@@ -39,7 +39,7 @@
 /* ── Design tokens ───────────────────────────────────────── */
 :root {
   /* Surfaces */
-  --bg:            hsl(142 24% 95%);
+  --bg:            hsl(150 10% 92%);
   --bg-card:       hsl(0 0% 100%);
   --fg:            hsl(153 26% 12%);
 
