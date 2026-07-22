@@ -739,7 +739,7 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
         </div>
 
         {/* pt usa var(--hero-pad-top) para iniciar abaixo do hamburger + sino flutuantes */}
-        <div className="relative z-10 px-5 pb-10" style={{ paddingTop: 'var(--hero-pad-top)' }}>
+        <div className="relative z-10 px-5 pb-6" style={{ paddingTop: 'var(--hero-pad-top)' }}>
           <div className="flex items-center gap-3 pr-24">
             {/* pr-24 reserva espaço à direita para os botões flutuantes */}
             <Logo size={40} className="flex-shrink-0" style={{ borderRadius: 10 }} />
@@ -758,7 +758,7 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
       <div className="page-body pt-4 pb-4">
         {/* Resumo (cards sobrepostos ao hero) */}
         {!loading && temDados && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 -mt-7 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
             <StatCard icon={Building2} label="Propriedades" value={propriedades.length} />
             <StatCard icon={Leaf} label="Lotes" value={lotes.length} />
             <StatCard icon={CheckCircle2} label="P/ colheita" value={prontos} accent={prontos > 0} />
