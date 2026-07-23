@@ -33,6 +33,8 @@ import TabInsumos from './lote/TabInsumos';
 import TabDiario from './lote/TabDiario';
 import TabProducao from './lote/TabProducao';
 import TabAplicacoes from './lote/TabAplicacoes';
+import IrrigacaoPanel from './IrrigacaoPanel';
+import IrrigacaoKitForm from './IrrigacaoKitForm';
 import TabDespesas from './lote/TabDespesas';
 import TabReceitas from './lote/TabReceitas';
 
@@ -440,6 +442,15 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
   const toast = useToast();
   const [tab, setTab] = useState('cronograma');
   const [concluindo, setConcluindo] = useState(false);
+  const [showKitForm, setShowKitForm] = useState(false);
+  // sistema de irrigação instalado neste lote (cópia local p/ refletir após salvar)
+  const [kitIrrigacao, setKitIrrigacao] = useState({
+    irrigacao_tipo: lote.irrigacao_tipo,
+    irrigacao_taxa_mm_h: lote.irrigacao_taxa_mm_h,
+    irrigacao_vazao_emissor_lh: lote.irrigacao_vazao_emissor_lh,
+    irrigacao_area_emissor_m2: lote.irrigacao_area_emissor_m2,
+    irrigacao_eficiencia: lote.irrigacao_eficiencia,
+  });
   const [concluido, setConcluido] = useState(lote.status === 'concluido');
   const [repetindo, setRepetindo] = useState(false);
   const cor = cultura.cor;
@@ -793,6 +804,14 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
         >
           {tab === 'cronograma' && (
             <div className="flex flex-col gap-4">
+              {/* Manejo de irrigação — usa a localização da propriedade e o kit do lote */}
+              <IrrigacaoPanel
+                lat={propriedade?.latitude} lon={propriedade?.longitude}
+                culturaId={cultura.id} culturaNome={cultura.nome}
+                areaHa={parseFloat(lote.area_ha) || null}
+                talhao={{ ...lote, ...kitIrrigacao }}
+                onConfigurarKit={() => setShowKitForm(true)}
+              />
               {/* Curva de produção — mostra a maturação da cultura ao longo dos anos */}
               <CurvaProducaoChart
                 culturaId={cultura.id}
@@ -839,6 +858,21 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
           )}
         </motion.div>
       </AnimatePresence>
+
+      {showKitForm && (
+        <IrrigacaoKitForm
+          entidade="lote"
+          talhao={{ ...lote, ...kitIrrigacao }}
+          onClose={() => setShowKitForm(false)}
+          onSaved={(updated) => setKitIrrigacao({
+            irrigacao_tipo: updated.irrigacao_tipo ?? null,
+            irrigacao_taxa_mm_h: updated.irrigacao_taxa_mm_h ?? null,
+            irrigacao_vazao_emissor_lh: updated.irrigacao_vazao_emissor_lh ?? null,
+            irrigacao_area_emissor_m2: updated.irrigacao_area_emissor_m2 ?? null,
+            irrigacao_eficiencia: updated.irrigacao_eficiencia ?? null,
+          })}
+        />
+      )}
     </div>
   );
 }

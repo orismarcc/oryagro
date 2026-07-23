@@ -68,8 +68,11 @@ function normalizeUnidade(qtd, unidade) {
   return { qtd, unidade };
 }
 
-/** Encontra o item de estoque que corresponde ao produto do cronograma. */
-function matchEstoque(produto, estoque) {
+/**
+ * Encontra o item de estoque que corresponde a um produto (do cronograma ou do
+ * caderno de campo). Exportada para ser a ÚNICA regra de correspondência do app.
+ */
+export function matchEstoque(produto, estoque) {
   const p = norm(produto);
   if (!p) return null;
   // 1) match direto/contido

@@ -13,9 +13,14 @@ import { useToast } from '../context/ToastContext';
 import {
   SISTEMAS_IRRIGACAO, eficienciaPadrao, taxaAplicacaoMmH, tempoIrrigacao,
 } from '../lib/clima';
-import { updateTalhaoIrrigacao } from '../hooks/useSupabaseSync';
+import { updateTalhaoIrrigacao, updatePlantioIrrigacao } from '../hooks/useSupabaseSync';
 
-export default function IrrigacaoKitForm({ talhao, onClose, onSaved }) {
+/**
+ * @param {'talhao'|'lote'} entidade — define em qual tabela o kit é salvo.
+ *   'talhao' → talhoes (perenes) · 'lote' → plantios (safras e culturas anuais)
+ */
+export default function IrrigacaoKitForm({ talhao, onClose, onSaved, entidade = 'talhao' }) {
+  const persistir = entidade === 'lote' ? updatePlantioIrrigacao : updateTalhaoIrrigacao;
   const toast = useToast();
   const [tipo, setTipo] = useState(talhao?.irrigacao_tipo || '');
   // modo de definição da taxa: 'direta' (mm/h) ou 'emissor' (vazão ÷ área)
@@ -66,7 +71,7 @@ export default function IrrigacaoKitForm({ talhao, onClose, onSaved }) {
         irrigacao_area_emissor_m2: modo === 'emissor' ? (areaFinal || null) : null,
         irrigacao_eficiencia: Math.round(eficFinal * 100) / 100,
       };
-      const updated = await updateTalhaoIrrigacao(talhao.id, kit);
+      const updated = await persistir(talhao.id, kit);
       toast.success('Sistema de irrigação salvo!');
       onSaved?.(updated ?? kit);
       onClose?.();
@@ -85,7 +90,7 @@ export default function IrrigacaoKitForm({ talhao, onClose, onSaved }) {
         irrigacao_tipo: null, irrigacao_taxa_mm_h: null, irrigacao_vazao_emissor_lh: null,
         irrigacao_area_emissor_m2: null, irrigacao_eficiencia: null,
       };
-      const updated = await updateTalhaoIrrigacao(talhao.id, kit);
+      const updated = await persistir(talhao.id, kit);
       toast.success('Sistema removido.');
       onSaved?.(updated ?? kit);
       onClose?.();

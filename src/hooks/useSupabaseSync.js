@@ -670,6 +670,26 @@ export async function updateTalhaoIrrigacao(id, kit) {
 }
 
 /**
+ * Atualiza o sistema de irrigação instalado num lote/safra (plantios).
+ * Mesmo contrato de updateTalhaoIrrigacao — usado pelas culturas anuais.
+ */
+export async function updatePlantioIrrigacao(id, kit) {
+  const payload = { updated_at: new Date().toISOString() };
+  ['irrigacao_tipo', 'irrigacao_taxa_mm_h', 'irrigacao_vazao_emissor_lh',
+   'irrigacao_area_emissor_m2', 'irrigacao_eficiencia'].forEach(k => {
+    if (kit[k] !== undefined) payload[k] = kit[k];
+  });
+  const { data, error } = await supabase
+    .from('plantios')
+    .update(payload)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) { logDbError('updatePlantioIrrigacao', error); throw error; }
+  return data;
+}
+
+/**
  * Atualiza a localização (lat/lon) de uma propriedade — base para o clima (#8).
  */
 export async function updatePropriedadeLocal(id, { latitude, longitude }) {

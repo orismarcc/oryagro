@@ -1,5 +1,26 @@
 import { describe, it, expect } from 'vitest';
-import { parseDose, computeListaCompras } from './listaCompras';
+import { parseDose, computeListaCompras, matchEstoque } from './listaCompras';
+
+describe('matchEstoque (usado pelo cronograma E pelo caderno de campo)', () => {
+  const estoque = [
+    { id: 'a', nome: 'Ureia' },
+    { id: 'b', nome: 'Nitrato de Cálcio' },
+    { id: 'c', nome: 'Calcário Dolomítico' },
+  ];
+  it('casa nome exato e parcial', () => {
+    expect(matchEstoque('Ureia', estoque).id).toBe('a');
+    expect(matchEstoque('Ureia 46%', estoque).id).toBe('a');
+  });
+  it('ignora acentos e caixa', () => {
+    expect(matchEstoque('NITRATO DE CALCIO', estoque).id).toBe('b');
+    expect(matchEstoque('calcario dolomitico', estoque).id).toBe('c');
+  });
+  it('retorna null quando não há correspondência', () => {
+    expect(matchEstoque('Glifosato', estoque)).toBeNull();
+    expect(matchEstoque('', estoque)).toBeNull();
+    expect(matchEstoque(null, estoque)).toBeNull();
+  });
+});
 
 describe('parseDose', () => {
   it('interpreta dose por hectare (kg)', () => {

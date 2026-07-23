@@ -14,6 +14,7 @@ import { useToast } from '../context/ToastContext';
 import PropagacaoSelector from './PropagacaoSelector';
 import BackupModal from './BackupModal';
 import AuditLogModal from './AuditLogModal';
+import PropriedadeLocalCard from './PropriedadeLocalCard';
 
 
 
@@ -817,6 +818,8 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
   const [showBackup, setShowBackup] = useState(false);
   const [showHistorico, setShowHistorico] = useState(false);
   const [showNovoTalhao, setShowNovoTalhao] = useState(false);
+  // localização salva nesta sessão (reflete na tela sem recarregar a propriedade)
+  const [localProp, setLocalProp] = useState({});
 
   useEffect(() => {
     Promise.all([
@@ -908,6 +911,12 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
           <StatBox icon={Ruler} label="Área total" value={`${resumo.areaTotal.toLocaleString('pt-BR')} ha`} />
           <StatBox icon={CheckCircle2} label="P/ colheita" value={resumo.prontos} accent={resumo.prontos > 0} />
         </div>
+
+        {/* ── Localização (base do clima/irrigação de todos os lotes) ── */}
+        <PropriedadeLocalCard
+          propriedade={{ ...propriedade, ...localProp }}
+          onSaved={(loc) => setLocalProp(loc)}
+        />
 
         {/* ── Ações ── */}
         <div>

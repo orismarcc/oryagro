@@ -15,21 +15,9 @@ import {
 } from '../../data/defensivos';
 import { gerarCadernoCampoPDF } from '../../lib/cadernoCampoPdf';
 import { loadEstoque, addMovimento } from '../../hooks/useGestao';
+import { matchEstoque } from '../../lib/listaCompras';
 import { supabase } from '../../lib/supabase';
 import { today, formatDatePtBR } from './shared';
-
-/** Normaliza nome para casar produto do caderno com item de estoque. */
-function normNome(s) {
-  return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
-}
-/** Acha o item de estoque que corresponde ao produto digitado. */
-function acharInsumo(produto, estoque) {
-  const p = normNome(produto);
-  if (!p) return null;
-  return estoque.find(i => { const n = normNome(i.nome); return n && (p === n || p.includes(n) || n.includes(p)); })
-    || estoque.find(i => { const t = p.split(/\s|\d/).filter(Boolean)[0]; return t && t.length >= 3 && normNome(i.nome).includes(t); })
-    || null;
-}
 
 const CLASSE_COR = {
   herbicida: '#b45309', fungicida: '#0369a1', inseticida: '#991b1b',
@@ -105,7 +93,7 @@ export default function TabAplicacoes({ lote, cultura, propriedade = null, canDe
     });
     // sugere o item de estoque correspondente para a baixa (se ainda não escolhido)
     if (!baixaInsumoId) {
-      const m = acharInsumo(val, estoque);
+      const m = matchEstoque(val, estoque);
       if (m) setBaixaInsumoId(m.id);
     }
   };
