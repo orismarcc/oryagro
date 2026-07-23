@@ -290,6 +290,58 @@ export default function SimuladorFinanceiro({ cultura }) {
             )}
           </div>
 
+          {/* ── Fluxo de caixa multi-ano (perenes) ── */}
+          {resultado.projecaoMultiAno && resultado.projecaoMultiAno.length > 0 && (
+            <div className="card-elevated p-4">
+              <p className="section-label mb-1" style={{ color: cor }}>📈 Fluxo de caixa — {resultado.projecaoMultiAno.length} anos</p>
+              <p className="text-[10.5px] text-muted-foreground mb-3 leading-snug">
+                Ano 1 = implantação (custo cheio, produção parcial); anos seguintes = manutenção, com a produção subindo pela curva da cultura.
+              </p>
+
+              {/* Payback */}
+              <div className="rounded-xl px-3.5 py-3 mb-3 flex items-center justify-between"
+                style={{ background: resultado.paybackAno ? `${cor}0f` : 'hsl(4 80% 96%)', border: `1px solid ${resultado.paybackAno ? `${cor}30` : '#fca5a5'}` }}>
+                <span className="text-[11px] font-semibold" style={{ color: resultado.paybackAno ? cor : '#dc2626' }}>
+                  {resultado.paybackAno ? 'Retorno do investimento (payback)' : 'Não se paga no horizonte'}
+                </span>
+                <span className="text-[15px] font-black" style={{ color: resultado.paybackAno ? cor : '#dc2626' }}>
+                  {resultado.paybackAno ? `Ano ${resultado.paybackAno}` : '—'}
+                </span>
+              </div>
+
+              {/* Tabela ano a ano */}
+              <div className="overflow-x-auto -mx-1">
+                <table className="w-full text-[11px]" style={{ borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr className="text-muted-foreground">
+                      <th className="text-left font-bold uppercase tracking-wider text-[9px] py-1.5 px-1">Ano</th>
+                      <th className="text-right font-bold uppercase tracking-wider text-[9px] py-1.5 px-1">Prod.</th>
+                      <th className="text-right font-bold uppercase tracking-wider text-[9px] py-1.5 px-1">Receita</th>
+                      <th className="text-right font-bold uppercase tracking-wider text-[9px] py-1.5 px-1">Custo</th>
+                      <th className="text-right font-bold uppercase tracking-wider text-[9px] py-1.5 px-1">Lucro</th>
+                      <th className="text-right font-bold uppercase tracking-wider text-[9px] py-1.5 px-1">Acum.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resultado.projecaoMultiAno.map((r) => {
+                      const pay = resultado.paybackAno === r.ano;
+                      return (
+                        <tr key={r.ano} style={{ borderTop: '1px solid hsl(150 14% 90%)', background: pay ? `${cor}0c` : 'transparent' }}>
+                          <td className="py-1.5 px-1 font-bold text-foreground">{r.ano}{pay && ' 🏁'}</td>
+                          <td className="py-1.5 px-1 text-right tabular-nums text-muted-foreground">{Math.round(r.fator * 100)}%</td>
+                          <td className="py-1.5 px-1 text-right tabular-nums text-foreground">{resultado.formatBRL(r.receita)}</td>
+                          <td className="py-1.5 px-1 text-right tabular-nums" style={{ color: '#b5451b' }}>{resultado.formatBRL(r.custo)}</td>
+                          <td className="py-1.5 px-1 text-right tabular-nums font-semibold" style={{ color: r.lucro >= 0 ? 'hsl(142 72% 30%)' : '#dc2626' }}>{resultado.formatBRL(r.lucro)}</td>
+                          <td className="py-1.5 px-1 text-right tabular-nums font-bold" style={{ color: r.acumulado >= 0 ? 'hsl(142 72% 30%)' : '#dc2626' }}>{resultado.formatBRL(r.acumulado)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* ── Insumos ── */}
           <div className="card-elevated p-4">
             <div className="flex items-center justify-between mb-3">

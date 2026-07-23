@@ -14,7 +14,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
 // Fallback hardcoded (usado se o banco estiver indisponível)
-const FALLBACK_CURVES = {
+export const FALLBACK_CURVES = {
   acerola:  [0, 0.10, 0.30, 0.60, 0.85, 1.0],
   mamao:    [0, 0.40, 0.80, 1.0,  1.0,  1.0],
   banana:   [0, 0.50, 0.90, 1.0,  1.0,  1.0],

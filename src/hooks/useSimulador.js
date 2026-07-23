@@ -1,5 +1,14 @@
 import { useMemo } from 'react';
 import { getPrecosPadrao, getOpCosts } from '../data/precos';
+import { FALLBACK_CURVES } from './useCurvasProducao';
+
+/** Fator de produção (0–1) de uma cultura no ano N após o plantio (curva de maturação). */
+function fatorProducao(culturaId, ano) {
+  const curva = FALLBACK_CURVES[culturaId] || FALLBACK_CURVES._default;
+  if (ano <= 0) return curva[0] ?? 0;
+  if (ano < curva.length) return curva[ano];
+  return curva[curva.length - 1]; // produção plena a partir do fim da curva
+}
 
 const formatBRL = (v) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -171,6 +180,33 @@ export function useSimulador(cultura, valores) {
     // seria necessário para atingir uma meta de lucro/ano informada pelo usuário.
     const lucroPorEscala = escala > 0 ? lucro / escala : 0;
 
+    // ── Projeção multi-ano (culturas perenes) ──────────────────────────────
+    // Ano 1 = implantação (custo total, produção parcial pela curva de maturação).
+    // Anos seguintes = manutenção (subconjunto recorrente dos custos), com a
+    // produção subindo pela curva até a plena. Calcula o fluxo acumulado e o
+    // ANO DE PAYBACK (quando o acumulado passa a positivo).
+    let projecaoMultiAno = null, paybackAno = null, custoImplantacao = null, custoManutencao = null;
+    if (cultura.tipoCultura === 'perene') {
+      const vidaUtil = Math.min(cultura.vidaUtilAnos || 10, 12); // teto de exibição
+      const receitaPlena = receita; // 'receita' já é a produção plena anual desta densidade
+      custoImplantacao = custoTotal;
+      // Recorrente: adubação de cobertura + defensivos + operacionais + manejo/colheita.
+      // Exclui itens de implantação (calcário, esterco, mudas, estacas, ~cova/formação).
+      custoManutencao = custoUreia + custoNitratoCa + custoDefensivos + custoEmbalagem +
+                        custoTransporte + custoEnergia + custoNPK * 0.4 + custoMOD * 0.6;
+      let acumulado = 0;
+      projecaoMultiAno = [];
+      for (let y = 1; y <= vidaUtil; y++) {
+        const fator = fatorProducao(cultura.id, y);
+        const receitaY = receitaPlena * fator;
+        const custoY = y === 1 ? custoImplantacao : custoManutencao;
+        const lucroY = receitaY - custoY;
+        acumulado += lucroY;
+        if (paybackAno === null && acumulado >= 0) paybackAno = y;
+        projecaoMultiAno.push({ ano: y, fator, receita: receitaY, custo: custoY, lucro: lucroY, acumulado });
+      }
+    }
+
     const composicaoCustos = [
       { name: 'Calcário',       value: +custoCalcareo.toFixed(2),    fill: '#52b788' },
       { name: 'Esterco',        value: +custoEsterco.toFixed(2),     fill: '#7b4f12' },
@@ -194,6 +230,7 @@ export function useSimulador(cultura, valores) {
       receita, lucro, margem,
       pontoEquilibrio, pontoEquilibrioPct, unidadeVenda,
       periodo, escala, densRef: densRefCampo, lucroPorEscala,
+      projecaoMultiAno, paybackAno, custoImplantacao, custoManutencao,
       composicaoCustos,
       formatBRL, isCampo,
     };
