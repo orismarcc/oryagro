@@ -2,7 +2,8 @@
  * TalhaoMapEditor.jsx — define a geometria/localização de um talhão (#7).
  *
  * Três formas, todas funcionais:
- *   1. Mapa   — desenhar o polígono tocando no mapa de satélite (Leaflet+Esri/OSM).
+ *   1. Mapa   — desenhar o polígono tocando no mapa; várias fontes de satélite
+ *              selecionáveis (a cobertura varia por região — ver data/mapTiles).
  *   2. Caminhar — andar a borda do talhão; o GPS grava os vértices (offline).
  *   3. Ponto  — marcar só a coordenada central (GPS atual ou digitada).
  *
@@ -19,16 +20,13 @@ import {
   polygonAreaHa, polygonPerimeter, centroid, pointsToGeojson, geojsonToPoints, isValidLatLng, haversine,
 } from '../lib/geo';
 import { updateTalhaoGeo } from '../hooks/useSupabaseSync';
+import { FONTES_MAPA, FONTE_PADRAO, getFonte } from '../data/mapTiles';
 
 const MODOS = [
   { id: 'mapa', label: 'Mapa', Icon: MapIcon },
   { id: 'caminhar', label: 'Caminhar', Icon: Footprints },
   { id: 'ponto', label: 'Ponto', Icon: Crosshair },
 ];
-
-// URL do OSM sem o `{s}` de subdomínio (padrão atual recomendado)
-const OSM_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-const SAT_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 
 export default function TalhaoMapEditor({ talhao, onClose, onSaved }) {
   const toast = useToast();
@@ -53,7 +51,7 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved }) {
   const mapRef = useRef(null);
   const layerRef = useRef(null);
   const tileRef = useRef(null);
-  const [satelite, setSatelite] = useState(true);
+  const [fonteId, setFonteId] = useState(FONTE_PADRAO);
   const [ready, setReady] = useState(false);
 
   const redraw = useCallback(() => {
@@ -87,9 +85,8 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved }) {
     const map = L.map(el, { zoomControl: true, attributionControl: true });
     map.setView([start.lat, start.lng], pontos.length ? 17 : 5);
 
-    const tile = L.tileLayer(satelite ? SAT_URL : OSM_URL, {
-      maxZoom: 19, attribution: satelite ? 'Tiles © Esri' : '© OpenStreetMap',
-    });
+    const fonte = getFonte(fonteId);
+    const tile = L.tileLayer(fonte.url, { maxZoom: fonte.maxZoom, attribution: fonte.attribution });
     tile.addTo(map);
     tileRef.current = tile;
 
@@ -123,17 +120,16 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modo]);
 
-  // Troca de camada (satélite ↔ mapa) sem recriar o mapa
+  // Troca de fonte de imagem sem recriar o mapa
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
     if (tileRef.current) { try { tileRef.current.remove(); } catch { /* ok */ } }
-    const tile = L.tileLayer(satelite ? SAT_URL : OSM_URL, {
-      maxZoom: 19, attribution: satelite ? 'Tiles © Esri' : '© OpenStreetMap',
-    });
+    const fonte = getFonte(fonteId);
+    const tile = L.tileLayer(fonte.url, { maxZoom: fonte.maxZoom, attribution: fonte.attribution });
     tile.addTo(map);
     tileRef.current = tile;
-  }, [satelite, ready]);
+  }, [fonteId, ready]);
 
   useEffect(() => { if (modo === 'mapa') redraw(); }, [pontos, modo, redraw]);
 
@@ -265,20 +261,22 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved }) {
             <div>
               <div style={{ position: 'relative' }}>
                 <div ref={mapDivRef} style={{ height: 320, width: '100%', borderRadius: 12, overflow: 'hidden', border: '1px solid hsl(152 14% 84%)', background: '#dddddd' }} />
-                {ready && (
-                  <button type="button" onClick={() => setSatelite(v => !v)}
-                    style={{
-                      position: 'absolute', top: 8, left: 8, zIndex: 1000,
-                      background: satelite ? '#0f5132' : 'rgba(255,255,255,0.95)',
-                      color: satelite ? '#fff' : '#374151',
-                      border: '1px solid rgba(0,0,0,0.14)', borderRadius: 8,
-                      padding: '4px 10px', fontSize: 11, fontWeight: 700,
-                      cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
-                    }}>
-                    🛰 {satelite ? 'Satélite' : 'Mapa'}
-                  </button>
-                )}
               </div>
+
+              {/* Seletor de fonte de imagem — cobertura de satélite varia por região */}
+              <div className="flex gap-1.5 mt-2 overflow-x-auto -mx-1 px-1 pb-0.5">
+                {FONTES_MAPA.map(f => (
+                  <button key={f.id} type="button" onClick={() => setFonteId(f.id)}
+                    className="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[10.5px] font-bold transition-all whitespace-nowrap"
+                    style={fonteId === f.id
+                      ? { background: 'hsl(156 64% 31%)', color: 'white' }
+                      : { background: 'hsl(156 25% 93%)', color: 'hsl(156 40% 30%)' }}>
+                    {f.tipo === 'satelite' ? '🛰 ' : '🗺 '}{f.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">{getFonte(fonteId).nota}</p>
+
               <div className="flex items-center gap-2 mt-2">
                 <button onClick={localizarNoMapa} className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'hsl(156 30% 92%)', color: 'hsl(156 45% 28%)' }}>
                   <Crosshair size={13} /> Minha localização

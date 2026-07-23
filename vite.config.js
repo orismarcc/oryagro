@@ -93,6 +93,7 @@ export default defineConfig({
             // faz o mapa abrir instantaneamente e funcionar em áreas sem cobertura.
             urlPattern: ({ url }) =>
               url.origin === 'https://server.arcgisonline.com' ||
+              url.hostname.endsWith('.maptiles.arcgis.com') ||
               url.hostname.endsWith('tile.openstreetmap.org'),
             handler: 'CacheFirst',
             options: {
