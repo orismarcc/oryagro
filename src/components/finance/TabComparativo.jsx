@@ -4,8 +4,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Card, Spinner, EmptyState } from './ui';
-import { fmtBRL, fmtPct, getCultura, buildDreMap } from './helpers';
+import { fmtBRL, fmtPct, getCultura, buildDreMap, producaoPlenaLote, anoFromDate } from './helpers';
 import { aggregateDreEntry } from '../../lib/financeiro';
+import { getProductionFactorSync } from '../../hooks/useCurvasProducao';
 
 function TabComparativo({ rawData, loading, propriedades = [] }) {
   const dreMap = useMemo(() => (rawData ? buildDreMap(rawData) : {}), [rawData]);
@@ -88,6 +89,21 @@ import { aggregateDreEntry } from '../../lib/financeiro';
         const agg = aggregateDreEntry(e);
         const kgColhido = e.vendas.reduce((s, v) => s + (v.quantidade ?? 0), 0);
         const custoKg = kgColhido > 0 ? agg.custo / kgColhido : null;
+
+        // ── Orçado (meta) do lote×safra ──
+        const cultLote = getCultura(lote.cultura_id);
+        const plena = producaoPlenaLote(lote, cultLote);
+        const anoPlantio = anoFromDate(lote.data_plantio);
+        const anoRel = anoPlantio != null ? ano - anoPlantio : null;
+        const fatorMat = cultLote?.tipoCultura === 'perene' && anoRel != null && anoRel >= 0
+          ? getProductionFactorSync(cultLote.id, anoRel)
+          : 1;
+        const metaKg = plena != null ? Math.round(plena * fatorMat) : null;
+        const preco = cultLote?.venda?.precoUnitario ?? null;
+        const receitaOrcada = metaKg != null && preco != null ? metaKg * preco : null;
+        // Preço realizado médio por kg (para não misturar variação de preço com a de volume)
+        const kgVendido = e.vendas.reduce((s, v) => s + (v.quantidade ?? 0), 0);
+
         return {
           lote, ano,
           receita: agg.receita,
@@ -96,6 +112,9 @@ import { aggregateDreEntry } from '../../lib/financeiro';
           kgColhido,
           custoKg,
           margem: agg.margemPct,
+          metaKg,
+          receitaOrcada,
+          kgVendido,
         };
       });
   });
@@ -182,7 +201,7 @@ import { aggregateDreEntry } from '../../lib/financeiro';
 
                   {/* Métricas por ano */}
                   <div className="divide-y divide-gray-50">
-                    {safrasLote.map(({ ano, receita, custo, lucro, kgColhido, custoKg, margem }) => (
+                    {safrasLote.map(({ ano, receita, custo, lucro, kgColhido, custoKg, margem, metaKg, receitaOrcada }) => (
                       <div key={ano} className="px-4 py-3">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-[12px] font-bold text-gray-600">Safra {ano}</span>
@@ -220,6 +239,47 @@ import { aggregateDreEntry } from '../../lib/financeiro';
                             </div>
                           )}
                         </div>
+
+                        {/* ── Orçado (meta) × Realizado ── */}
+                        {(metaKg != null || receitaOrcada != null) && (() => {
+                          const varKg  = metaKg  != null && metaKg  > 0 ? (kgColhido - metaKg) / metaKg   : null;
+                          const varRec = receitaOrcada != null && receitaOrcada > 0 ? (receita - receitaOrcada) / receitaOrcada : null;
+                          const chip = (v) => v == null ? 'text-gray-400 bg-gray-50'
+                            : v >= -0.001 ? 'text-emerald-700 bg-emerald-50' : 'text-amber-700 bg-amber-50';
+                          const sign = (v) => v == null ? '—' : `${v >= 0 ? '+' : ''}${(v * 100).toFixed(0)}%`;
+                          return (
+                            <div className="mt-1 mb-2 rounded-xl border border-gray-100 bg-gray-50/60 p-2.5">
+                              <div className="flex items-center gap-1.5 mb-1.5">
+                                <span className="text-[9px] font-black uppercase tracking-wider text-gray-400">Meta × Realizado</span>
+                              </div>
+                              <div className="flex flex-col gap-1 text-[11px]">
+                                {metaKg != null && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-400">Produção</span>
+                                    <span className="text-gray-600">
+                                      <strong className="text-gray-700">{kgColhido.toLocaleString('pt-BR')}</strong>
+                                      {' / '}{metaKg.toLocaleString('pt-BR')} kg
+                                    </span>
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${chip(varKg)}`}>{sign(varKg)}</span>
+                                  </div>
+                                )}
+                                {receitaOrcada != null && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-400">Receita</span>
+                                    <span className="text-gray-600">
+                                      <strong className="text-gray-700">{fmtBRL(receita)}</strong>
+                                      {' / '}{fmtBRL(receitaOrcada)}
+                                    </span>
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${chip(varRec)}`}>{sign(varRec)}</span>
+                                  </div>
+                                )}
+                              </div>
+                              <p className="text-[9px] text-gray-400 mt-1.5 leading-tight">
+                                Meta = produção plena × curva de maturação do ano, ao preço de referência da cultura.
+                              </p>
+                            </div>
+                          );
+                        })()}
 
                         {/* Mini gráfico de barras: receita vs custo */}
                         <div className="flex items-end gap-3 mt-1">

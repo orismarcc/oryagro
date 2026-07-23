@@ -25,6 +25,24 @@ export function getCultura(culturaId) {
   return CULTURAS[culturaId] || null;
 }
 
+/**
+ * Produção PLENA estimada de um lote (kg), na maturidade — antes de aplicar a
+ * curva de maturação do ano. Mesma regra usada na página do lote:
+ * campo = kg/ha × área;  canteiro = kg/m² × (comprimento × largura).
+ * Retorna null se a cultura não tiver base de produção.
+ */
+export function producaoPlenaLote(lote, cultura) {
+  if (!lote || !cultura) return null;
+  const area = cultura.tipo === 'campo'
+    ? (parseFloat(lote.area_ha) || cultura.area?.padrao || 1)
+    : ((parseFloat(lote.comprimento_m) || cultura.canteiro?.comprimento || 1) *
+       (parseFloat(lote.largura_m)     || cultura.canteiro?.largura    || 1));
+  if (cultura.venda?.producaoKgPorHa) return Math.round(cultura.venda.producaoKgPorHa * area);
+  if (cultura.venda?.producaoKgPorM2) return Math.round(cultura.venda.producaoKgPorM2 * area);
+  if (cultura.venda?.producaoBase)    return cultura.venda.producaoBase;
+  return null;
+}
+
 export function anoFromDate(dateStr) {
   if (!dateStr) return null;
   return new Date(dateStr + 'T12:00:00').getFullYear();
