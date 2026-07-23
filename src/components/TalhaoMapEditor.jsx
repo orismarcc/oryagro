@@ -26,6 +26,10 @@ const MODOS = [
   { id: 'ponto', label: 'Ponto', Icon: Crosshair },
 ];
 
+// URL do OSM sem o `{s}` de subdomínio (padrão atual recomendado)
+const OSM_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const SAT_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
 export default function TalhaoMapEditor({ talhao, onClose, onSaved }) {
   const toast = useToast();
   const [modo, setModo] = useState('mapa');
@@ -48,6 +52,9 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved }) {
   const mapDivRef = useRef(null);
   const mapRef = useRef(null);
   const layerRef = useRef(null);
+  const tileRef = useRef(null);
+  const [satelite, setSatelite] = useState(true);
+  const [ready, setReady] = useState(false);
 
   const redraw = useCallback(() => {
     const map = mapRef.current;
@@ -69,33 +76,64 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved }) {
 
   useEffect(() => {
     if (modo !== 'mapa' || !mapDivRef.current || mapRef.current) return;
+    const el = mapDivRef.current;
     const start = pontos.length ? centroid(pontos)
       : (isValidLatLng(talhao?.latitude, talhao?.longitude) ? { lat: talhao.latitude, lng: talhao.longitude }
       : { lat: -14.24, lng: -51.93 }); // centro do Brasil (fallback)
-    const map = L.map(mapDivRef.current, { zoomControl: true, attributionControl: true })
-      .setView([start.lat, start.lng], pontos.length ? 17 : 5);
 
-    const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 19, attribution: 'Tiles © Esri',
-    });
-    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '© OpenStreetMap',
-    });
-    sat.addTo(map);
-    L.control.layers({ 'Satélite': sat, 'Mapa (OSM)': osm }, null, { position: 'topright' }).addTo(map);
+    // Ícone padrão do Leaflet quebra sob bundler — removemos a resolução automática
+    delete L.Icon.Default.prototype._getIconUrl;
 
+    const map = L.map(el, { zoomControl: true, attributionControl: true });
+    map.setView([start.lat, start.lng], pontos.length ? 17 : 5);
+
+    const tile = L.tileLayer(satelite ? SAT_URL : OSM_URL, {
+      maxZoom: 19, attribution: satelite ? 'Tiles © Esri' : '© OpenStreetMap',
+    });
+    tile.addTo(map);
+    tileRef.current = tile;
+
+    map.getContainer().style.cursor = 'crosshair';
     map.on('click', (e) => {
       setPontos(prev => [...prev, { lat: e.latlng.lat, lng: e.latlng.lng }]);
     });
 
     mapRef.current = map;
-    // garante render correto dentro do modal
-    setTimeout(() => map.invalidateSize(), 200);
+
+    // O mapa nasce dentro de um modal com animação: o container pode ter altura 0
+    // no momento da criação, o que deixa o mapa em branco. Recalculamos o tamanho
+    // logo, de novo após a animação, e sempre que o container mudar de tamanho.
+    const fix = () => { try { map.invalidateSize(); } catch { /* ok */ } };
+    requestAnimationFrame(fix);
+    const t1 = setTimeout(fix, 150);
+    const t2 = setTimeout(fix, 400);
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fix) : null;
+    ro?.observe(el);
+
+    setReady(true);
     redraw();
 
-    return () => { map.remove(); mapRef.current = null; layerRef.current = null; };
+    return () => {
+      clearTimeout(t1); clearTimeout(t2);
+      ro?.disconnect();
+      try { map.remove(); } catch { /* ok */ }
+      mapRef.current = null; layerRef.current = null; tileRef.current = null;
+      setReady(false);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modo]);
+
+  // Troca de camada (satélite ↔ mapa) sem recriar o mapa
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    if (tileRef.current) { try { tileRef.current.remove(); } catch { /* ok */ } }
+    const tile = L.tileLayer(satelite ? SAT_URL : OSM_URL, {
+      maxZoom: 19, attribution: satelite ? 'Tiles © Esri' : '© OpenStreetMap',
+    });
+    tile.addTo(map);
+    tileRef.current = tile;
+  }, [satelite, ready]);
 
   useEffect(() => { if (modo === 'mapa') redraw(); }, [pontos, modo, redraw]);
 
@@ -225,7 +263,22 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved }) {
           {/* ── MAPA ── */}
           {modo === 'mapa' && (
             <div>
-              <div ref={mapDivRef} style={{ height: 320, width: '100%', borderRadius: 12, overflow: 'hidden' }} />
+              <div style={{ position: 'relative' }}>
+                <div ref={mapDivRef} style={{ height: 320, width: '100%', borderRadius: 12, overflow: 'hidden', border: '1px solid hsl(152 14% 84%)', background: '#dddddd' }} />
+                {ready && (
+                  <button type="button" onClick={() => setSatelite(v => !v)}
+                    style={{
+                      position: 'absolute', top: 8, left: 8, zIndex: 1000,
+                      background: satelite ? '#0f5132' : 'rgba(255,255,255,0.95)',
+                      color: satelite ? '#fff' : '#374151',
+                      border: '1px solid rgba(0,0,0,0.14)', borderRadius: 8,
+                      padding: '4px 10px', fontSize: 11, fontWeight: 700,
+                      cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
+                    }}>
+                    🛰 {satelite ? 'Satélite' : 'Mapa'}
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-2 mt-2">
                 <button onClick={localizarNoMapa} className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'hsl(156 30% 92%)', color: 'hsl(156 45% 28%)' }}>
                   <Crosshair size={13} /> Minha localização

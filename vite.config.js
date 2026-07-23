@@ -88,6 +88,20 @@ export default defineConfig({
             },
           },
           {
+            // Tiles do mapa dos talhões (satélite Esri + OpenStreetMap).
+            // CacheFirst: no campo o sinal é fraco — reaproveitar o tile já baixado
+            // faz o mapa abrir instantaneamente e funcionar em áreas sem cobertura.
+            urlPattern: ({ url }) =>
+              url.origin === 'https://server.arcgisonline.com' ||
+              url.hostname.endsWith('tile.openstreetmap.org'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'map-tiles',
+              expiration: { maxEntries: 600, maxAgeSeconds: 60 * 60 * 24 * 30 }, // 30d
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
             urlPattern: ({ url }) => url.origin === 'https://fonts.googleapis.com',
             handler: 'StaleWhileRevalidate',
             options: { cacheName: 'google-fonts-stylesheets' },
