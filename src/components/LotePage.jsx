@@ -5,7 +5,7 @@ import {
   ArrowLeft, CalendarDays, Sprout, TrendingUp,
   Cloud, CheckCircle2, AlertTriangle,
   BookOpen, Loader2,
-  Receipt, DollarSign,
+  Receipt, DollarSign, SprayCan,
 } from 'lucide-react';
 import CronogramaTimeline from './CronogramaTimeline';
 import CurvaProducaoChart from './CurvaProducaoChart';
@@ -32,6 +32,7 @@ import { formatDatePtBR, fmtNumber, today, safeLS } from './lote/shared';
 import TabInsumos from './lote/TabInsumos';
 import TabDiario from './lote/TabDiario';
 import TabProducao from './lote/TabProducao';
+import TabAplicacoes from './lote/TabAplicacoes';
 import TabDespesas from './lote/TabDespesas';
 import TabReceitas from './lote/TabReceitas';
 
@@ -428,6 +429,7 @@ const TABS = [
   { value: 'cronograma', label: 'Cronograma', Icon: CalendarDays },
   { value: 'colheita',   label: 'Colheita',   Icon: TrendingUp },
   { value: 'producao',   label: 'Produção',   Icon: Sprout },
+  { value: 'aplicacoes', label: 'Caderno',    Icon: SprayCan },
   { value: 'receitas',   label: 'Receitas',   Icon: DollarSign },
   { value: 'despesas',   label: 'Despesas',   Icon: Receipt },
   { value: 'diario',     label: 'Diário',     Icon: BookOpen },
@@ -828,6 +830,9 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
               anoRelativo={anoRelativo}
               fatorMaturacao={fatorMaturacao}
             />
+          )}
+          {tab === 'aplicacoes' && (
+            <TabAplicacoes lote={lote} cultura={cultura} propriedade={propriedade} canDelete={canDelete} />
           )}
           {tab === 'diario' && (
             <TabDiario lote={lote} canDelete={canDelete} />
