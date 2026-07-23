@@ -6,13 +6,14 @@
  */
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, CheckCircle2, Clock, TrendingUp, Leaf, BarChart2, Calendar, AlertCircle, Loader2, Trash2, MapPin, Ruler } from 'lucide-react';
+import { ArrowLeft, Plus, CheckCircle2, Clock, TrendingUp, Leaf, BarChart2, Calendar, AlertCircle, Loader2, Trash2, MapPin } from 'lucide-react';
 import { CULTURAS } from '../data/culturas';
 import { loadSafrasDeTalhao, criarSafraDeTalhao, deleteTalhaoComSeguranca } from '../hooks/useSupabaseSync';
 import TalhaoMapEditor from './TalhaoMapEditor';
+import TalhaoMapPreview from './TalhaoMapPreview';
 import IrrigacaoPanel from './IrrigacaoPanel';
 import IrrigacaoKitForm from './IrrigacaoKitForm';
-import { isValidLatLng, geojsonToPoints } from '../lib/geo';
+import { isValidLatLng } from '../lib/geo';
 import { resolveLifecycle } from '../lib/lifecycle';
 import { useToast } from '../context/ToastContext';
 import { useFarm } from '../context/FarmContext';
@@ -339,12 +340,7 @@ export default function TalhaoPage({ talhao, onBack, onSelectLote }) {
               <MapPin size={13} /> {isValidLatLng(geo.latitude, geo.longitude) ? 'Editar' : 'Definir'}
             </button>
           </div>
-          {geojsonToPoints(geo.geojson).length >= 3 && (
-            <div className="flex items-center gap-1.5 mt-2 text-[10.5px] text-muted-foreground">
-              <Ruler size={12} style={{ color: cor }} />
-              Polígono com {geojsonToPoints(geo.geojson).length} vértices salvo.
-            </div>
-          )}
+          <TalhaoMapPreview geojson={geo.geojson} areaHa={geo.area_gps_ha} cor={cor} />
         </div>
 
         {/* ── Manejo de irrigação com clima (#8) ── */}
