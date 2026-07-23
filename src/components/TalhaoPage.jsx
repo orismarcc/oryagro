@@ -6,9 +6,12 @@
  */
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, CheckCircle2, Clock, TrendingUp, Leaf, BarChart2, Calendar, AlertCircle, Loader2, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, CheckCircle2, Clock, TrendingUp, Leaf, BarChart2, Calendar, AlertCircle, Loader2, Trash2, MapPin, Ruler } from 'lucide-react';
 import { CULTURAS } from '../data/culturas';
 import { loadSafrasDeTalhao, criarSafraDeTalhao, deleteTalhaoComSeguranca } from '../hooks/useSupabaseSync';
+import TalhaoMapEditor from './TalhaoMapEditor';
+import IrrigacaoPanel from './IrrigacaoPanel';
+import { isValidLatLng, geojsonToPoints } from '../lib/geo';
 import { resolveLifecycle } from '../lib/lifecycle';
 import { useToast } from '../context/ToastContext';
 import { useFarm } from '../context/FarmContext';
@@ -198,6 +201,12 @@ export default function TalhaoPage({ talhao, onBack, onSelectLote }) {
   const [safras, setSafras] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showNovaSafra, setShowNovaSafra] = useState(false);
+  const [showMapEditor, setShowMapEditor] = useState(false);
+  // cópia local dos campos de geo para refletir na tela após salvar
+  const [geo, setGeo] = useState({
+    latitude: talhao.latitude, longitude: talhao.longitude,
+    geojson: talhao.geojson, area_gps_ha: talhao.area_gps_ha, area_ha: talhao.area_ha,
+  });
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -297,6 +306,44 @@ export default function TalhaoPage({ talhao, onBack, onSelectLote }) {
         >
           <Plus size={15} /> Nova Safra
         </button>
+
+        {/* ── Localização & mapa do talhão (#7) ── */}
+        <div className="card p-4">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${cor}18` }}>
+              <MapPin size={17} style={{ color: cor }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-bold text-foreground leading-tight">Localização do talhão</p>
+              <p className="text-[11px] text-muted-foreground">
+                {isValidLatLng(geo.latitude, geo.longitude)
+                  ? (geo.area_gps_ha
+                    ? `Área medida por GPS: ${Number(geo.area_gps_ha).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ha`
+                    : 'Ponto central definido')
+                  : 'Ainda não definida'}
+              </p>
+            </div>
+            <button onClick={() => setShowMapEditor(true)}
+              className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-2 rounded-xl flex-shrink-0"
+              style={{ background: `${cor}12`, color: cor, border: `1px solid ${cor}30` }}>
+              <MapPin size={13} /> {isValidLatLng(geo.latitude, geo.longitude) ? 'Editar' : 'Definir'}
+            </button>
+          </div>
+          {geojsonToPoints(geo.geojson).length >= 3 && (
+            <div className="flex items-center gap-1.5 mt-2 text-[10.5px] text-muted-foreground">
+              <Ruler size={12} style={{ color: cor }} />
+              Polígono com {geojsonToPoints(geo.geojson).length} vértices salvo.
+            </div>
+          )}
+        </div>
+
+        {/* ── Manejo de irrigação com clima (#8) ── */}
+        <IrrigacaoPanel
+          lat={geo.latitude} lon={geo.longitude}
+          culturaId={talhao.cultura_id} culturaNome={cultura?.nome}
+          areaHa={parseFloat(geo.area_ha) || parseFloat(talhao.area_ha) || null}
+          onDefinirLocal={() => setShowMapEditor(true)}
+        />
 
         {/* Safras ativas */}
         {loading ? (
@@ -419,6 +466,21 @@ export default function TalhaoPage({ talhao, onBack, onSelectLote }) {
           />
         )}
       </AnimatePresence>
+
+      {showMapEditor && (
+        <TalhaoMapEditor
+          talhao={{ ...talhao, ...geo }}
+          onClose={() => setShowMapEditor(false)}
+          onSaved={(updated) => setGeo(g => ({
+            ...g,
+            latitude: updated.latitude ?? g.latitude,
+            longitude: updated.longitude ?? g.longitude,
+            geojson: updated.geojson !== undefined ? updated.geojson : g.geojson,
+            area_gps_ha: updated.area_gps_ha !== undefined ? updated.area_gps_ha : g.area_gps_ha,
+            area_ha: updated.area_ha ?? g.area_ha,
+          }))}
+        />
+      )}
     </div>
   );
 }

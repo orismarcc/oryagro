@@ -630,6 +630,40 @@ export async function loadTalhoesPorPropriedade(propriedadeId) {
 }
 
 /**
+ * Atualiza a geometria/localização de um talhão (#7).
+ * @param {string} id
+ * @param {{latitude?:number, longitude?:number, geojson?:any, area_gps_ha?:number, area_ha?:number}} geo
+ */
+export async function updateTalhaoGeo(id, geo) {
+  const payload = { updated_at: new Date().toISOString() };
+  ['latitude', 'longitude', 'geojson', 'area_gps_ha', 'area_ha'].forEach(k => {
+    if (geo[k] !== undefined) payload[k] = geo[k];
+  });
+  const { data, error } = await supabase
+    .from('talhoes')
+    .update(payload)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) { logDbError('updateTalhaoGeo', error); throw error; }
+  return data;
+}
+
+/**
+ * Atualiza a localização (lat/lon) de uma propriedade — base para o clima (#8).
+ */
+export async function updatePropriedadeLocal(id, { latitude, longitude }) {
+  const { data, error } = await supabase
+    .from('propriedades')
+    .update({ latitude, longitude, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) { logDbError('updatePropriedadeLocal', error); throw error; }
+  return data;
+}
+
+/**
  * Retorna todos os talhões do usuário atual (todas as propriedades), apenas ativos.
  */
 export async function loadTodosTalhoes() {
