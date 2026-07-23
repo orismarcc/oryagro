@@ -447,7 +447,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
   const cycleProgress = cycleProgressPct / 100;
 
   // Curva de produção
-  const { curves: curvasProducao } = useCurvasProducao();
+  const { curves: curvasProducao, getProductionFactor } = useCurvasProducao();
   const anoRelativo = lote.data_plantio
     ? Math.floor((Date.now() - new Date(lote.data_plantio + 'T12:00:00').getTime()) / (365.25 * 24 * 3600 * 1000))
     : null;
@@ -462,6 +462,15 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
     if (cultura.venda?.producaoBase)     return cultura.venda.producaoBase;
     return null;
   })();
+
+  // Meta de produção da safra ATUAL: produção plena ajustada pela curva de maturação.
+  // Perenes crescem ano a ano (fator < 1 nos primeiros anos); anuais colhem a plena no ciclo.
+  const fatorMaturacao = cultura.tipoCultura === 'perene' && anoRelativo != null
+    ? getProductionFactor(cultura.id, anoRelativo)
+    : 1;
+  const producaoEstimadaPeriodo = producaoPlena != null
+    ? Math.round(producaoPlena * fatorMaturacao)
+    : null;
 
   const handleConcluir = async () => {
     if (!window.confirm('Marcar este lote como concluído? Isso arquivará o ciclo no histórico.')) return;
@@ -811,7 +820,14 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
             <TabDespesas lote={lote} cor={cor} canDelete={canDelete} />
           )}
           {tab === 'producao' && (
-            <TabProducao lote={lote} cultura={cultura} />
+            <TabProducao
+              lote={lote}
+              cultura={cultura}
+              producaoEstimadaPeriodo={producaoEstimadaPeriodo}
+              producaoPlena={producaoPlena}
+              anoRelativo={anoRelativo}
+              fatorMaturacao={fatorMaturacao}
+            />
           )}
           {tab === 'diario' && (
             <TabDiario lote={lote} canDelete={canDelete} />

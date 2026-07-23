@@ -8,7 +8,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '../../context/ToastContext';
-import { Plus, Trash2, TrendingUp, BarChart2, Loader2 } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, BarChart2, Loader2, Target, Sparkles } from 'lucide-react';
+import { saveCurvaPonto } from '../../hooks/useCurvasProducao';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell,
@@ -51,7 +52,13 @@ function ChartTooltip({ active, payload, label }) {
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
-export default function TabProducao({ lote, cultura }) {
+export default function TabProducao({
+  lote, cultura,
+  producaoEstimadaPeriodo = null,
+  producaoPlena = null,
+  anoRelativo = null,
+  fatorMaturacao = 1,
+}) {
   const toast = useToast();
   const {
     registros, loading, totalKg, mediaKgDia, chartData,
@@ -59,6 +66,36 @@ export default function TabProducao({ lote, cultura }) {
   } = useProducaoRegistros(lote.id);
 
   const cor = cultura?.cor ?? '#16a34a';
+  const [calibrando, setCalibrando] = useState(false);
+
+  // ── Meta da safra × colhido real ────────────────────────────────────────────
+  const meta = producaoEstimadaPeriodo && producaoEstimadaPeriodo > 0 ? producaoEstimadaPeriodo : null;
+  const pctMeta = meta ? Math.round((totalKg / meta) * 100) : null;
+  const isPerene = cultura?.tipoCultura === 'perene';
+  // Calibração: só faz sentido com produção plena conhecida e colheita real registrada.
+  const podeCalibrar = isPerene && producaoPlena > 0 && totalKg > 0 && anoRelativo != null && anoRelativo >= 0;
+  const fatorReal = podeCalibrar ? totalKg / producaoPlena : null;
+
+  const handleCalibrar = async () => {
+    if (!podeCalibrar) return;
+    const fatorPct = Math.round(fatorReal * 100);
+    const atualPct = Math.round((fatorMaturacao || 0) * 100);
+    if (!window.confirm(
+      `Calibrar a curva de produção da cultura "${cultura.nome}" para o ano ${anoRelativo}?\n\n` +
+      `A estimativa passará a usar a sua colheita real (${fmtNumber(totalKg)} kg = ${fatorPct}% da produção plena), ` +
+      `no lugar do padrão do sistema (${atualPct}%).\n\n` +
+      `Isso afeta as próximas estimativas e simulações desta cultura no ano ${anoRelativo}.`
+    )) return;
+    setCalibrando(true);
+    try {
+      await saveCurvaPonto({ culturaId: cultura.id, anoRelativo, fator: fatorReal });
+      toast.success('Curva calibrada com a sua colheita real!');
+    } catch (err) {
+      toast.error(err?.message || 'Não foi possível calibrar. Tente novamente.');
+    } finally {
+      setCalibrando(false);
+    }
+  };
 
   // Formulário de novo registro
   const [form, setForm] = useState({
@@ -127,7 +164,7 @@ export default function TabProducao({ lote, cultura }) {
             {fmtNumber(totalKg)}
           </div>
           <div className="text-[9px] text-muted-foreground font-medium mt-0.5 uppercase tracking-wide">
-            kg total (90d)
+            kg total (safra)
           </div>
         </div>
         <div className="card p-3 text-center">
@@ -147,6 +184,58 @@ export default function TabProducao({ lote, cultura }) {
           </div>
         </div>
       </div>
+
+      {/* ── Meta da safra × colhido real ── */}
+      {meta && (
+        <div className="card p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Target size={13} style={{ color: cor }} />
+            <span className="text-[12px] font-bold text-foreground">
+              Meta da safra {isPerene && anoRelativo != null ? `— ${anoRelativo}º ano` : ''}
+            </span>
+            <span className="ml-auto text-[11px] font-black" style={{ color: pctMeta >= 100 ? '#16a34a' : cor }}>
+              {pctMeta}%
+            </span>
+          </div>
+
+          {/* Barra de progresso */}
+          <div className="h-3 rounded-full overflow-hidden" style={{ background: `${cor}18` }}>
+            <div
+              className="h-full rounded-full transition-all"
+              style={{ width: `${Math.min(100, pctMeta)}%`, background: pctMeta >= 100 ? '#16a34a' : cor }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between mt-2 text-[11px]">
+            <span className="text-muted-foreground">
+              Colhido: <strong className="text-foreground">{fmtNumber(totalKg)} kg</strong>
+            </span>
+            <span className="text-muted-foreground">
+              Meta: <strong className="text-foreground">{fmtNumber(meta)} kg</strong>
+            </span>
+          </div>
+
+          {isPerene && fatorMaturacao < 1 && (
+            <p className="text-[10px] text-muted-foreground mt-2 leading-snug">
+              Planta em formação: a meta deste ano é {Math.round(fatorMaturacao * 100)}% da produção plena
+              ({fmtNumber(producaoPlena)} kg), conforme a curva de maturação da cultura.
+            </p>
+          )}
+
+          {/* Calibração da curva com dados reais */}
+          {podeCalibrar && (
+            <button
+              onClick={handleCalibrar}
+              disabled={calibrando}
+              className="mt-3 w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-bold transition-all"
+              style={{ background: `${cor}12`, color: cor, border: `1px solid ${cor}30` }}
+            >
+              {calibrando ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              {calibrando ? 'Calibrando…' : `Calibrar curva com a colheita real (${Math.round(fatorReal * 100)}%)`}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ── Gráfico últimos 30 dias ── */}
       {chartData.some(d => d.kg > 0) ? (

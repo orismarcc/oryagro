@@ -100,6 +100,41 @@ export function invalidateCurvasCache() {
 }
 
 /**
+ * Salva/atualiza um ponto da curva de produção do usuário (calibração).
+ * Baseado na colheita real: fator = colhidoReal / producaoPlena (0 a 3).
+ * Sobrescreve a curva global apenas para este usuário e cultura.
+ */
+export async function saveCurvaPonto({ culturaId, anoRelativo, fator }) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Você precisa estar conectado para calibrar a curva.');
+  const f = Math.max(0, Math.min(3, Number(fator) || 0));
+  const ano = Math.max(0, Math.round(Number(anoRelativo) || 0));
+
+  const { data: existing } = await supabase
+    .from('curvas_producao')
+    .select('id')
+    .eq('cultura_id', culturaId)
+    .eq('ano_relativo', ano)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (existing?.id) {
+    const { error } = await supabase
+      .from('curvas_producao')
+      .update({ fator: f, updated_at: new Date().toISOString() })
+      .eq('id', existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from('curvas_producao')
+      .insert({ cultura_id: culturaId, ano_relativo: ano, fator: f, user_id: user.id });
+    if (error) throw error;
+  }
+  invalidateCurvasCache();
+  return f;
+}
+
+/**
  * Hook React — retorna o mapa de curvas { culturaId: [fator0, fator1, ...] }
  * e uma função helper getProductionFactor(culturaId, anoDoPlantio).
  */
