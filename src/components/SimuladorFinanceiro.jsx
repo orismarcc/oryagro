@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import InsumoField from './InsumoField';
 import ResultadoPanel from './ResultadoPanel';
 import { useSimulador, calcularPlantas } from '../hooks/useSimulador';
+import { useCurvasProducao } from '../hooks/useCurvasProducao';
 import { useSimuladorSync, loadSimuladorConfig, registrarPlantio, preCarregarEtapasPadrao } from '../hooks/useSupabaseSync';
 import { getPrecosPadrao, getOpCosts } from '../data/precos';
 import { RotateCcw, Database, CheckCircle2, Pencil, Check, Package, Truck, Zap, ShieldCheck } from 'lucide-react';
@@ -81,6 +82,9 @@ export default function SimuladorFinanceiro({ cultura }) {
   const [plantioSaved, setPlantioSaved] = useState(null);
 
   useSimuladorSync(cultura.id, valores);
+  // Aquece o cache de curvas de produção (inclui as CALIBRADAS pelo usuário),
+  // para que a projeção multi-ano use a curva real e não só o padrão do sistema.
+  useCurvasProducao();
 
   useEffect(() => {
     loadSimuladorConfig(cultura.id).then(remote => {

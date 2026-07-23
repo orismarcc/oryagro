@@ -132,3 +132,69 @@ export function laminaParaLitros(mm, areaHa) {
   if (!(mm > 0) || !(areaHa > 0)) return 0;
   return Math.round(mm * 10_000 * areaHa);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sistema de irrigação instalado — tempo de acionamento
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Tipos de sistema e sua eficiência de aplicação típica (fração da água que chega à planta). */
+export const SISTEMAS_IRRIGACAO = [
+  { id: 'gotejamento',  label: 'Gotejamento',    eficiencia: 0.90, dica: 'Emissores na linha; molha só a faixa da planta.' },
+  { id: 'microaspersao', label: 'Microaspersão', eficiencia: 0.85, dica: 'Microaspersor por planta ou por grupo.' },
+  { id: 'aspersao',     label: 'Aspersão',       eficiencia: 0.75, dica: 'Aspersores cobrindo toda a área.' },
+];
+
+export function sistemaIrrigacao(tipo) {
+  return SISTEMAS_IRRIGACAO.find(s => s.id === tipo) || null;
+}
+
+/** Eficiência padrão do tipo de sistema (fallback 0.8). */
+export function eficienciaPadrao(tipo) {
+  return sistemaIrrigacao(tipo)?.eficiencia ?? 0.8;
+}
+
+/**
+ * Taxa de aplicação do sistema em mm/h, derivada da vazão do emissor e da área
+ * que ele atende. Base física: 1 litro espalhado em 1 m² = 1 mm de lâmina.
+ *   taxa (mm/h) = vazão (L/h) ÷ área do emissor (m²)
+ * @returns número em mm/h, ou null se os dados não permitirem calcular.
+ */
+export function taxaAplicacaoMmH({ vazaoLh, areaEmissorM2 }) {
+  const v = Number(vazaoLh), a = Number(areaEmissorM2);
+  if (!(v > 0) || !(a > 0)) return null;
+  return Math.round((v / a) * 100) / 100;
+}
+
+/**
+ * Tempo que o sistema deve ficar ligado para aplicar a lâmina líquida desejada.
+ *   lâmina bruta = lâmina líquida ÷ eficiência   (compensa perdas do sistema)
+ *   tempo (h)    = lâmina bruta ÷ taxa de aplicação
+ * @returns {{ horas, minutosTotais, h, min, laminaBruta }} ou null se faltar dado.
+ */
+export function tempoIrrigacao({ laminaMm, taxaMmH, eficiencia = 0.8 }) {
+  const l = Number(laminaMm), t = Number(taxaMmH), e = Number(eficiencia);
+  if (!(l > 0) || !(t > 0) || !(e > 0) || e > 1) return null;
+  const laminaBruta = l / e;
+  const horas = laminaBruta / t;
+  const minutosTotais = Math.round(horas * 60);
+  return {
+    horas: Math.round(horas * 100) / 100,
+    minutosTotais,
+    h: Math.floor(minutosTotais / 60),
+    min: minutosTotais % 60,
+    laminaBruta: Math.round(laminaBruta * 10) / 10,
+  };
+}
+
+/**
+ * Resolve a taxa de aplicação efetiva de um talhão: usa a taxa informada
+ * diretamente ou, na falta dela, deriva de vazão ÷ área do emissor.
+ */
+export function resolverTaxaTalhao(talhao) {
+  const direta = Number(talhao?.irrigacao_taxa_mm_h);
+  if (direta > 0) return direta;
+  return taxaAplicacaoMmH({
+    vazaoLh: talhao?.irrigacao_vazao_emissor_lh,
+    areaEmissorM2: talhao?.irrigacao_area_emissor_m2,
+  });
+}

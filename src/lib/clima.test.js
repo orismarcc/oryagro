@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { calcularManejoIrrigacao, kcCultura, laminaParaLitros } from './clima';
+import {
+  calcularManejoIrrigacao, kcCultura, laminaParaLitros,
+  taxaAplicacaoMmH, tempoIrrigacao, resolverTaxaTalhao, eficienciaPadrao,
+} from './clima';
 
 function prev(dias) {
   return {
@@ -61,6 +64,57 @@ describe('calcularManejoIrrigacao', () => {
     const r = calcularManejoIrrigacao({ daily: { time: [] } }, {});
     expect(r.dias).toEqual([]);
     expect(r.recomendacao).toBeNull();
+  });
+});
+
+describe('sistema de irrigação — taxa e tempo de acionamento', () => {
+  it('deriva taxa mm/h de vazão ÷ área do emissor (1 L/m² = 1 mm)', () => {
+    // gotejador 2 L/h, espaçamento 0,5 × 0,3 m = 0,15 m² → 13,33 mm/h
+    expect(taxaAplicacaoMmH({ vazaoLh: 2, areaEmissorM2: 0.15 })).toBe(13.33);
+    // microaspersor 50 L/h cobrindo 10 m² → 5 mm/h
+    expect(taxaAplicacaoMmH({ vazaoLh: 50, areaEmissorM2: 10 })).toBe(5);
+  });
+
+  it('retorna null quando faltam dados para a taxa', () => {
+    expect(taxaAplicacaoMmH({ vazaoLh: 0, areaEmissorM2: 10 })).toBeNull();
+    expect(taxaAplicacaoMmH({ vazaoLh: 2, areaEmissorM2: 0 })).toBeNull();
+  });
+
+  it('calcula o tempo compensando a eficiência do sistema', () => {
+    // precisa 5 mm líquidos, sistema aplica 10 mm/h com 100% eficiência → 30 min
+    const t1 = tempoIrrigacao({ laminaMm: 5, taxaMmH: 10, eficiencia: 1 });
+    expect(t1.minutosTotais).toBe(30);
+    expect(t1.laminaBruta).toBe(5);
+
+    // mesma lâmina com aspersão (75%) → precisa aplicar 6,67 mm → 40 min
+    const t2 = tempoIrrigacao({ laminaMm: 5, taxaMmH: 10, eficiencia: 0.75 });
+    expect(t2.laminaBruta).toBe(6.7);
+    expect(t2.minutosTotais).toBe(40);
+  });
+
+  it('formata horas e minutos', () => {
+    const t = tempoIrrigacao({ laminaMm: 12, taxaMmH: 5, eficiencia: 0.8 });
+    // bruta 15 mm ÷ 5 mm/h = 3 h
+    expect(t.h).toBe(3);
+    expect(t.min).toBe(0);
+  });
+
+  it('retorna null com dados inválidos', () => {
+    expect(tempoIrrigacao({ laminaMm: 0, taxaMmH: 10, eficiencia: 0.9 })).toBeNull();
+    expect(tempoIrrigacao({ laminaMm: 5, taxaMmH: 0, eficiencia: 0.9 })).toBeNull();
+    expect(tempoIrrigacao({ laminaMm: 5, taxaMmH: 10, eficiencia: 1.5 })).toBeNull();
+  });
+
+  it('resolverTaxaTalhao prioriza a taxa informada e cai para a derivada', () => {
+    expect(resolverTaxaTalhao({ irrigacao_taxa_mm_h: 8 })).toBe(8);
+    expect(resolverTaxaTalhao({ irrigacao_vazao_emissor_lh: 2, irrigacao_area_emissor_m2: 0.5 })).toBe(4);
+    expect(resolverTaxaTalhao({})).toBeNull();
+  });
+
+  it('eficiência padrão por tipo de sistema', () => {
+    expect(eficienciaPadrao('gotejamento')).toBe(0.90);
+    expect(eficienciaPadrao('aspersao')).toBe(0.75);
+    expect(eficienciaPadrao('inexistente')).toBe(0.8);
   });
 });
 

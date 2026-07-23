@@ -11,6 +11,7 @@ import { CULTURAS } from '../data/culturas';
 import { loadSafrasDeTalhao, criarSafraDeTalhao, deleteTalhaoComSeguranca } from '../hooks/useSupabaseSync';
 import TalhaoMapEditor from './TalhaoMapEditor';
 import IrrigacaoPanel from './IrrigacaoPanel';
+import IrrigacaoKitForm from './IrrigacaoKitForm';
 import { isValidLatLng, geojsonToPoints } from '../lib/geo';
 import { resolveLifecycle } from '../lib/lifecycle';
 import { useToast } from '../context/ToastContext';
@@ -202,10 +203,19 @@ export default function TalhaoPage({ talhao, onBack, onSelectLote }) {
   const [loading, setLoading] = useState(true);
   const [showNovaSafra, setShowNovaSafra] = useState(false);
   const [showMapEditor, setShowMapEditor] = useState(false);
+  const [showKitForm, setShowKitForm] = useState(false);
   // cópia local dos campos de geo para refletir na tela após salvar
   const [geo, setGeo] = useState({
     latitude: talhao.latitude, longitude: talhao.longitude,
     geojson: talhao.geojson, area_gps_ha: talhao.area_gps_ha, area_ha: talhao.area_ha,
+  });
+  // cópia local do sistema de irrigação instalado
+  const [kit, setKit] = useState({
+    irrigacao_tipo: talhao.irrigacao_tipo,
+    irrigacao_taxa_mm_h: talhao.irrigacao_taxa_mm_h,
+    irrigacao_vazao_emissor_lh: talhao.irrigacao_vazao_emissor_lh,
+    irrigacao_area_emissor_m2: talhao.irrigacao_area_emissor_m2,
+    irrigacao_eficiencia: talhao.irrigacao_eficiencia,
   });
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -343,6 +353,8 @@ export default function TalhaoPage({ talhao, onBack, onSelectLote }) {
           culturaId={talhao.cultura_id} culturaNome={cultura?.nome}
           areaHa={parseFloat(geo.area_ha) || parseFloat(talhao.area_ha) || null}
           onDefinirLocal={() => setShowMapEditor(true)}
+          talhao={{ ...talhao, ...kit }}
+          onConfigurarKit={() => setShowKitForm(true)}
         />
 
         {/* Safras ativas */}
@@ -479,6 +491,20 @@ export default function TalhaoPage({ talhao, onBack, onSelectLote }) {
             area_gps_ha: updated.area_gps_ha !== undefined ? updated.area_gps_ha : g.area_gps_ha,
             area_ha: updated.area_ha ?? g.area_ha,
           }))}
+        />
+      )}
+
+      {showKitForm && (
+        <IrrigacaoKitForm
+          talhao={{ ...talhao, ...kit }}
+          onClose={() => setShowKitForm(false)}
+          onSaved={(updated) => setKit({
+            irrigacao_tipo: updated.irrigacao_tipo ?? null,
+            irrigacao_taxa_mm_h: updated.irrigacao_taxa_mm_h ?? null,
+            irrigacao_vazao_emissor_lh: updated.irrigacao_vazao_emissor_lh ?? null,
+            irrigacao_area_emissor_m2: updated.irrigacao_area_emissor_m2 ?? null,
+            irrigacao_eficiencia: updated.irrigacao_eficiencia ?? null,
+          })}
         />
       )}
     </div>

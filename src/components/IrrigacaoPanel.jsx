@@ -8,8 +8,11 @@
  */
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Droplets, CloudRain, MapPin, RefreshCw, Loader2, Sun, AlertCircle } from 'lucide-react';
-import { fetchPrevisao, calcularManejoIrrigacao, kcCultura, laminaParaLitros } from '../lib/clima';
+import { Droplets, CloudRain, MapPin, RefreshCw, Loader2, Sun, AlertCircle, Timer, Settings2 } from 'lucide-react';
+import {
+  fetchPrevisao, calcularManejoIrrigacao, kcCultura, laminaParaLitros,
+  resolverTaxaTalhao, eficienciaPadrao, tempoIrrigacao, sistemaIrrigacao,
+} from '../lib/clima';
 import { isValidLatLng } from '../lib/geo';
 
 const NIVEL_STYLE = {
@@ -24,7 +27,7 @@ function diaCurto(iso, hojeISO) {
   return dt.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit' }).replace('.', '');
 }
 
-export default function IrrigacaoPanel({ lat, lon, culturaId, culturaNome, areaHa, onDefinirLocal }) {
+export default function IrrigacaoPanel({ lat, lon, culturaId, culturaNome, areaHa, onDefinirLocal, talhao = null, onConfigurarKit }) {
   const temLocal = isValidLatLng(lat, lon);
   const cacheKey = temLocal ? `clima_${lat.toFixed(3)}_${lon.toFixed(3)}_${culturaId || ''}` : null;
 
@@ -92,9 +95,18 @@ export default function IrrigacaoPanel({ lat, lon, culturaId, culturaNome, areaH
   const rec = manejo?.recomendacao;
   const style = rec ? (NIVEL_STYLE[rec.nivel] || NIVEL_STYLE.ok) : NIVEL_STYLE.ok;
   const RecIcon = style.Icon;
+  const necessidadeHoje = manejo?.dias?.find(d => d.data === hojeISO)?.necessidade || 0;
   const litrosHoje = rec?.nivel === 'irrigar' && areaHa
-    ? laminaParaLitros(manejo.dias.find(d => d.data === hojeISO)?.necessidade || 0, areaHa)
+    ? laminaParaLitros(necessidadeHoje, areaHa)
     : 0;
+
+  // ── Sistema de irrigação instalado → tempo de acionamento ──
+  const sistema = sistemaIrrigacao(talhao?.irrigacao_tipo);
+  const taxaMmH = resolverTaxaTalhao(talhao);
+  const eficSistema = Number(talhao?.irrigacao_eficiencia) || eficienciaPadrao(talhao?.irrigacao_tipo);
+  const tempoHoje = (sistema && taxaMmH && necessidadeHoje > 0)
+    ? tempoIrrigacao({ laminaMm: necessidadeHoje, taxaMmH, eficiencia: eficSistema })
+    : null;
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="card p-4">
@@ -127,6 +139,38 @@ export default function IrrigacaoPanel({ lat, lon, culturaId, culturaNome, areaH
               </p>
             )}
           </div>
+
+          {/* ── Sistema instalado: quanto tempo ligar ── */}
+          {sistema ? (
+            <div className="mt-2 rounded-xl p-3" style={{ background: 'hsl(190 60% 96%)', border: '1px solid hsl(190 50% 85%)' }}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <Timer size={13} style={{ color: '#0e7490' }} />
+                <span className="text-[11px] font-bold" style={{ color: '#0e7490' }}>{sistema.label}</span>
+                <span className="text-[10px] text-muted-foreground">· {taxaMmH} mm/h · {Math.round(eficSistema * 100)}% efic.</span>
+                {onConfigurarKit && (
+                  <button onClick={onConfigurarKit} className="ml-auto p-1 rounded-md text-muted-foreground hover:bg-black/5" title="Editar sistema">
+                    <Settings2 size={13} />
+                  </button>
+                )}
+              </div>
+              {tempoHoje ? (
+                <p className="text-[12.5px] text-foreground">
+                  Ligar por <strong style={{ color: '#0e7490' }}>{tempoHoje.h > 0 ? `${tempoHoje.h}h ` : ''}{tempoHoje.min}min</strong> hoje
+                  <span className="text-[11px] text-muted-foreground"> — aplica {tempoHoje.laminaBruta} mm brutos para entregar {necessidadeHoje} mm à planta.</span>
+                </p>
+              ) : (
+                <p className="text-[11.5px] text-muted-foreground">
+                  Nenhum acionamento necessário hoje — a chuva prevista cobre a demanda da cultura.
+                </p>
+              )}
+            </div>
+          ) : onConfigurarKit && (
+            <button onClick={onConfigurarKit}
+              className="mt-2 w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-bold"
+              style={{ background: 'hsl(190 50% 94%)', color: '#0e7490', border: '1px solid hsl(190 45% 85%)' }}>
+              <Settings2 size={13} /> Tenho irrigação instalada — calcular tempo de acionamento
+            </button>
+          )}
 
           {/* Previsão 7 dias */}
           <div className="mt-3 overflow-x-auto -mx-1 px-1">

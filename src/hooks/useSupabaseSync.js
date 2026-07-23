@@ -650,6 +650,26 @@ export async function updateTalhaoGeo(id, geo) {
 }
 
 /**
+ * Atualiza o sistema de irrigação instalado num talhão.
+ * Alimenta o cálculo de tempo de acionamento no manejo de irrigação.
+ */
+export async function updateTalhaoIrrigacao(id, kit) {
+  const payload = { updated_at: new Date().toISOString() };
+  ['irrigacao_tipo', 'irrigacao_taxa_mm_h', 'irrigacao_vazao_emissor_lh',
+   'irrigacao_area_emissor_m2', 'irrigacao_eficiencia'].forEach(k => {
+    if (kit[k] !== undefined) payload[k] = kit[k];
+  });
+  const { data, error } = await supabase
+    .from('talhoes')
+    .update(payload)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) { logDbError('updateTalhaoIrrigacao', error); throw error; }
+  return data;
+}
+
+/**
  * Atualiza a localização (lat/lon) de uma propriedade — base para o clima (#8).
  */
 export async function updatePropriedadeLocal(id, { latitude, longitude }) {

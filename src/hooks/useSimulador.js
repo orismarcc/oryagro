@@ -1,13 +1,15 @@
 import { useMemo } from 'react';
 import { getPrecosPadrao, getOpCosts } from '../data/precos';
-import { FALLBACK_CURVES } from './useCurvasProducao';
+import { getProductionFactorSync } from './useCurvasProducao';
 
-/** Fator de produção (0–1) de uma cultura no ano N após o plantio (curva de maturação). */
+/**
+ * Fator de produção (0–1) de uma cultura no ano N após o plantio (curva de maturação).
+ * Usa a curva CALIBRADA do usuário quando existir (via cache de useCurvasProducao),
+ * caindo para a curva padrão do sistema — assim a calibração da colheita real
+ * reflete diretamente na projeção multi-ano do simulador.
+ */
 function fatorProducao(culturaId, ano) {
-  const curva = FALLBACK_CURVES[culturaId] || FALLBACK_CURVES._default;
-  if (ano <= 0) return curva[0] ?? 0;
-  if (ano < curva.length) return curva[ano];
-  return curva[curva.length - 1]; // produção plena a partir do fim da curva
+  return getProductionFactorSync(culturaId, ano);
 }
 
 const formatBRL = (v) =>

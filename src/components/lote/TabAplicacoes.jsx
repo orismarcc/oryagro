@@ -5,7 +5,7 @@
  * detalhes técnicos exigidos pelo MAPA ficam numa seção expansível. Gera o
  * relatório em PDF de rastreabilidade.
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '../../context/ToastContext';
 import { Plus, Trash2, FileText, Loader2, SprayCan, ChevronDown } from 'lucide-react';
@@ -14,8 +14,22 @@ import {
   TIPOS_APLICACAO, CLASSES_APLICACAO, sugerirProduto, classeLabel, tipoLabel,
 } from '../../data/defensivos';
 import { gerarCadernoCampoPDF } from '../../lib/cadernoCampoPdf';
+import { loadEstoque, addMovimento } from '../../hooks/useGestao';
 import { supabase } from '../../lib/supabase';
 import { today, formatDatePtBR } from './shared';
+
+/** Normaliza nome para casar produto do caderno com item de estoque. */
+function normNome(s) {
+  return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+/** Acha o item de estoque que corresponde ao produto digitado. */
+function acharInsumo(produto, estoque) {
+  const p = normNome(produto);
+  if (!p) return null;
+  return estoque.find(i => { const n = normNome(i.nome); return n && (p === n || p.includes(n) || n.includes(p)); })
+    || estoque.find(i => { const t = p.split(/\s|\d/).filter(Boolean)[0]; return t && t.length >= 3 && normNome(i.nome).includes(t); })
+    || null;
+}
 
 const CLASSE_COR = {
   herbicida: '#b45309', fungicida: '#0369a1', inseticida: '#991b1b',
@@ -43,7 +57,19 @@ export default function TabAplicacoes({ lote, cultura, propriedade = null, canDe
   const [gerando, setGerando] = useState(false);
   const [form, setForm] = useState(() => emptyForm(lote));
 
+  // Baixa de estoque (opcional) vinculada à aplicação
+  const [estoque, setEstoque] = useState([]);
+  const [baixaInsumoId, setBaixaInsumoId] = useState('');
+  const [baixaQtd, setBaixaQtd] = useState('');
+
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const propId = propriedade?.id ?? lote.propriedade_id ?? null;
+  useEffect(() => {
+    loadEstoque(propId).then(setEstoque).catch(() => setEstoque([]));
+  }, [propId]);
+
+  const insumoBaixa = estoque.find(i => i.id === baixaInsumoId) || null;
 
   // Prefill do RT/CREA a partir da aplicação mais recente (conveniência)
   const ultimaComRT = useMemo(
@@ -60,6 +86,8 @@ export default function TabAplicacoes({ lote, cultura, propriedade = null, canDe
       base.epi = ultimaComRT.epi || '';
     }
     setForm(base);
+    setBaixaInsumoId('');
+    setBaixaQtd('');
     setShowTec(false);
     setShowForm(true);
   };
@@ -75,17 +103,39 @@ export default function TabAplicacoes({ lote, cultura, propriedade = null, canDe
       }
       return next;
     });
+    // sugere o item de estoque correspondente para a baixa (se ainda não escolhido)
+    if (!baixaInsumoId) {
+      const m = acharInsumo(val, estoque);
+      if (m) setBaixaInsumoId(m.id);
+    }
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
     if (!form.produto.trim()) { toast.error('Informe o produto aplicado.'); return; }
     if (!form.data) { toast.error('Informe a data da aplicação.'); return; }
+    const baixarQtd = parseFloat(baixaQtd);
+    if (baixaInsumoId && baixarQtd > 0 && insumoBaixa && baixarQtd > insumoBaixa.quantidade) {
+      if (!window.confirm(`A baixa (${baixarQtd} ${insumoBaixa.unidade}) é maior que o estoque de ${insumoBaixa.nome} (${insumoBaixa.quantidade} ${insumoBaixa.unidade}). O estoque ficará negativo. Continuar?`)) return;
+    }
     setSaving(true);
     try {
       await add(form);
+      // Conexão com o estoque/financeiro: baixa opcional do insumo aplicado
+      if (baixaInsumoId && baixarQtd > 0) {
+        await addMovimento({
+          insumoId: baixaInsumoId,
+          tipo: 'saida',
+          quantidade: baixarQtd,
+          data: form.data,
+          plantioId: lote.id,
+          observacao: `Aplicação: ${form.produto}${form.alvo ? ` — ${form.alvo}` : ''}`,
+        });
+        setEstoque(prev => prev.map(i => i.id === baixaInsumoId ? { ...i, quantidade: (parseFloat(i.quantidade) || 0) - baixarQtd } : i));
+      }
+      setBaixaInsumoId(''); setBaixaQtd('');
       setShowForm(false);
-      toast.success('Aplicação registrada no caderno!');
+      toast.success(baixaInsumoId && baixarQtd > 0 ? 'Aplicação registrada e estoque atualizado!' : 'Aplicação registrada no caderno!');
     } catch {
       toast.error('Erro ao registrar. Tente novamente.');
     } finally {
@@ -213,6 +263,27 @@ export default function TabAplicacoes({ lote, cultura, propriedade = null, canDe
                     <input value={form.dose} onChange={e => set('dose', e.target.value)} placeholder="Ex.: 2,5 kg/ha" className={inputCls} style={bd} />
                   </div>
                 </div>
+
+                {/* Baixa de estoque (opcional) — conecta caderno ↔ estoque ↔ financeiro */}
+                {estoque.length > 0 && (
+                  <div className="rounded-xl p-2.5" style={{ background: `${cor}0a`, border: `1px solid ${cor}22` }}>
+                    <label className={labelCls}>Dar baixa no estoque (opcional)</label>
+                    <div className="flex gap-2 mt-1">
+                      <select value={baixaInsumoId} onChange={e => setBaixaInsumoId(e.target.value)}
+                        className="flex-1 rounded-xl border px-2 py-2 text-[12px] outline-none bg-background" style={bd}>
+                        <option value="">Não baixar</option>
+                        {estoque.map(i => (
+                          <option key={i.id} value={i.id}>{i.nome} ({i.quantidade} {i.unidade})</option>
+                        ))}
+                      </select>
+                      <input type="number" min="0" step="0.01" value={baixaQtd} onChange={e => setBaixaQtd(e.target.value)}
+                        placeholder="qtd" disabled={!baixaInsumoId}
+                        className="w-20 rounded-xl border px-2 py-2 text-sm outline-none bg-background disabled:opacity-50" style={bd} />
+                      {insumoBaixa && <span className="self-center text-[11px] text-muted-foreground">{insumoBaixa.unidade}</span>}
+                    </div>
+                    <p className="text-[9.5px] text-muted-foreground mt-1">Registra a saída no estoque e lança o custo no Financeiro deste lote.</p>
+                  </div>
+                )}
 
                 {/* Detalhes técnicos (MAPA) */}
                 <button type="button" onClick={() => setShowTec(v => !v)}
