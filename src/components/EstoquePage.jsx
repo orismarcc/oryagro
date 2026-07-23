@@ -7,6 +7,7 @@ import { logDbError } from '../lib/logger';
 import { useFarm } from '../context/FarmContext';
 import { can, FARM_ACTIONS } from '../lib/permissions';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
+import ListaComprasCard from './ListaComprasCard';
 
 // ── Constante de segurança para padding acima da navbar ──────────────────────
 // Todos os bottom-sheets devem usar isso no último elemento scrollável.
@@ -612,6 +613,11 @@ export default function EstoquePage({ propriedadeId = null, onBack }) {
               </p>
             ))}
           </motion.div>
+        )}
+
+        {/* ── Lista de compras inteligente (do cronograma dos lotes ativos) ── */}
+        {!loading && (
+          <ListaComprasCard propriedadeId={propriedadeId} insumos={insumos} />
         )}
 
         {/* Lista */}
