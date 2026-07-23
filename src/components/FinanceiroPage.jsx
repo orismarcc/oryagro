@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, TrendingUp, BarChart2, Award } from 'lucide-react';
+import { ChevronLeft, TrendingUp, BarChart2, Award, FileText, Loader2 } from 'lucide-react';
 import { loadDreRawData } from '../hooks/useFinanceiro';
 import { loadMaoObraBatch } from '../hooks/useGestao';
 import { logDbError } from '../lib/logger';
+import { supabase } from '../lib/supabase';
+import { gerarRelatorioFinanceiroPDF } from '../lib/relatorioFinanceiroPdf';
+import { useToast } from '../context/ToastContext';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import TabDRE from './finance/TabDRE';
 import TabComparativo from './finance/TabComparativo';
@@ -20,9 +23,29 @@ const TABS = [
 /* ─── Componente principal ────────────────────────────────────── */
 
 export default function FinanceiroPage({ onBack, propriedades = [] }) {
+  const toast = useToast();
   const [tab, setTab] = useState('dre');
   const [rawData, setRawData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [gerandoPdf, setGerandoPdf] = useState(false);
+
+  const handleRelatorioPDF = async () => {
+    if (!rawData) return;
+    setGerandoPdf(true);
+    try {
+      let produtor = '';
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        produtor = user?.user_metadata?.nome || user?.email || '';
+      } catch { /* offline */ }
+      gerarRelatorioFinanceiroPDF({ rawData, propriedades, produtor });
+    } catch (e) {
+      logDbError('FinanceiroPage.pdf', e);
+      toast.error('Não foi possível gerar o relatório.');
+    } finally {
+      setGerandoPdf(false);
+    }
+  };
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -61,6 +84,15 @@ export default function FinanceiroPage({ onBack, propriedades = [] }) {
           <div className="flex items-center gap-2 flex-1">
             <BarChart2 size={18} className="opacity-80" />
             <h1 className="text-[16px] font-bold leading-tight">Financeiro</h1>
+            <button
+              onClick={handleRelatorioPDF}
+              disabled={gerandoPdf || loading || !rawData}
+              className="ml-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-white/15 hover:bg-white/25 transition-colors disabled:opacity-40"
+              title="Relatório financeiro consolidado (PDF)"
+            >
+              {gerandoPdf ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+              Relatório
+            </button>
           </div>
         </div>
 
