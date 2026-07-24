@@ -280,7 +280,7 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly 
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4">
           {/* ── MAPA ── */}
           {modo === 'mapa' && (
             <div>

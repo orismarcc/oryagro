@@ -646,7 +646,7 @@ function NovaTalhaoDialog({ propriedadeId, onClose, onCreated }) {
           </p>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-3" style={{ scrollbarWidth: 'none' }}>
           {/* Cultura */}
           <div>
             <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Cultura perene *</label>

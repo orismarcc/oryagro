@@ -95,7 +95,7 @@ export default function CroquiGenerator({ pontos, culturaNome = 'Cultura', cor =
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/15"><X size={18} /></button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
           {/* Preview */}
           {svg && (
             <div className="rounded-xl overflow-hidden border" style={{ borderColor: 'hsl(152 14% 84%)', background: '#f3f5f1' }}>

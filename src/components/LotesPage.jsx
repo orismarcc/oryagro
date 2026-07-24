@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, CalendarDays, Sprout, CheckCircle2, ChevronDown, ChevronUp, Leaf } from 'lucide-react';
+import { Plus, Trash2, CalendarDays, Sprout, CheckCircle2, ChevronDown, ChevronUp, Leaf, MapPin } from 'lucide-react';
 import { calcularPlantas } from '../hooks/useSimulador';
 import { registrarPlantio, deleteLote, updateLoteMudas, preCarregarEtapasPadrao } from '../hooks/useSupabaseSync';
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
+import { geojsonToPoints } from '../lib/geo';
 import PropagacaoSelector from './PropagacaoSelector';
 import AnaliseSoloForm from './AnaliseSoloForm';
+import TalhaoMapEditor from './TalhaoMapEditor';
+import TalhaoMapPreview from './TalhaoMapPreview';
 
 /** Converte o painel de análise (strings do form) em números para o banco. */
 function sanitizeAnalise(analise) {
@@ -242,6 +245,8 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
   const [soloData, setSoloData]                 = useState({ ativo: false, tipoSolo: '', analise: {} });
   const [numLinhas, setNumLinhas]               = useState('');
   const [espEstaca, setEspEstaca]               = useState('');
+  const [showMapa, setShowMapa]                 = useState(false);
+  const [geoDemarcado, setGeoDemarcado]         = useState(null); // área demarcada no mapa (opcional)
 
   const calcValores = {
     comprimento: calc.comprimento,
@@ -325,6 +330,13 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
       ...(soloData.ativo && sanitizeAnalise(soloData.analise)
         ? { analise_solo: sanitizeAnalise(soloData.analise) }
         : {}),
+      // Geometria demarcada no mapa (opcional) — ativa clima/irrigação/croqui no lote
+      ...(geoDemarcado ? {
+        latitude: geoDemarcado.latitude ?? null,
+        longitude: geoDemarcado.longitude ?? null,
+        geojson: geoDemarcado.geojson ?? null,
+        area_gps_ha: geoDemarcado.area_gps_ha ?? null,
+      } : {}),
     };
 
     const novo = await registrarPlantio(payload);
@@ -338,7 +350,7 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
       setUsaMudas(false);
       setMetodoPropagacao(defaultMetodo);
       setSoloData({ ativo: false, tipoSolo: '', analise: {} });
-      setNumLinhas(''); setEspEstaca('');
+      setNumLinhas(''); setEspEstaca(''); setGeoDemarcado(null);
       setShowForm(false);
     }
     setSaving(false);
@@ -433,6 +445,25 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
             </>
           )}
         </div>
+
+        {/* Demarcar a área no mapa (opcional) — só para culturas de campo (ha) */}
+        {isCampo && (
+          <>
+            <button type="button" onClick={() => setShowMapa(true)}
+              className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-bold"
+              style={geoDemarcado
+                ? { background: `${cor}18`, color: cor, border: `1px solid ${cor}40` }
+                : { background: 'hsl(156 30% 93%)', color: 'hsl(156 45% 28%)', border: '1px dashed hsl(156 40% 60%)' }}>
+              <MapPin size={13} />
+              {geoDemarcado
+                ? `Área demarcada: ${Number(geoDemarcado.area_gps_ha).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ha — editar`
+                : 'Ou demarcar a área no mapa (GPS)'}
+            </button>
+            {geoDemarcado?.geojson && geojsonToPoints(geoDemarcado.geojson).length >= 3 && (
+              <TalhaoMapPreview geojson={geoDemarcado.geojson} areaHa={geoDemarcado.area_gps_ha} cor={cor} height={130} />
+            )}
+          </>
+        )}
 
         {!isCampo && dim.linhas !== undefined && (
           <p className="text-[11px] text-muted-foreground">
@@ -608,6 +639,21 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
           </motion.div>
         )}
       </AnimatePresence>
+
+      {showMapa && (
+        <TalhaoMapEditor
+          captureOnly
+          talhao={{ nome: nome || cultura.nome, ...(geoDemarcado || {}) }}
+          onClose={() => setShowMapa(false)}
+          onSaved={(payload) => {
+            setGeoDemarcado({
+              latitude: payload.latitude, longitude: payload.longitude,
+              geojson: payload.geojson, area_gps_ha: payload.area_gps_ha,
+            });
+            if (payload.area_ha != null) onCalcChange(c => ({ ...c, area: payload.area_ha }));
+          }}
+        />
+      )}
     </div>
   );
 }
