@@ -61,7 +61,10 @@ export default function TalhaoMapPreview({ geojson, areaHa, height = 150, cor = 
     <div className="mt-3">
       <div
         ref={divRef}
-        style={{ height, width: '100%', borderRadius: 12, overflow: 'hidden', border: '1px solid hsl(152 14% 84%)', background: '#dddddd' }}
+        style={{ height, width: '100%', borderRadius: 12, overflow: 'hidden', border: '1px solid hsl(152 14% 84%)', background: '#dddddd',
+          // isola os z-index internos do Leaflet (panes 200–700, controles 1000)
+          // para que o mapa não pinte por cima de modais abertos sobre a página
+          position: 'relative', zIndex: 0, isolation: 'isolate' }}
       />
       <div className="grid grid-cols-3 gap-2 mt-2">
         <div className="rounded-xl py-2 text-center" style={{ background: `${cor}0f` }}>

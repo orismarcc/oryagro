@@ -227,7 +227,7 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved }) {
     : pontos.length >= 3;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/50 flex items-end sm:items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 z-[2000] bg-black/50 flex items-end sm:items-center justify-center" onClick={onClose}>
       <motion.div
         initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
         className="bg-background w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col"
@@ -259,8 +259,8 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved }) {
           {/* ── MAPA ── */}
           {modo === 'mapa' && (
             <div>
-              <div style={{ position: 'relative' }}>
-                <div ref={mapDivRef} style={{ height: 320, width: '100%', borderRadius: 12, overflow: 'hidden', border: '1px solid hsl(152 14% 84%)', background: '#dddddd' }} />
+              <div style={{ position: 'relative', isolation: 'isolate' }}>
+                <div ref={mapDivRef} style={{ height: 320, width: '100%', borderRadius: 12, overflow: 'hidden', border: '1px solid hsl(152 14% 84%)', background: '#dddddd', position: 'relative', zIndex: 0, isolation: 'isolate' }} />
               </div>
 
               {/* Seletor de fonte de imagem — cobertura de satélite varia por região */}
