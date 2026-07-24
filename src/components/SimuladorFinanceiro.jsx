@@ -7,10 +7,11 @@ import InsumoField from './InsumoField';
 import ResultadoPanel from './ResultadoPanel';
 import { useSimulador, calcularPlantas } from '../hooks/useSimulador';
 import { useCurvasProducao } from '../hooks/useCurvasProducao';
-import { useSimuladorSync, loadSimuladorConfig, registrarPlantio, preCarregarEtapasPadrao } from '../hooks/useSupabaseSync';
+import { useSimuladorSync, loadSimuladorConfig, registrarPlantio, preCarregarEtapasPadrao, loadPropriedades } from '../hooks/useSupabaseSync';
 import { getPrecosPadrao, getOpCosts } from '../data/precos';
 import { RotateCcw, Database, CheckCircle2, Pencil, Check, Package, Truck, Zap, ShieldCheck, MapPin } from 'lucide-react';
 import TalhaoMapEditor from './TalhaoMapEditor';
+import { useToast } from '../context/ToastContext';
 
 const loadFromStorage = (key, def) => {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; }
@@ -36,6 +37,7 @@ function NumField({ label, field, valores, onChange, prefix, suffix, width = 'w-
 }
 
 export default function SimuladorFinanceiro({ cultura }) {
+  const toast = useToast();
   const storageKey = `sim_${cultura.id}`;
   const ins = cultura.insumos;
   const isCampo = cultura.tipo === 'campo';
@@ -83,6 +85,15 @@ export default function SimuladorFinanceiro({ cultura }) {
   const [plantioSaved, setPlantioSaved] = useState(null);
   const [showMapa, setShowMapa] = useState(false);
   const [geoDemarcado, setGeoDemarcado] = useState(null); // área demarcada no mapa (opcional)
+  // Lote precisa pertencer a uma propriedade (plantios.propriedade_id é obrigatório)
+  const [propriedades, setPropriedades] = useState([]);
+  const [propId, setPropId] = useState('');
+  useEffect(() => {
+    loadPropriedades().then(ps => {
+      setPropriedades(ps || []);
+      if ((ps || []).length === 1) setPropId(String(ps[0].id)); // auto-seleciona a única
+    }).catch(() => {});
+  }, []);
 
   useSimuladorSync(cultura.id, valores);
   // Aquece o cache de curvas de produção (inclui as CALIBRADAS pelo usuário),
@@ -506,6 +517,21 @@ export default function SimuladorFinanceiro({ cultura }) {
           <p className="text-xs text-muted-foreground mb-3">Salva os parâmetros no Supabase para histórico.</p>
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
+              <Label>Propriedade</Label>
+              <select
+                value={propId}
+                onChange={e => setPropId(e.target.value)}
+                className="w-full rounded-xl border px-3 py-2 text-sm bg-background outline-none"
+                style={{ borderColor: 'hsl(152 14% 84%)' }}
+              >
+                <option value="">Selecione a propriedade…</option>
+                {propriedades.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+              </select>
+              {propriedades.length === 0 && (
+                <span className="text-[10.5px] text-amber-600">Cadastre uma propriedade antes de registrar o lote.</span>
+              )}
+            </div>
+            <div className="flex flex-col gap-1">
               <Label>Nome / identificação</Label>
               <Input placeholder={`${cultura.nome} – Lote 1`} value={plantioNome} onChange={e => setPlantioNome(e.target.value)} />
             </div>
@@ -522,9 +548,11 @@ export default function SimuladorFinanceiro({ cultura }) {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPlantioDialog(false)}>Cancelar</Button>
-            <Button onClick={async () => {
+            <Button disabled={!propId} onClick={async () => {
+              if (!propId) { toast.error('Selecione a propriedade do lote.'); return; }
               const dim2 = calcularPlantas(cultura, valores);
               const saved = await registrarPlantio({
+                propriedade_id: propId,
                 cultura_id: cultura.id,
                 nome: plantioNome || `${cultura.nome} – ${plantioData}`,
                 data_plantio: plantioData,

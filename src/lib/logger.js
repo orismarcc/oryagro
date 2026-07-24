@@ -60,7 +60,8 @@ const ERROR_TOAST_THROTTLE_MS = 5000;
 // Leitura falha = quase sempre transitória e com fallback de cache → só avisa
 // se PERSISTIR (2ª falha de leitura numa janela curta), evitando "cry wolf"
 // por um blip de rede isolado.
-const WRITE_CTX = /^(add|update|delete|save|insert|upsert|create|remove|set|patch|put|del)/i;
+// Prefixos de ESCRITA em inglês e português (o codebase mistura os dois).
+const WRITE_CTX = /^(add|update|delete|save|insert|upsert|create|remove|set|patch|put|del|criar|registrar|atualizar|salvar|excluir|deletar|remover|gravar|enviar|apagar|editar)/i;
 let _lastReadErrorAt = 0;
 const READ_PERSIST_WINDOW_MS = 12000;
 
