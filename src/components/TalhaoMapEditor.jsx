@@ -28,7 +28,10 @@ const MODOS = [
   { id: 'ponto', label: 'Ponto', Icon: Crosshair },
 ];
 
-export default function TalhaoMapEditor({ talhao, onClose, onSaved }) {
+export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly = false }) {
+  // captureOnly (ou talhão ainda sem id): não grava no banco — apenas devolve a
+  // geometria (geojson/área/centro) para o formulário de cadastro usar.
+  const soCaptura = captureOnly || !talhao?.id;
   const toast = useToast();
   const [modo, setModo] = useState('mapa');
   const [pontos, setPontos] = useState(() => geojsonToPoints(talhao?.geojson));
@@ -208,6 +211,13 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved }) {
         area_gps_ha: Math.round(a * 1000) / 1000,
         area_ha: Math.round(a * 100) / 100, // atualiza a área do talhão com a medida real
       };
+    }
+    // Cadastro novo: só devolve a geometria, sem tocar no banco.
+    if (soCaptura) {
+      onSaved?.(payload);
+      toast.success('Área demarcada!');
+      onClose?.();
+      return;
     }
     setSalvando(true);
     try {

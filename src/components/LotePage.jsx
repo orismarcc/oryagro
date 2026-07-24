@@ -34,6 +34,8 @@ import TabDiario from './lote/TabDiario';
 import TabProducao from './lote/TabProducao';
 import TabAplicacoes from './lote/TabAplicacoes';
 import IrrigacaoPanel from './IrrigacaoPanel';
+import TalhaoMapPreview from './TalhaoMapPreview';
+import { geojsonToPoints } from '../lib/geo';
 import IrrigacaoKitForm from './IrrigacaoKitForm';
 import TabDespesas from './lote/TabDespesas';
 import TabReceitas from './lote/TabReceitas';
@@ -804,9 +806,13 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
         >
           {tab === 'cronograma' && (
             <div className="flex flex-col gap-4">
-              {/* Manejo de irrigação — usa a localização da propriedade e o kit do lote */}
+              {/* Recorte da área demarcada do lote (se houver) */}
+              {geojsonToPoints(lote.geojson).length >= 3 && (
+                <TalhaoMapPreview geojson={lote.geojson} areaHa={lote.area_gps_ha} cor={cor} />
+              )}
+              {/* Manejo de irrigação — usa a localização do lote (se demarcada) ou da propriedade */}
               <IrrigacaoPanel
-                lat={propriedade?.latitude} lon={propriedade?.longitude}
+                lat={lote.latitude ?? propriedade?.latitude} lon={lote.longitude ?? propriedade?.longitude}
                 culturaId={cultura.id} culturaNome={cultura.nome}
                 areaHa={parseFloat(lote.area_ha) || null}
                 talhao={{ ...lote, ...kitIrrigacao }}

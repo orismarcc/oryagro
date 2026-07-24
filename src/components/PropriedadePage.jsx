@@ -15,6 +15,7 @@ import PropagacaoSelector from './PropagacaoSelector';
 import BackupModal from './BackupModal';
 import AuditLogModal from './AuditLogModal';
 import PropriedadeLocalCard from './PropriedadeLocalCard';
+import TalhaoMapEditor from './TalhaoMapEditor';
 
 
 
@@ -556,6 +557,8 @@ function NovaTalhaoDialog({ propriedadeId, onClose, onCreated }) {
     metodoPropagacao: '', observacoes: '',
   });
   const [saving, setSaving] = useState(false);
+  const [showMapa, setShowMapa] = useState(false);
+  const [geoDemarcado, setGeoDemarcado] = useState(null); // { latitude, longitude, geojson, area_gps_ha }
 
   const cultura = form.culturaId ? CULTURAS[form.culturaId] : null;
   const cor = cultura?.cor ?? '#16a34a';
@@ -604,6 +607,7 @@ function NovaTalhaoDialog({ propriedadeId, onClose, onCreated }) {
         espacamentoLinhas: parseFloat(form.linhas) || null,
         espacamentoPlanta: parseFloat(form.plantas) || null,
         observacoes: form.observacoes || null,
+        geo: geoDemarcado, // geometria demarcada no mapa (opcional)
       });
       if (!talhao) { toast.error('Não foi possível criar o talhão. Tente novamente.'); return; }
 
@@ -710,6 +714,19 @@ function NovaTalhaoDialog({ propriedadeId, onClose, onCreated }) {
                       className={inputCls} style={{ '--tw-ring-color': cor }} />
                   </div>
                 </div>
+
+                {/* Demarcar a área no mapa (opcional) — preenche a área medida */}
+                <button type="button" onClick={() => setShowMapa(true)}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-bold mt-0.5"
+                  style={geoDemarcado
+                    ? { background: `${cor}18`, color: cor, border: `1px solid ${cor}40` }
+                    : { background: 'hsl(156 30% 93%)', color: 'hsl(156 45% 28%)', border: '1px dashed hsl(156 40% 60%)' }}>
+                  <MapPin size={13} />
+                  {geoDemarcado
+                    ? `Área demarcada: ${Number(geoDemarcado.area_gps_ha).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ha — editar`
+                    : 'Ou demarcar a área no mapa (GPS)'}
+                </button>
+
                 {dim.plantasPorHa > 0 && (
                   <p className="text-[11px] text-muted-foreground">
                     {dim.plantasPorHa.toLocaleString('pt-BR')} plantas/ha × {parseFloat(form.areaHa) || 0} ha
@@ -754,6 +771,21 @@ function NovaTalhaoDialog({ propriedadeId, onClose, onCreated }) {
           </button>
         </div>
       </motion.div>
+
+      {showMapa && (
+        <TalhaoMapEditor
+          captureOnly
+          talhao={{ nome: form.nome || 'Novo talhão', ...(geoDemarcado || {}) }}
+          onClose={() => setShowMapa(false)}
+          onSaved={(payload) => {
+            setGeoDemarcado({
+              latitude: payload.latitude, longitude: payload.longitude,
+              geojson: payload.geojson, area_gps_ha: payload.area_gps_ha,
+            });
+            if (payload.area_ha != null) setForm(f => ({ ...f, areaHa: String(payload.area_ha) }));
+          }}
+        />
+      )}
     </div>
   );
 }

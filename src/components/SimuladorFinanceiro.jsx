@@ -9,7 +9,8 @@ import { useSimulador, calcularPlantas } from '../hooks/useSimulador';
 import { useCurvasProducao } from '../hooks/useCurvasProducao';
 import { useSimuladorSync, loadSimuladorConfig, registrarPlantio, preCarregarEtapasPadrao } from '../hooks/useSupabaseSync';
 import { getPrecosPadrao, getOpCosts } from '../data/precos';
-import { RotateCcw, Database, CheckCircle2, Pencil, Check, Package, Truck, Zap, ShieldCheck } from 'lucide-react';
+import { RotateCcw, Database, CheckCircle2, Pencil, Check, Package, Truck, Zap, ShieldCheck, MapPin } from 'lucide-react';
+import TalhaoMapEditor from './TalhaoMapEditor';
 
 const loadFromStorage = (key, def) => {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; }
@@ -80,6 +81,8 @@ export default function SimuladorFinanceiro({ cultura }) {
   const [plantioNome, setPlantioNome] = useState('');
   const [plantioData, setPlantioData] = useState(new Date().toISOString().split('T')[0]);
   const [plantioSaved, setPlantioSaved] = useState(null);
+  const [showMapa, setShowMapa] = useState(false);
+  const [geoDemarcado, setGeoDemarcado] = useState(null); // área demarcada no mapa (opcional)
 
   useSimuladorSync(cultura.id, valores);
   // Aquece o cache de curvas de produção (inclui as CALIBRADAS pelo usuário),
@@ -224,6 +227,21 @@ export default function SimuladorFinanceiro({ cultura }) {
                 </>
               )}
             </div>
+
+            {/* Demarcar a área no mapa (opcional) — preenche a área medida por GPS */}
+            {isCampo && (
+              <button type="button" onClick={() => setShowMapa(true)}
+                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-bold mt-3"
+                style={geoDemarcado
+                  ? { background: `${cor}18`, color: cor, border: `1px solid ${cor}40` }
+                  : { background: 'hsl(156 30% 93%)', color: 'hsl(156 45% 28%)', border: '1px dashed hsl(156 40% 60%)' }}>
+                <MapPin size={13} />
+                {geoDemarcado
+                  ? `Área demarcada: ${Number(geoDemarcado.area_gps_ha).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ha — editar`
+                  : 'Ou demarcar a área no mapa (GPS)'}
+              </button>
+            )}
+
             <div className="mt-3 rounded-xl px-4 py-3" style={{ background: `${cor}10`, border: `1px solid ${cor}22` }}>
               {isCampo ? (
                 <>
@@ -516,6 +534,11 @@ export default function SimuladorFinanceiro({ cultura }) {
                 espacamento_linhas: parseFloat(valores.espacamentoLinhas) || (isCampo ? cultura.espacamento.linhas : cultura.canteiro.espacamentoLinhas),
                 espacamento_plantas: parseFloat(valores.espacamentoPlantas) || (isCampo ? cultura.espacamento.plantas : cultura.canteiro.espacamentoPlantas),
                 total_plantas: dim2.totalPlantas,
+                // Geometria demarcada no mapa (opcional) — já ativa clima/irrigação no lote
+                latitude: geoDemarcado?.latitude ?? null,
+                longitude: geoDemarcado?.longitude ?? null,
+                geojson: geoDemarcado?.geojson ?? null,
+                area_gps_ha: geoDemarcado?.area_gps_ha ?? null,
               });
               if (saved) {
                 preCarregarEtapasPadrao(saved, cultura, 0).catch(() => {});
@@ -526,6 +549,21 @@ export default function SimuladorFinanceiro({ cultura }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {showMapa && (
+        <TalhaoMapEditor
+          captureOnly
+          talhao={{ nome: cultura.nome, ...(geoDemarcado || {}) }}
+          onClose={() => setShowMapa(false)}
+          onSaved={(payload) => {
+            setGeoDemarcado({
+              latitude: payload.latitude, longitude: payload.longitude,
+              geojson: payload.geojson, area_gps_ha: payload.area_gps_ha,
+            });
+            if (payload.area_ha != null) handleChange('areaHa', payload.area_ha);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -579,7 +579,7 @@ export async function countLotesByPropriedade() {
 /**
  * Cria um novo talhão na tabela talhoes. Retorna o row criado ou null.
  */
-export async function criarTalhao({ propriedadeId, nome, culturaId, dataImplantacao, areaHa, totalPlantas, metodoPropagacao, espacamentoLinhas, espacamentoPlanta, observacoes }) {
+export async function criarTalhao({ propriedadeId, nome, culturaId, dataImplantacao, areaHa, totalPlantas, metodoPropagacao, espacamentoLinhas, espacamentoPlanta, observacoes, geo }) {
   const userId = await getUserId();
   if (!userId) return null;
   const { data, error } = await supabase
@@ -597,6 +597,11 @@ export async function criarTalhao({ propriedadeId, nome, culturaId, dataImplanta
       espacamento_plantas:  espacamentoPlanta || null,
       observacoes:          observacoes || null,
       status:               'ativo',
+      // Geometria demarcada no cadastro (opcional)
+      latitude:             geo?.latitude ?? null,
+      longitude:            geo?.longitude ?? null,
+      geojson:              geo?.geojson ?? null,
+      area_gps_ha:          geo?.area_gps_ha ?? null,
     })
     .select()
     .single();
