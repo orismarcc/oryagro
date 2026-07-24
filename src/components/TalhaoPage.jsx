@@ -11,6 +11,8 @@ import { CULTURAS } from '../data/culturas';
 import { loadSafrasDeTalhao, criarSafraDeTalhao, deleteTalhaoComSeguranca } from '../hooks/useSupabaseSync';
 import TalhaoMapEditor from './TalhaoMapEditor';
 import TalhaoMapPreview from './TalhaoMapPreview';
+import CroquiGenerator from './CroquiGenerator';
+import { geojsonToPoints as geojsonToPts } from '../lib/geo';
 import IrrigacaoPanel from './IrrigacaoPanel';
 import IrrigacaoKitForm from './IrrigacaoKitForm';
 import { isValidLatLng } from '../lib/geo';
@@ -205,6 +207,7 @@ export default function TalhaoPage({ talhao, onBack, onSelectLote }) {
   const [showNovaSafra, setShowNovaSafra] = useState(false);
   const [showMapEditor, setShowMapEditor] = useState(false);
   const [showKitForm, setShowKitForm] = useState(false);
+  const [showCroqui, setShowCroqui] = useState(false);
   // cópia local dos campos de geo para refletir na tela após salvar
   const [geo, setGeo] = useState({
     latitude: talhao.latitude, longitude: talhao.longitude,
@@ -340,7 +343,8 @@ export default function TalhaoPage({ talhao, onBack, onSelectLote }) {
               <MapPin size={13} /> {isValidLatLng(geo.latitude, geo.longitude) ? 'Editar' : 'Definir'}
             </button>
           </div>
-          <TalhaoMapPreview geojson={geo.geojson} areaHa={geo.area_gps_ha} cor={cor} />
+          <TalhaoMapPreview geojson={geo.geojson} areaHa={geo.area_gps_ha} cor={cor}
+            onCroqui={() => setShowCroqui(true)} />
         </div>
 
         {/* ── Manejo de irrigação com clima (#8) ── */}
@@ -487,6 +491,15 @@ export default function TalhaoPage({ talhao, onBack, onSelectLote }) {
             area_gps_ha: updated.area_gps_ha !== undefined ? updated.area_gps_ha : g.area_gps_ha,
             area_ha: updated.area_ha ?? g.area_ha,
           }))}
+        />
+      )}
+
+      {showCroqui && (
+        <CroquiGenerator
+          pontos={geojsonToPts(geo.geojson)}
+          culturaNome={cultura?.nome || 'Cultura'}
+          cor={cor}
+          onClose={() => setShowCroqui(false)}
         />
       )}
 

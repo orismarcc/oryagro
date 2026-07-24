@@ -35,6 +35,7 @@ import TabProducao from './lote/TabProducao';
 import TabAplicacoes from './lote/TabAplicacoes';
 import IrrigacaoPanel from './IrrigacaoPanel';
 import TalhaoMapPreview from './TalhaoMapPreview';
+import CroquiGenerator from './CroquiGenerator';
 import { geojsonToPoints } from '../lib/geo';
 import IrrigacaoKitForm from './IrrigacaoKitForm';
 import TabDespesas from './lote/TabDespesas';
@@ -445,6 +446,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
   const [tab, setTab] = useState('cronograma');
   const [concluindo, setConcluindo] = useState(false);
   const [showKitForm, setShowKitForm] = useState(false);
+  const [showCroqui, setShowCroqui] = useState(false);
   // sistema de irrigação instalado neste lote (cópia local p/ refletir após salvar)
   const [kitIrrigacao, setKitIrrigacao] = useState({
     irrigacao_tipo: lote.irrigacao_tipo,
@@ -808,7 +810,8 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
             <div className="flex flex-col gap-4">
               {/* Recorte da área demarcada do lote (se houver) */}
               {geojsonToPoints(lote.geojson).length >= 3 && (
-                <TalhaoMapPreview geojson={lote.geojson} areaHa={lote.area_gps_ha} cor={cor} />
+                <TalhaoMapPreview geojson={lote.geojson} areaHa={lote.area_gps_ha} cor={cor}
+                  onCroqui={() => setShowCroqui(true)} />
               )}
               {/* Manejo de irrigação — usa a localização do lote (se demarcada) ou da propriedade */}
               <IrrigacaoPanel
@@ -877,6 +880,15 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
             irrigacao_area_emissor_m2: updated.irrigacao_area_emissor_m2 ?? null,
             irrigacao_eficiencia: updated.irrigacao_eficiencia ?? null,
           })}
+        />
+      )}
+
+      {showCroqui && (
+        <CroquiGenerator
+          pontos={geojsonToPoints(lote.geojson)}
+          culturaNome={cultura?.nome || 'Cultura'}
+          cor={cor}
+          onClose={() => setShowCroqui(false)}
         />
       )}
     </div>

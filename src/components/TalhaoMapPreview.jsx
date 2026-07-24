@@ -8,10 +8,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { Grid3x3 } from 'lucide-react';
 import { polygonAreaHa, polygonPerimeter, geojsonToPoints } from '../lib/geo';
 import { getFonte } from '../data/mapTiles';
 
-export default function TalhaoMapPreview({ geojson, areaHa, height = 150, cor = '#16a34a' }) {
+export default function TalhaoMapPreview({ geojson, areaHa, height = 150, cor = '#16a34a', onCroqui }) {
   const pontos = geojsonToPoints(geojson);
   const divRef = useRef(null);
   const mapRef = useRef(null);
@@ -82,6 +83,14 @@ export default function TalhaoMapPreview({ geojson, areaHa, height = 150, cor = 
           <p className="text-[8.5px] font-bold uppercase tracking-wider text-muted-foreground mt-0.5">vértices</p>
         </div>
       </div>
+
+      {onCroqui && (
+        <button onClick={onCroqui}
+          className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11.5px] font-bold mt-2"
+          style={{ background: `${cor}12`, color: cor, border: `1px solid ${cor}30` }}>
+          <Grid3x3 size={13} /> Gerar croqui de plantio (covas)
+        </button>
+      )}
     </div>
   );
 }

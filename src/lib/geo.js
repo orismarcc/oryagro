@@ -80,3 +80,46 @@ export function geojsonToPoints(geo) {
 export function isValidLatLng(lat, lng) {
   return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
 }
+
+/** Distância perpendicular (m) de p à reta infinita que passa por a e b (no plano local). */
+function perpLineDist(p, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy);
+  if (L === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  return Math.abs((p.x - a.x) * dy - (p.y - a.y) * dx) / L;
+}
+
+/**
+ * Simplifica um trajeto (Ramer–Douglas–Peucker) removendo pontos que estão em
+ * linha reta: mantém apenas X e Y quando os pontos entre eles desviam MENOS que
+ * `epsilonM` metros da reta X–Y. A garantia é matemática — nenhum ponto removido
+ * está a mais de epsilonM da reta, então "foi reto" dentro dessa tolerância.
+ * Cantos reais (desvio > epsilonM) são preservados. Fecha o laço se o último
+ * ponto coincide com o primeiro.
+ *
+ * @param {Array<{lat,lng}>} points
+ * @param {number} epsilonM  tolerância em metros (default 3 — ~ruído de GPS)
+ */
+export function simplifyRDP(points, epsilonM = 3) {
+  const pts = (points || []).filter(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lng));
+  if (pts.length <= 2) return pts.slice();
+  const c = centroid(pts);
+  const lat0 = rad(c.lat);
+  const xy = pts.map(p => ({ x: rad(p.lng - c.lng) * R * Math.cos(lat0), y: rad(p.lat - c.lat) * R }));
+
+  const keep = new Array(pts.length).fill(false);
+  keep[0] = keep[pts.length - 1] = true;
+  const stack = [[0, pts.length - 1]];
+  while (stack.length) {
+    const [s, e] = stack.pop();
+    let maxD = -1, idx = -1;
+    for (let i = s + 1; i < e; i++) {
+      const d = perpLineDist(xy[i], xy[s], xy[e]);
+      if (d > maxD) { maxD = d; idx = i; }
+    }
+    if (maxD > epsilonM && idx > s) { keep[idx] = true; stack.push([s, idx], [idx, e]); }
+  }
+  const out = pts.filter((_, i) => keep[i]);
+  // Remove o ponto final se ele apenas fechou o laço sobre o inicial.
+  if (out.length >= 3 && haversine(out[0], out[out.length - 1]) < 2) out.pop();
+  return out;
+}

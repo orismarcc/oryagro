@@ -17,7 +17,7 @@ import { motion } from 'framer-motion';
 import { X, MapPin, Footprints, Crosshair, Undo2, Trash2, Check, Loader2, Map as MapIcon } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import {
-  polygonAreaHa, polygonPerimeter, centroid, pointsToGeojson, geojsonToPoints, isValidLatLng, haversine,
+  polygonAreaHa, polygonPerimeter, centroid, pointsToGeojson, geojsonToPoints, isValidLatLng, haversine, simplifyRDP,
 } from '../lib/geo';
 import { updateTalhaoGeo } from '../hooks/useSupabaseSync';
 import { FONTES_MAPA, FONTE_PADRAO, getFonte } from '../data/mapTiles';
@@ -154,6 +154,17 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly 
       if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
       setWatching(false);
+      // Ao parar: simplifica trechos retos (mantém X e Y, remove os pontos entre
+      // eles que estão sobre a reta, com garantia de desvio < 3 m). Cantos ficam.
+      setPontos(prev => {
+        if (prev.length < 4) return prev;
+        const simp = simplifyRDP(prev, 3);
+        if (simp.length >= 3 && simp.length < prev.length) {
+          toast.info(`Trajeto simplificado: ${prev.length} → ${simp.length} pontos (trechos retos unidos).`);
+          return simp;
+        }
+        return prev;
+      });
       return;
     }
     if (!navigator.geolocation) { toast.error('GPS indisponível neste dispositivo.'); return; }
