@@ -3,9 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 import { CULTURAS, CULTURAS_LIST } from '../data/culturas';
 import SimuladorFinanceiro from './SimuladorFinanceiro';
-import { TrendingUp, ChevronDown } from 'lucide-react';
+import { TrendingUp, ChevronDown, Scale } from 'lucide-react';
 
-export default function SimuladorPage() {
+export default function SimuladorPage({ onComparar }) {
   const [culturaId, setCulturaId] = useState('alface');
   const [open, setOpen] = useState(false);
   const pickerRef = useRef(null);
@@ -105,6 +105,17 @@ export default function SimuladorPage() {
               )}
             </AnimatePresence>
           </div>
+
+          {/* Atalho opcional para comparar todas as culturas (ranking editável) */}
+          {onComparar && (
+            <button
+              onClick={onComparar}
+              className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-bold text-white transition-all active:scale-[0.98]"
+              style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)' }}
+            >
+              <Scale size={14} /> Comparar com outras culturas
+            </button>
+          )}
         </div>
       </div>
 

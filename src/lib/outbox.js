@@ -50,12 +50,13 @@ export function pendingCount() {
  * Enfileira uma operação idempotente para reenvio.
  * @param {{ table: string, payload: object, options?: object }} op
  */
-export function enqueueUpsert({ table, payload, options }) {
+export function enqueueUpsert({ table, payload, options, sig }) {
   const queue = read();
-  // Dedup: se já existe um upsert pendente para a mesma tabela+chave, substitui
-  const sig = JSON.stringify({ table, k: payload?.plantio_id, e: payload?.etapa, d: payload?.dia_previsto, c: payload?.is_custom });
-  const filtered = queue.filter(o => o._sig !== sig);
-  filtered.push({ id: `${Date.now()}_${Math.random().toString(36).slice(2)}`, kind: 'upsert', table, payload, options: options || {}, _sig: sig, ts: Date.now() });
+  // Dedup: se já existe um upsert pendente para a mesma tabela+chave, substitui.
+  // `sig` explícito permite dedup por id (ex.: geometria de um talhão).
+  const signature = sig || JSON.stringify({ table, k: payload?.plantio_id, e: payload?.etapa, d: payload?.dia_previsto, c: payload?.is_custom });
+  const filtered = queue.filter(o => o._sig !== signature);
+  filtered.push({ id: `${Date.now()}_${Math.random().toString(36).slice(2)}`, kind: 'upsert', table, payload, options: options || {}, _sig: signature, ts: Date.now() });
   write(filtered);
 }
 
@@ -95,6 +96,28 @@ export async function insertOfflineSafe(table, payload) {
     return { row, queued: true, error: null };
   }
   // Erro real (online) → caller decide como logar/avisar.
+  return { row: null, queued: false, error };
+}
+
+/**
+ * UPDATE resiliente a offline (para edições no campo — ex.: geometria de talhão
+ * capturada caminhando o perímetro sem sinal). Tenta atualizar online; se estiver
+ * OFFLINE, enfileira um upsert idempotente (por id) e devolve a linha otimista,
+ * de modo que o dado NUNCA se perde — sincroniza sozinho quando a internet voltar.
+ *
+ * @param {string} table
+ * @param {string} id     - chave primária da linha
+ * @param {object} patch  - colunas a atualizar
+ * @returns {Promise<{ row: object|null, queued: boolean, error: object|null }>}
+ */
+export async function updateOfflineSafe(table, id, patch) {
+  const { data, error } = await supabase.from(table).update(patch).eq('id', id).select().single();
+  if (!error) return { row: data, queued: false, error: null };
+
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    enqueueUpsert({ table, payload: { id, ...patch }, options: { onConflict: 'id' }, sig: `upsert:${table}:${id}` });
+    return { row: { id, ...patch }, queued: true, error: null };
+  }
   return { row: null, queued: false, error };
 }
 

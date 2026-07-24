@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { supabase, getUserId } from '../lib/supabase';
 import { logDbError } from '../lib/logger';
 import { cacheSet, cacheGet } from './useOfflineCache';
-import { enqueueUpsert, insertOfflineSafe } from '../lib/outbox';
+import { enqueueUpsert, insertOfflineSafe, updateOfflineSafe } from '../lib/outbox';
 
 /**
  * Debounced upsert of simulator config values to Supabase.
@@ -639,14 +639,11 @@ export async function updateTalhaoGeo(id, geo) {
   ['latitude', 'longitude', 'geojson', 'area_gps_ha', 'area_ha'].forEach(k => {
     if (geo[k] !== undefined) payload[k] = geo[k];
   });
-  const { data, error } = await supabase
-    .from('talhoes')
-    .update(payload)
-    .eq('id', id)
-    .select()
-    .single();
+  // Offline-safe: geometria capturada no campo (caminhando o perímetro) não pode
+  // se perder por falta de sinal — enfileira e sincroniza quando reconectar.
+  const { row, queued, error } = await updateOfflineSafe('talhoes', id, payload);
   if (error) { logDbError('updateTalhaoGeo', error); throw error; }
-  return data;
+  return { ...(row || { id, ...payload }), _queued: queued };
 }
 
 /**
@@ -659,14 +656,9 @@ export async function updateTalhaoIrrigacao(id, kit) {
    'irrigacao_area_emissor_m2', 'irrigacao_eficiencia'].forEach(k => {
     if (kit[k] !== undefined) payload[k] = kit[k];
   });
-  const { data, error } = await supabase
-    .from('talhoes')
-    .update(payload)
-    .eq('id', id)
-    .select()
-    .single();
+  const { row, error } = await updateOfflineSafe('talhoes', id, payload);
   if (error) { logDbError('updateTalhaoIrrigacao', error); throw error; }
-  return data;
+  return row || { id, ...payload };
 }
 
 /**
@@ -679,28 +671,20 @@ export async function updatePlantioIrrigacao(id, kit) {
    'irrigacao_area_emissor_m2', 'irrigacao_eficiencia'].forEach(k => {
     if (kit[k] !== undefined) payload[k] = kit[k];
   });
-  const { data, error } = await supabase
-    .from('plantios')
-    .update(payload)
-    .eq('id', id)
-    .select()
-    .single();
+  const { row, error } = await updateOfflineSafe('plantios', id, payload);
   if (error) { logDbError('updatePlantioIrrigacao', error); throw error; }
-  return data;
+  return row || { id, ...payload };
 }
 
 /**
  * Atualiza a localização (lat/lon) de uma propriedade — base para o clima (#8).
  */
 export async function updatePropriedadeLocal(id, { latitude, longitude }) {
-  const { data, error } = await supabase
-    .from('propriedades')
-    .update({ latitude, longitude, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .select()
-    .single();
+  const { row, error } = await updateOfflineSafe('propriedades', id, {
+    latitude, longitude, updated_at: new Date().toISOString(),
+  });
   if (error) { logDbError('updatePropriedadeLocal', error); throw error; }
-  return data;
+  return row || { id, latitude, longitude };
 }
 
 /**

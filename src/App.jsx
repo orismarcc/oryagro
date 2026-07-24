@@ -497,7 +497,7 @@ function AppInner({ session, displayName, signOut }) {
                 onRepetido={handleSelectLote}
               />
             )}
-            {mainView === 'simulador'  && <SimuladorPage />}
+            {mainView === 'simulador'  && <SimuladorPage onComparar={() => setMainView('comparacao')} />}
             {mainView === 'analise'    && <AnalysePage onSignOut={signOut} userName={displayName} propriedades={propriedades} userRole={userRole} />}
             {mainView === 'comparacao' && <ComparacaoCulturas />}
             {mainView === 'calendario' && <CalendarioPage />}

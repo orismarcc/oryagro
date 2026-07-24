@@ -160,6 +160,7 @@ export const CULTURAS = {
     nomesCientifico: 'Abelmoschus esculentus',
     cor: '#b5451b',
     corClara: '#fde8e0',
+    emoji: '🥒',
     ciclo: '60–70 dias (1ª colheita)',
     espacamentoPadrao: '1,0 × 0,50 m',
     areaPadrao: '1 ha',
@@ -424,7 +425,7 @@ export const CULTURAS = {
     nomesCientifico: 'Theobroma grandiflorum',
     cor: '#92400e',
     corClara: '#fef3c7',
-    emoji: '🍈',
+    emoji: '🥥',
     ciclo: '2–3 anos p/ 1ª safra (enxertia) · 4–5 anos (semente)',
     espacamentoPadrao: '5×5 m',
     areaPadrao: '1 ha',
@@ -714,7 +715,7 @@ export const CULTURAS = {
     nomesCientifico: 'Carica papaya L. (Tainung 01 — Formosa)',
     cor: '#ea580c',
     corClara: '#ffedd5',
-    emoji: '🍈',
+    emoji: '🥭',
     ciclo: '10–14 meses (1ª colheita)',
     espacamentoPadrao: '3,5 × 2,0 m',
     areaPadrao: '1 ha',
@@ -1026,4 +1027,6 @@ export const CULTURAS = {
   },
 };
 
-export const CULTURAS_LIST = Object.values(CULTURAS);
+// Lista para os seletores de cultura — em ordem alfabética (pt-BR, respeita acentos).
+export const CULTURAS_LIST = Object.values(CULTURAS)
+  .sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' }));

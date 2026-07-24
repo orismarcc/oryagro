@@ -149,6 +149,15 @@ export default function SimuladorFinanceiro({ cultura }) {
   const dim = calcularPlantas(cultura, valores);
   const fmtNum = (n) => (n == null || !isFinite(n) ? '—' : Math.round(n).toLocaleString('pt-BR'));
 
+  // As quantidades de insumo já são o TOTAL para a área digitada (auto-escaladas
+  // acima), então a unidade não deve dizer "/ha" — isso confundia. Ex.: com 2 ha,
+  // 3000 kg é o total, não "3000 kg/ha". Removemos o "/ha" do rótulo (a área
+  // aparece no cabeçalho da seção). As doses do cronograma continuam por-ha.
+  const unidadeArea = (u) => (isCampo ? (u || '').replace(/\s*\/\s*ha/gi, '').trim() || u : u);
+  const areaLabel = isCampo
+    ? `${(parseFloat(valores.areaHa) || cultura.area?.padrao || 1).toLocaleString('pt-BR')} ha`
+    : `${(dim.area || 0).toFixed(1)} m²`;
+
   // ── Meta de lucro (goal-seek) ──
   // Dado um lucro-alvo por período, estima quantas plantas/área seriam necessárias
   // mantendo o mesmo espaçamento, preços e manejo (escala proporcional ao lucro).
@@ -159,11 +168,11 @@ export default function SimuladorFinanceiro({ cultura }) {
   const metaArea = metaViavel ? (isCampo ? (dim.areaHa || 0) * fatorMeta : ((dim.area || 0) / 10000) * fatorMeta) : 0;
 
   const insumoRows = [
-    { label: 'Calcário',         value: valores.calcareo,      unit: ins.calcareo.unidade },
-    { label: 'Esterco bovino',    value: valores.esterco,       unit: ins.esterco.unidade },
-    { label: `NPK ${ins.npk.formula}`, value: valores.npk,     unit: ins.npk.unidade },
-    { label: 'Ureia 46%',         value: valores.ureia,         unit: ins.ureia.unidade },
-    { label: 'Nitrato de Cálcio', value: valores.nitratoCalcio, unit: ins.nitratoCalcio.unidade },
+    { label: 'Calcário',         value: valores.calcareo,      unit: unidadeArea(ins.calcareo.unidade) },
+    { label: 'Esterco bovino',    value: valores.esterco,       unit: unidadeArea(ins.esterco.unidade) },
+    { label: `NPK ${ins.npk.formula}`, value: valores.npk,     unit: unidadeArea(ins.npk.unidade) },
+    { label: 'Ureia 46%',         value: valores.ureia,         unit: unidadeArea(ins.ureia.unidade) },
+    { label: 'Nitrato de Cálcio', value: valores.nitratoCalcio, unit: unidadeArea(ins.nitratoCalcio.unidade) },
   ];
 
   return (
@@ -173,7 +182,7 @@ export default function SimuladorFinanceiro({ cultura }) {
       <div className="flex items-start justify-between mb-5 flex-wrap gap-2">
         <div>
           <h2 className="font-display text-lg font-bold text-foreground">Simulador Financeiro</h2>
-          {isCampo && <p className="text-[11px] font-bold uppercase tracking-wide mt-0.5" style={{ color: cor }}>Cálculo por hectare</p>}
+          {isCampo && <p className="text-[11px] font-bold uppercase tracking-wide mt-0.5" style={{ color: cor }}>Quantidades para {areaLabel}</p>}
           {plantioSaved && (
             <p className="text-[12px] font-medium flex items-center gap-1 mt-0.5" style={{ color: 'hsl(142 72% 30%)' }}>
               <CheckCircle2 size={12} /> Plantio "{plantioSaved.nome}" registrado
@@ -368,16 +377,16 @@ export default function SimuladorFinanceiro({ cultura }) {
 
             {editInsumos ? (
               <div className="space-y-0">
-                <InsumoField label={`Calcário (${ins.calcareo.unidade})`} campo="calcareo" culturaId={cultura.id}
-                  valor={valores.calcareo} valorPadrao={ins.calcareo.padrao} params={scaledParams(ins.calcareo)} unidade={ins.calcareo.unidade} onChange={handleChange} />
-                <InsumoField label={`Esterco bovino (${ins.esterco.unidade})`} campo="esterco" culturaId={cultura.id}
-                  valor={valores.esterco} valorPadrao={ins.esterco.padrao} params={scaledParams(ins.esterco)} unidade={ins.esterco.unidade} onChange={handleChange} />
-                <InsumoField label={`NPK ${ins.npk.formula} (${ins.npk.unidade})`} campo="npk" culturaId={cultura.id}
-                  valor={valores.npk} valorPadrao={ins.npk.padrao} params={scaledParams(ins.npk)} unidade={ins.npk.unidade} onChange={handleChange} />
-                <InsumoField label={`Ureia 46% (${ins.ureia.unidade})`} campo="ureia" culturaId={cultura.id}
-                  valor={valores.ureia} valorPadrao={ins.ureia.padrao} params={scaledParams(ins.ureia)} unidade={ins.ureia.unidade} onChange={handleChange} />
-                <InsumoField label={`Nitrato de Cálcio (${ins.nitratoCalcio.unidade})`} campo="nitratoCalcio" culturaId={cultura.id}
-                  valor={valores.nitratoCalcio} valorPadrao={ins.nitratoCalcio.padrao} params={scaledParams(ins.nitratoCalcio)} unidade={ins.nitratoCalcio.unidade} onChange={handleChange} />
+                <InsumoField label={`Calcário (${unidadeArea(ins.calcareo.unidade)})`} campo="calcareo" culturaId={cultura.id}
+                  valor={valores.calcareo} valorPadrao={ins.calcareo.padrao} params={scaledParams(ins.calcareo)} unidade={unidadeArea(ins.calcareo.unidade)} onChange={handleChange} />
+                <InsumoField label={`Esterco bovino (${unidadeArea(ins.esterco.unidade)})`} campo="esterco" culturaId={cultura.id}
+                  valor={valores.esterco} valorPadrao={ins.esterco.padrao} params={scaledParams(ins.esterco)} unidade={unidadeArea(ins.esterco.unidade)} onChange={handleChange} />
+                <InsumoField label={`NPK ${ins.npk.formula} (${unidadeArea(ins.npk.unidade)})`} campo="npk" culturaId={cultura.id}
+                  valor={valores.npk} valorPadrao={ins.npk.padrao} params={scaledParams(ins.npk)} unidade={unidadeArea(ins.npk.unidade)} onChange={handleChange} />
+                <InsumoField label={`Ureia 46% (${unidadeArea(ins.ureia.unidade)})`} campo="ureia" culturaId={cultura.id}
+                  valor={valores.ureia} valorPadrao={ins.ureia.padrao} params={scaledParams(ins.ureia)} unidade={unidadeArea(ins.ureia.unidade)} onChange={handleChange} />
+                <InsumoField label={`Nitrato de Cálcio (${unidadeArea(ins.nitratoCalcio.unidade)})`} campo="nitratoCalcio" culturaId={cultura.id}
+                  valor={valores.nitratoCalcio} valorPadrao={ins.nitratoCalcio.padrao} params={scaledParams(ins.nitratoCalcio)} unidade={unidadeArea(ins.nitratoCalcio.unidade)} onChange={handleChange} />
 
                 {/* Editable prices */}
                 <div className="mt-4 pt-3" style={{ borderTop: '1px solid hsl(140 13% 90%)' }}>

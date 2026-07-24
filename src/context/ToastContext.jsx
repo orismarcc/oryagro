@@ -108,10 +108,13 @@ export function ToastProvider({ children }) {
   // mensagem genérica e segura ao usuário, para que falhas de escrita/leitura
   // nunca mais passem despercebidas.
   useEffect(() => {
-    const onDbError = () => {
+    const onDbError = (e) => {
+      const isWrite = e?.detail?.kind === 'write';
       showToast(
-        'Falha de comunicação com o servidor. Algumas alterações podem não ter sido salvas — verifique sua conexão e tente novamente.',
-        'error',
+        isWrite
+          ? 'Não foi possível salvar. Verifique sua conexão e tente novamente.'
+          : 'Conexão instável ao carregar dados. Alguns itens podem estar desatualizados.',
+        isWrite ? 'error' : 'warning',
         6000,
       );
     };

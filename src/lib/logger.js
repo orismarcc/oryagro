@@ -55,18 +55,36 @@ export function logDbError(context, error) {
 let _lastErrorToastAt = 0;
 const ERROR_TOAST_THROTTLE_MS = 5000;
 
+// Distingue ESCRITA de LEITURA pelo nome do contexto (ex.: 'addMovimento' vs
+// 'loadVendas'). Escrita falha = risco real de perda de dado → avisa na hora.
+// Leitura falha = quase sempre transitória e com fallback de cache → só avisa
+// se PERSISTIR (2ª falha de leitura numa janela curta), evitando "cry wolf"
+// por um blip de rede isolado.
+const WRITE_CTX = /^(add|update|delete|save|insert|upsert|create|remove|set|patch|put|del)/i;
+let _lastReadErrorAt = 0;
+const READ_PERSIST_WINDOW_MS = 12000;
+
 function notifyDbError(context, error) {
   if (typeof window === 'undefined') return;
   // Não notificar erros enquanto offline (indicador de conexão cobre esse caso)
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
 
+  const isWrite = WRITE_CTX.test(context || '');
   const now = Date.now();
+
+  if (!isWrite) {
+    // Leitura: exige uma 2ª falha recente para caracterizar problema persistente.
+    const persistent = now - _lastReadErrorAt < READ_PERSIST_WINDOW_MS;
+    _lastReadErrorAt = now;
+    if (!persistent) return; // 1ª falha isolada de leitura → silenciosa (só console)
+  }
+
   if (now - _lastErrorToastAt < ERROR_TOAST_THROTTLE_MS) return;
   _lastErrorToastAt = now;
 
   try {
     window.dispatchEvent(new CustomEvent('oryagro:db-error', {
-      detail: { context, message: (error && error.message) || 'erro' },
+      detail: { context, message: (error && error.message) || 'erro', kind: isWrite ? 'write' : 'read' },
     }));
   } catch { /* ambiente sem CustomEvent — ignora */ }
 }

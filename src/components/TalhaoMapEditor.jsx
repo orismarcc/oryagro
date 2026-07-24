@@ -212,7 +212,11 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved }) {
     setSalvando(true);
     try {
       const updated = await updateTalhaoGeo(talhao.id, payload);
-      toast.success('Localização do talhão salva!');
+      if (updated?._queued) {
+        toast.warning('Sem sinal — salvo no aparelho. Sincroniza sozinho quando a internet voltar.');
+      } else {
+        toast.success('Localização do talhão salva!');
+      }
       onSaved?.(updated ?? payload);
       onClose?.();
     } catch {
