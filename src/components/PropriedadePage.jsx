@@ -16,6 +16,8 @@ import BackupModal from './BackupModal';
 import AuditLogModal from './AuditLogModal';
 import PropriedadeLocalCard from './PropriedadeLocalCard';
 import TalhaoMapEditor from './TalhaoMapEditor';
+import TalhaoMapPreview from './TalhaoMapPreview';
+import { geojsonToPoints as geojsonToPts } from '../lib/geo';
 
 
 
@@ -634,8 +636,8 @@ function NovaTalhaoDialog({ propriedadeId, onClose, onCreated }) {
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <motion.div
-        className="relative bg-background rounded-t-3xl sm:rounded-2xl w-full max-w-lg max-h-[90svh] flex flex-col overflow-hidden shadow-2xl"
-        initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        className="relative bg-background rounded-t-3xl sm:rounded-2xl w-full max-w-lg max-h-[90dvh] flex flex-col overflow-hidden shadow-2xl"
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
       >
         <div className="px-5 pt-5 pb-3 border-b border-border flex-shrink-0">
           <h3 className="text-[15px] font-bold text-foreground">Novo Talhão</h3>
@@ -727,6 +729,11 @@ function NovaTalhaoDialog({ propriedadeId, onClose, onCreated }) {
                     : 'Ou demarcar a área no mapa (GPS)'}
                 </button>
 
+                {/* Preview da área demarcada — mostra ao usuário que foi feito */}
+                {geoDemarcado?.geojson && geojsonToPts(geoDemarcado.geojson).length >= 3 && (
+                  <TalhaoMapPreview geojson={geoDemarcado.geojson} areaHa={geoDemarcado.area_gps_ha} cor={cor} height={130} />
+                )}
+
                 {dim.plantasPorHa > 0 && (
                   <p className="text-[11px] text-muted-foreground">
                     {dim.plantasPorHa.toLocaleString('pt-BR')} plantas/ha × {parseFloat(form.areaHa) || 0} ha
@@ -758,7 +765,7 @@ function NovaTalhaoDialog({ propriedadeId, onClose, onCreated }) {
           )}
         </div>
 
-        <div className="px-5 py-4 border-t border-border flex gap-2 flex-shrink-0">
+        <div className="px-5 py-4 border-t border-border flex gap-2 flex-shrink-0" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}>
           <button onClick={onClose}
             className="flex-1 py-2.5 rounded-xl border border-input text-[13px] font-medium text-muted-foreground">
             Cancelar

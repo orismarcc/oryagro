@@ -254,9 +254,9 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly 
   return (
     <div className="fixed inset-0 z-[2000] bg-black/50 flex items-end sm:items-center justify-center" onClick={onClose}>
       <motion.div
-        initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
         className="bg-background w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col"
-        style={{ maxHeight: '92vh' }}
+        style={{ maxHeight: '90dvh' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -386,7 +386,7 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly 
         </div>
 
         {/* Footer salvar */}
-        <div className="p-3 border-t border-border">
+        <div className="p-3 border-t border-border flex-shrink-0" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 12px)' }}>
           <button onClick={salvar} disabled={!podeSalvar || salvando}
             className="w-full py-3 rounded-xl font-bold text-[14px] text-white flex items-center justify-center gap-2 disabled:opacity-40"
             style={{ background: 'hsl(156 64% 31%)' }}>

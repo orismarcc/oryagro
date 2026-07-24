@@ -108,9 +108,9 @@ export default function IrrigacaoKitForm({ talhao, onClose, onSaved, entidade = 
   return (
     <div className="fixed inset-0 z-[2000] bg-black/50 flex items-end sm:items-center justify-center" onClick={onClose}>
       <motion.div
-        initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
         className="bg-background w-full max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col"
-        style={{ maxHeight: '92vh' }}
+        style={{ maxHeight: '90dvh' }}
         onClick={e => e.stopPropagation()}
       >
         <div className="px-4 py-3 flex items-center gap-2 text-white" style={{ background: '#0369a1' }}>
@@ -221,7 +221,7 @@ export default function IrrigacaoKitForm({ talhao, onClose, onSaved, entidade = 
           )}
         </div>
 
-        <div className="p-3 border-t border-border flex gap-2">
+        <div className="p-3 border-t border-border flex gap-2 flex-shrink-0" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 12px)' }}>
           {talhao?.irrigacao_tipo && (
             <button onClick={remover} disabled={salvando}
               className="px-3 py-3 rounded-xl font-bold text-[12px] text-red-600" style={{ background: 'hsl(4 60% 95%)' }}>
