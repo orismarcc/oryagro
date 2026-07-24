@@ -7,6 +7,7 @@
  * Essa taxa é o que permite converter "precisa de 5 mm" em "ligar por 40 min".
  */
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { X, Droplets, Check, Loader2, Calculator } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
@@ -105,7 +106,7 @@ export default function IrrigacaoKitForm({ talhao, onClose, onSaved, entidade = 
   const labelCls = 'text-[10px] font-bold uppercase tracking-wide text-muted-foreground';
   const bd = { borderColor: 'hsl(205 40% 78%)' };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[2000] bg-black/50 flex items-end sm:items-center justify-center" onClick={onClose}>
       <motion.div
         initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -236,6 +237,7 @@ export default function IrrigacaoKitForm({ talhao, onClose, onSaved, entidade = 
           </button>
         </div>
       </motion.div>
-    </div>
+    </div>,
+    document.body,
   );
 }

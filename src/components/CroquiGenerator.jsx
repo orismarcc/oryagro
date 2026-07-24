@@ -1,48 +1,76 @@
 /**
  * CroquiGenerator.jsx — gera o croqui de plantio (covas) sobre a área demarcada.
  *
- * 100% no aparelho, sem IA: usa lib/croqui (geometria pura). Deixa configurar
- * espaçamento, recuo de cerca por aresta e um consórcio opcional nas entrelinhas,
- * com preview ao vivo e download em KML (para marcar as covas por GPS).
+ * 100% no aparelho, sem IA: usa lib/croqui (geometria pura). Configura
+ * espaçamento e recuo de cerca por aresta, com preview ao vivo (proporção real
+ * do talhão) e download em IMAGEM (PNG) — ou KML para marcar por GPS.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
-import { X, Grid3x3, Download, Loader2, Sprout } from 'lucide-react';
+import { X, Grid3x3, Image as ImageIcon, MapPin, Loader2 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { gerarCroqui } from '../lib/croqui';
 
 const NS = 'http://www.w3.org/2000/svg';
 
-function baixarKML(nome, principal, consorcio, nomePrinc, nomeCons) {
-  const pm = (arr, style) => arr.map((p, i) =>
-    `  <Placemark><name>${i + 1}</name><styleUrl>#${style}</styleUrl><Point><coordinates>${p.lng},${p.lat},0</coordinates></Point></Placemark>`).join('\n');
+function baixarBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function baixarKML(nome, covas, culturaNome) {
+  const pm = covas.map((p, i) =>
+    `  <Placemark><name>${i + 1}</name><styleUrl>#a</styleUrl><Point><coordinates>${p.lng},${p.lat},0</coordinates></Point></Placemark>`).join('\n');
   const kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${nome}</name>
  <Style id="a"><IconStyle><color>ff2ea62e</color><scale>0.6</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle><LabelStyle><scale>0</scale></LabelStyle></Style>
- <Style id="b"><IconStyle><color>ff3b30d1</color><scale>0.5</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle><LabelStyle><scale>0</scale></LabelStyle></Style>
- <Folder><name>${nomePrinc} (${principal.length})</name>
-${pm(principal, 'a')}
- </Folder>${consorcio.length ? `
- <Folder><name>${nomeCons} (${consorcio.length})</name>
-${pm(consorcio, 'b')}
- </Folder>` : ''}
+ <Folder><name>${culturaNome} (${covas.length})</name>
+${pm}
+ </Folder>
 </Document></kml>`;
-  const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `${nome}.kml`; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  baixarBlob(new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' }), `${nome}.kml`);
+}
+
+/** Renderiza o SVG do croqui numa imagem PNG de alta resolução. */
+function svgParaPng(svgEl, filename) {
+  return new Promise((resolve, reject) => {
+    const vb = svgEl.viewBox.baseVal;
+    const clone = svgEl.cloneNode(true);
+    clone.setAttribute('width', vb.width);
+    clone.setAttribute('height', vb.height);
+    const bg = document.createElementNS(NS, 'rect');
+    bg.setAttribute('x', vb.x); bg.setAttribute('y', vb.y);
+    bg.setAttribute('width', vb.width); bg.setAttribute('height', vb.height);
+    bg.setAttribute('fill', '#ffffff');
+    clone.insertBefore(bg, clone.firstChild);
+    const s = new XMLSerializer().serializeToString(clone);
+    const src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(60, Math.max(20, 2400 / Math.max(vb.width, vb.height)));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(vb.width * scale);
+      canvas.height = Math.round(vb.height * scale);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(blob => { blob ? (baixarBlob(blob, `${filename}.png`), resolve()) : reject(); }, 'image/png');
+    };
+    img.onerror = reject;
+    img.src = src;
+  });
 }
 
 export default function CroquiGenerator({ pontos, culturaNome = 'Cultura', cor = '#16a34a', onClose }) {
   const toast = useToast();
+  const svgRef = useRef(null);
   const [dx, setDx] = useState('4');
   const [dy, setDy] = useState('4');
   const [recuo, setRecuo] = useState('2');
   const [cercaIdx, setCercaIdx] = useState([]);
-  const [temConsorcio, setTemConsorcio] = useState(false);
-  const [consorcioNome, setConsorcioNome] = useState('Maracujá');
-  const [consorcioDx, setConsorcioDx] = useState('2.5');
   const [baixando, setBaixando] = useState(false);
 
   const cro = useMemo(() => gerarCroqui({
@@ -51,37 +79,43 @@ export default function CroquiGenerator({ pontos, culturaNome = 'Cultura', cor =
     dy: parseFloat(dy) || 0,
     cercaIdx,
     recuoM: parseFloat(recuo) || 0,
-    consorcio: temConsorcio && parseFloat(consorcioDx) > 0 ? { dx: parseFloat(consorcioDx) } : null,
-  }), [pontos, dx, dy, recuo, cercaIdx, temConsorcio, consorcioDx]);
+  }), [pontos, dx, dy, recuo, cercaIdx]);
 
   const toggleCerca = (i) => setCercaIdx(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]);
 
-  // ── SVG preview ──
+  // ── Geometria do SVG (proporção real do talhão) ──
   const svg = useMemo(() => {
     const V = cro.poligonoXY;
     if (!V.length) return null;
     const xs = V.map(p => p.x), ys = V.map(p => p.y);
     const minx = Math.min(...xs), maxx = Math.max(...xs), miny = Math.min(...ys), maxy = Math.max(...ys);
-    const PAD = 6, W = (maxx - minx) + 2 * PAD, H = (maxy - miny) + 2 * PAD;
+    const PAD = 8, W = (maxx - minx) + 2 * PAD, H = (maxy - miny) + 2 * PAD;
     const sx = x => (x - minx) + PAD, sy = y => (maxy - y) + PAD;
-    return { W, H, sx, sy, V };
+    return { W, H, sx, sy, V, maxy };
   }, [cro]);
 
-  const baixar = () => {
-    if (!cro.covas.length) { toast.error('Ajuste os parâmetros — nenhuma cova cabe na área.'); return; }
+  const nomeArq = `croqui-${culturaNome}-${(parseFloat(dx) || 4)}x${(parseFloat(dy) || 4)}`.toLowerCase().replace(/\s+/g, '-');
+
+  const baixarPng = async () => {
+    if (!cro.covas.length || !svgRef.current) { toast.error('Ajuste os parâmetros — nenhuma cova cabe na área.'); return; }
     setBaixando(true);
-    try {
-      baixarKML(`croqui-${culturaNome}`.toLowerCase().replace(/\s+/g, '-'),
-        cro.covas, cro.consorcio, culturaNome, consorcioNome);
-      toast.success('Croqui exportado (KML) — abra no Google Earth/GPS.');
-    } catch { toast.error('Não foi possível exportar.'); }
+    try { await svgParaPng(svgRef.current, nomeArq); toast.success('Croqui salvo como imagem (PNG).'); }
+    catch { toast.error('Não foi possível gerar a imagem.'); }
     finally { setBaixando(false); }
+  };
+  const baixarGps = () => {
+    if (!cro.covas.length) { toast.error('Nenhuma cova para exportar.'); return; }
+    try { baixarKML(nomeArq, cro.covas, culturaNome); toast.success('KML exportado — abra no Google Earth/GPS.'); }
+    catch { toast.error('Não foi possível exportar o KML.'); }
   };
 
   const inputCls = 'w-full rounded-xl border px-3 py-2 text-sm bg-background outline-none';
   const bd = { borderColor: `${cor}40` };
 
-  return (
+  // barra de escala de 10 m no croqui
+  const escalaPx = svg ? 10 : 0;
+
+  return createPortal(
     <div className="fixed inset-0 z-[2000] bg-black/50 flex items-end sm:items-center justify-center" onClick={onClose}>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
         className="bg-background w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col"
@@ -90,42 +124,43 @@ export default function CroquiGenerator({ pontos, culturaNome = 'Cultura', cor =
           <Grid3x3 size={17} />
           <div className="flex-1 min-w-0">
             <p className="text-[14px] font-bold leading-tight">Croqui de plantio</p>
-            <p className="text-[10.5px] text-white/70">{cro.area.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ha · covas por GPS</p>
+            <p className="text-[10.5px] text-white/70">{cro.area.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ha</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/15"><X size={18} /></button>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
-          {/* Preview */}
+          {/* Preview — proporção real do talhão (não corta) */}
           {svg && (
             <div className="rounded-xl overflow-hidden border" style={{ borderColor: 'hsl(152 14% 84%)', background: '#f3f5f1' }}>
-              <svg viewBox={`0 0 ${svg.W} ${svg.H}`} style={{ width: '100%', height: 220, display: 'block' }}>
+              <svg ref={svgRef} viewBox={`0 0 ${svg.W} ${svg.H}`}
+                preserveAspectRatio="xMidYMid meet"
+                style={{ width: '100%', height: 'auto', maxHeight: '48vh', display: 'block' }}>
                 <path d={'M' + svg.V.map(p => `${svg.sx(p.x).toFixed(2)},${svg.sy(p.y).toFixed(2)}`).join(' L') + ' Z'}
                   fill={`${cor}18`} stroke={cor} strokeWidth={0.5} strokeLinejoin="round" />
-                {/* cercas */}
                 {cercaIdx.map(i => {
                   const a = svg.V[i], b = svg.V[(i + 1) % svg.V.length];
                   return <line key={i} x1={svg.sx(a.x)} y1={svg.sy(a.y)} x2={svg.sx(b.x)} y2={svg.sy(b.y)}
                     stroke="#1f6feb" strokeWidth={1.1} strokeLinecap="round" />;
                 })}
-                {cro.consorcio.map((p, i) => <circle key={'c' + i} cx={svg.sx(p.x).toFixed(2)} cy={svg.sy(p.y).toFixed(2)} r={0.5} fill="#7c3aed" opacity={0.9} />)}
-                {cro.covas.map((p, i) => <circle key={'p' + i} cx={svg.sx(p.x).toFixed(2)} cy={svg.sy(p.y).toFixed(2)} r={0.75} fill={cor} />)}
+                {cro.covas.map((p, i) => <circle key={'p' + i} cx={svg.sx(p.x).toFixed(2)} cy={svg.sy(p.y).toFixed(2)} r={0.7} fill={cor} />)}
+                {/* barra de escala 10 m */}
+                <line x1={4} y1={svg.H - 4} x2={4 + escalaPx} y2={svg.H - 4} stroke="#334036" strokeWidth={0.5} />
+                <line x1={4} y1={svg.H - 5.4} x2={4} y2={svg.H - 2.6} stroke="#334036" strokeWidth={0.5} />
+                <line x1={4 + escalaPx} y1={svg.H - 5.4} x2={4 + escalaPx} y2={svg.H - 2.6} stroke="#334036" strokeWidth={0.5} />
+                <text x={4 + escalaPx / 2} y={svg.H - 6} fontSize={2.6} textAnchor="middle" fill="#5c6b60">10 m</text>
               </svg>
             </div>
           )}
 
           {/* Contagem */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <div className="rounded-xl py-2 text-center" style={{ background: `${cor}0f` }}>
-              <p className="text-[16px] font-black leading-none" style={{ color: cor }}>{cro.covas.length}</p>
-              <p className="text-[8.5px] font-bold uppercase tracking-wider text-muted-foreground mt-0.5">covas {culturaNome}</p>
-            </div>
-            <div className="rounded-xl py-2 text-center" style={{ background: temConsorcio ? '#7c3aed14' : 'hsl(150 15% 95%)' }}>
-              <p className="text-[16px] font-black leading-none" style={{ color: temConsorcio ? '#7c3aed' : 'var(--muted-foreground)' }}>{temConsorcio ? cro.consorcio.length : '—'}</p>
-              <p className="text-[8.5px] font-bold uppercase tracking-wider text-muted-foreground mt-0.5">consórcio</p>
+              <p className="text-[18px] font-black leading-none" style={{ color: cor }}>{cro.covas.length}</p>
+              <p className="text-[8.5px] font-bold uppercase tracking-wider text-muted-foreground mt-0.5">covas de {culturaNome}</p>
             </div>
             <div className="rounded-xl py-2 text-center" style={{ background: `${cor}0f` }}>
-              <p className="text-[16px] font-black leading-none" style={{ color: cor }}>{cro.covas.length ? Math.round(cro.covas.length / (cro.area || 1)) : 0}</p>
+              <p className="text-[18px] font-black leading-none" style={{ color: cor }}>{cro.covas.length ? Math.round(cro.covas.length / (cro.area || 1)) : 0}</p>
               <p className="text-[8.5px] font-bold uppercase tracking-wider text-muted-foreground mt-0.5">covas/ha</p>
             </div>
           </div>
@@ -165,40 +200,26 @@ export default function CroquiGenerator({ pontos, culturaNome = 'Cultura', cor =
             )}
           </div>
 
-          {/* Consórcio */}
-          <div className="rounded-xl p-3" style={{ background: '#7c3aed0a', border: '1px solid #7c3aed22' }}>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={temConsorcio} onChange={e => setTemConsorcio(e.target.checked)} />
-              <span className="text-[12px] font-bold text-foreground flex items-center gap-1"><Sprout size={13} style={{ color: '#7c3aed' }} /> Consorciar outro cultivo nas entrelinhas</span>
-            </label>
-            {temConsorcio && (
-              <div className="grid grid-cols-2 gap-2 mt-2.5">
-                <div>
-                  <label className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Cultivo</label>
-                  <input value={consorcioNome} onChange={e => setConsorcioNome(e.target.value)} className={inputCls} style={{ borderColor: '#7c3aed40' }} />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Espaç. na linha (m)</label>
-                  <input type="number" step="0.5" min="0.5" value={consorcioDx} onChange={e => setConsorcioDx(e.target.value)} className={inputCls} style={{ borderColor: '#7c3aed40' }} />
-                </div>
-              </div>
-            )}
-          </div>
-
           <p className="text-[9.5px] text-muted-foreground/80 leading-tight">
-            Grade geométrica cheia — se deixar carreador/bordadura, o número real cai um pouco. Confira sempre o rótulo/manejo da cultura.
+            Grade geométrica cheia — se deixar carreador/bordadura, o número real cai um pouco. Confira sempre o manejo da cultura.
           </p>
         </div>
 
-        <div className="p-3 border-t border-border flex-shrink-0" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 12px)' }}>
-          <button onClick={baixar} disabled={baixando || !cro.covas.length}
-            className="w-full py-3 rounded-xl font-bold text-[14px] text-white flex items-center justify-center gap-2 disabled:opacity-40"
+        <div className="p-3 border-t border-border flex-shrink-0 flex gap-2" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 12px)' }}>
+          <button onClick={baixarGps} disabled={!cro.covas.length}
+            className="px-3 py-3 rounded-xl font-bold text-[12px] flex items-center justify-center gap-1.5 disabled:opacity-40"
+            style={{ background: 'hsl(210 30% 93%)', color: '#1f6feb' }}>
+            <MapPin size={14} /> GPS
+          </button>
+          <button onClick={baixarPng} disabled={baixando || !cro.covas.length}
+            className="flex-1 py-3 rounded-xl font-bold text-[14px] text-white flex items-center justify-center gap-2 disabled:opacity-40"
             style={{ background: cor }}>
-            {baixando ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-            Baixar croqui (KML — {cro.covas.length}{temConsorcio ? ` + ${cro.consorcio.length}` : ''} covas)
+            {baixando ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
+            Baixar croqui (imagem)
           </button>
         </div>
       </motion.div>
-    </div>
+    </div>,
+    document.body,
   );
 }

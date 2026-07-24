@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database, Loader2, History, Sprout, MapPin, Ruler } from 'lucide-react';
 import { loadLotesByPropriedade, deleteLoteCompleto, loadTalhoesPorPropriedade, criarTalhao, criarSafraDeTalhao, deleteTalhaoComSeguranca, preCarregarEtapasPadrao } from '../hooks/useSupabaseSync';
@@ -632,8 +633,8 @@ function NovaTalhaoDialog({ propriedadeId, onClose, onCreated }) {
 
   const inputCls = "w-full mt-1 rounded-xl border border-input px-3 py-2 text-sm bg-background outline-none focus:ring-2";
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+  return createPortal(
+    <div className="fixed inset-0 z-[2000] flex items-end justify-center sm:items-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <motion.div
         className="relative bg-background rounded-t-3xl sm:rounded-2xl w-full max-w-lg max-h-[90dvh] flex flex-col overflow-hidden shadow-2xl"
@@ -793,7 +794,8 @@ function NovaTalhaoDialog({ propriedadeId, onClose, onCreated }) {
           }}
         />
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
 

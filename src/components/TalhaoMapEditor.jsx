@@ -11,6 +11,7 @@
  * mesmo sem os tiles do mapa.
  */
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { motion } from 'framer-motion';
@@ -251,7 +252,9 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly 
     ? isValidLatLng(parseFloat(latManual), parseFloat(lngManual))
     : pontos.length >= 3;
 
-  return (
+  // Portal para o <body>: escapa do stacking context da página (framer-motion),
+  // garantindo que o modal fique ACIMA da barra de navegação inferior.
+  return createPortal(
     <div className="fixed inset-0 z-[2000] bg-black/50 flex items-end sm:items-center justify-center" onClick={onClose}>
       <motion.div
         initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -395,6 +398,7 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly 
           </button>
         </div>
       </motion.div>
-    </div>
+    </div>,
+    document.body,
   );
 }
