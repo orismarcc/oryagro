@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database, Loader2, History, Sprout, MapPin, Ruler, X, TreeDeciduous } from 'lucide-react';
+import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database, Loader2, History, Sprout, MapPin, Ruler, X, TreeDeciduous, Zap } from 'lucide-react';
 import { loadLotesByPropriedade, deleteLoteCompleto, loadTalhoesPorPropriedade, criarTalhao, criarSafraDeTalhao, deleteTalhaoComSeguranca, preCarregarEtapasPadrao } from '../hooks/useSupabaseSync';
 import { useCronogramaStatusBatch, makeStableId } from '../hooks/useCronogramaSync';
 import { calcularPlantas } from '../hooks/useSimulador';
@@ -1013,22 +1013,42 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
           <StatBox icon={CheckCircle2} label="P/ colheita" value={resumo.prontos} accent={resumo.prontos > 0} />
         </div>
 
-        {/* ── Ações (colapsáveis) ── */}
+        {/* ── Ações (colapsáveis, com destaque quando recolhido) ── */}
         <div>
-          <button onClick={() => setShowAcoes(v => !v)}
-            className="w-full flex items-center justify-between">
-            <p className="section-label">Ações</p>
-            <span className="flex items-center gap-1 text-[11px] font-bold text-muted-foreground">
-              {showAcoes ? 'Ocultar' : 'Mostrar'}
-              <ChevronDown size={15} className={`transition-transform ${showAcoes ? 'rotate-180' : ''}`} style={{ color: BRAND }} />
-            </span>
-          </button>
-          <AnimatePresence initial={false}>
-            {showAcoes && (
+          {!showAcoes ? (
+            <button onClick={() => setShowAcoes(true)}
+              className="w-full flex items-center gap-3 p-3.5 rounded-2xl transition-all active:scale-[0.99]"
+              style={{ background: `${BRAND}0e`, border: `1.5px solid ${BRAND}33`, boxShadow: `0 4px 14px -8px ${BRAND}66` }}>
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${BRAND}1a` }}>
+                <Zap size={17} style={{ color: BRAND }} />
+              </div>
+              <div className="flex-1 text-left min-w-0">
+                <p className="text-[13px] font-bold text-foreground leading-tight flex items-center gap-1.5">
+                  Ações rápidas
+                  {alertas > 0 && (
+                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full text-white" style={{ background: 'hsl(4 76% 50%)' }}>
+                      {alertas}
+                    </span>
+                  )}
+                </p>
+                <p className="text-[11px] text-muted-foreground truncate">Novo cultivo · estoque · histórico · backup</p>
+              </div>
+              <motion.div animate={{ y: [0, 3, 0] }} transition={{ repeat: Infinity, duration: 1.4, ease: 'easeInOut' }}>
+                <ChevronDown size={20} style={{ color: BRAND }} />
+              </motion.div>
+            </button>
+          ) : (
+            <>
+              <button onClick={() => setShowAcoes(false)} className="w-full flex items-center justify-between mb-0.5">
+                <p className="section-label">Ações rápidas</p>
+                <span className="flex items-center gap-1 text-[11px] font-bold" style={{ color: BRAND }}>
+                  Ocultar <ChevronDown size={15} className="rotate-180" />
+                </span>
+              </button>
               <motion.div
-                initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
                 transition={{ duration: 0.22 }} style={{ overflow: 'hidden' }}>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
                   <ActionTile icon={Plus}      label="Novo cultivo" sub="Perene ou anual" onClick={() => setShowNovoCultivo(true)} primary />
                   <ActionTile icon={Package2}  label="Estoque"     sub="Insumos"         onClick={onGoEstoque}              badge={alertas} />
                   {canDeleteLote
@@ -1039,8 +1059,8 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
                   )}
                 </div>
               </motion.div>
-            )}
-          </AnimatePresence>
+            </>
+          )}
         </div>
 
 
