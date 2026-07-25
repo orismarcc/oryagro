@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database, Loader2, History, Sprout, MapPin, Ruler } from 'lucide-react';
+import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database, Loader2, History, Sprout, MapPin, Ruler, X, TreeDeciduous } from 'lucide-react';
 import { loadLotesByPropriedade, deleteLoteCompleto, loadTalhoesPorPropriedade, criarTalhao, criarSafraDeTalhao, deleteTalhaoComSeguranca, preCarregarEtapasPadrao } from '../hooks/useSupabaseSync';
 import { useCronogramaStatusBatch, makeStableId } from '../hooks/useCronogramaSync';
 import { calcularPlantas } from '../hooks/useSimulador';
 import { loadEstoque } from '../hooks/useGestao';
-import { CULTURAS } from '../data/culturas';
+import { CULTURAS, CULTURAS_LIST } from '../data/culturas';
 import { resolveLifecycle, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
 import { loadFarmMembers, addFarmMember, removeFarmMember, updateFarmMemberRole } from '../hooks/useFarmMembers';
 import { supabase } from '../lib/supabase';
@@ -544,21 +544,80 @@ function TalhaoCard({ talhao, onSelect, index, onDeleteTalhao, canDelete }) {
   );
 }
 
+// ── Dialog: Novo Cultivo (seletor perene × anual) ───────────────────────────────
+// Um único ponto de entrada: escolher uma cultura PERENE cria um talhão; uma
+// cultura ANUAL cria um lote. Mais limpo que dois botões separados.
+function NovoCultivoDialog({ onPickPerene, onPickAnual, onClose }) {
+  const perenes = CULTURAS_LIST.filter(c => c.tipoCultura === 'perene');
+  const anuais  = CULTURAS_LIST.filter(c => c.tipoCultura === 'anual');
+
+  const Lista = ({ Icon, titulo, sub, itens, onPick }) => (
+    <div>
+      <div className="flex items-center gap-1.5">
+        <Icon size={14} style={{ color: BRAND }} />
+        <p className="text-[12px] font-bold text-foreground">{titulo}</p>
+      </div>
+      <p className="text-[10.5px] text-muted-foreground mb-2">{sub}</p>
+      <div className="grid grid-cols-2 gap-2">
+        {itens.map(c => (
+          <button key={c.id} onClick={() => onPick(c.id)}
+            className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-left transition-all active:scale-[0.98]"
+            style={{ background: `${c.cor}12`, border: `1px solid ${c.cor}30` }}>
+            <span className="text-lg leading-none">{c.emoji}</span>
+            <span className="text-[12.5px] font-semibold text-foreground leading-tight">{c.nome}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  return createPortal(
+    <div className="fixed inset-0 z-[2000] flex items-end justify-center sm:items-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50" />
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        className="relative bg-background rounded-t-3xl sm:rounded-2xl w-full max-w-lg max-h-[90dvh] flex flex-col overflow-hidden shadow-2xl"
+        onClick={e => e.stopPropagation()}>
+        <div className="px-5 pt-5 pb-3 border-b border-border flex items-center justify-between flex-shrink-0">
+          <div>
+            <h3 className="text-[15px] font-bold text-foreground">Novo cultivo</h3>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Escolha a cultura — o resto o app organiza sozinho.</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"><X size={18} /></button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-5">
+          <Lista Icon={TreeDeciduous} titulo="Cultura perene → Talhão"
+            sub="Área permanente, com várias safras ao longo dos anos." itens={perenes} onPick={onPickPerene} />
+          <Lista Icon={Sprout} titulo="Cultura anual → Lote"
+            sub="Ciclo único (planta, colhe, encerra)." itens={anuais} onPick={onPickAnual} />
+        </div>
+      </motion.div>
+    </div>,
+    document.body,
+  );
+}
+
 // ── Dialog: Novo Talhão ─────────────────────────────────────────────────────────
 // Usa a mesma UX do formulário "Novo Lote" (anual): seletor visual de método de
 // propagação + calculadora de dimensões que calcula o nº de plantas. Ao criar,
 // já inicia a Safra 1 automaticamente com o cronograma pré-carregado.
-function NovaTalhaoDialog({ propriedadeId, onClose, onCreated }) {
+function NovaTalhaoDialog({ propriedadeId, onClose, onCreated, culturaInicial = '' }) {
   const toast = useToast();
   const today = new Date().toISOString().split('T')[0];
 
   const culturasPerenes = Object.values(CULTURAS).filter(c => c.tipoCultura === 'perene');
 
-  const [form, setForm] = useState({
-    culturaId: '', nome: '', dataImplantacao: today,
-    areaHa: '', linhas: '', plantas: '',
-    metodoPropagacao: '', observacoes: '',
-  });
+  // Pré-preenche dimensões/método com os padrões da cultura escolhida.
+  const initFor = (culturaId) => {
+    const c = CULTURAS[culturaId];
+    return {
+      culturaId, nome: '', dataImplantacao: today, observacoes: '',
+      areaHa:  c?.area?.padrao != null ? String(c.area.padrao) : '',
+      linhas:  c?.espacamento?.linhas != null ? String(c.espacamento.linhas) : '',
+      plantas: c?.espacamento?.plantas != null ? String(c.espacamento.plantas) : '',
+      metodoPropagacao: c?.metodosPropagacao?.[0]?.key ?? '',
+    };
+  };
+  const [form, setForm] = useState(() => initFor(culturaInicial));
   const [saving, setSaving] = useState(false);
   const [showMapa, setShowMapa] = useState(false);
   const [geoDemarcado, setGeoDemarcado] = useState(null); // { latitude, longitude, geojson, area_gps_ha }
@@ -566,17 +625,8 @@ function NovaTalhaoDialog({ propriedadeId, onClose, onCreated }) {
   const cultura = form.culturaId ? CULTURAS[form.culturaId] : null;
   const cor = cultura?.cor ?? '#16a34a';
 
-  // Ao escolher a cultura, pré-preenche dimensões e método com os padrões dela
   const handleCulturaChange = (culturaId) => {
-    const c = CULTURAS[culturaId];
-    setForm(f => ({
-      ...f,
-      culturaId,
-      linhas:  c?.espacamento?.linhas != null ? String(c.espacamento.linhas) : '',
-      plantas: c?.espacamento?.plantas != null ? String(c.espacamento.plantas) : '',
-      areaHa:  c?.area?.padrao != null ? String(c.area.padrao) : f.areaHa,
-      metodoPropagacao: c?.metodosPropagacao?.[0]?.key ?? '',
-    }));
+    setForm(f => ({ ...initFor(culturaId), nome: f.nome, dataImplantacao: f.dataImplantacao, observacoes: f.observacoes }));
   };
 
   // Nº de plantas calculado a partir de área + espaçamento
@@ -859,6 +909,8 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
   const [showBackup, setShowBackup] = useState(false);
   const [showHistorico, setShowHistorico] = useState(false);
   const [showNovoTalhao, setShowNovoTalhao] = useState(false);
+  const [showNovoCultivo, setShowNovoCultivo] = useState(false);
+  const [talhaoCulturaInicial, setTalhaoCulturaInicial] = useState('');
   // localização salva nesta sessão (reflete na tela sem recarregar a propriedade)
   const [localProp, setLocalProp] = useState({});
 
@@ -963,8 +1015,7 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
         <div>
           <p className="section-label mb-2.5">Ações</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            <ActionTile icon={Plus}      label="Novo Lote"   sub="Cultura anual"   onClick={onAddLote}                primary />
-            <ActionTile icon={Sprout}    label="Novo Talhão" sub="Cultura perene"  onClick={() => setShowNovoTalhao(true)} primary />
+            <ActionTile icon={Plus}      label="Novo cultivo" sub="Perene ou anual" onClick={() => setShowNovoCultivo(true)} primary />
             <ActionTile icon={Package2}  label="Estoque"     sub="Insumos"         onClick={onGoEstoque}              badge={alertas} />
             {canDeleteLote
               ? <ActionTile icon={History} label="Histórico" sub="Auditoria" onClick={() => setShowHistorico(true)} />
@@ -984,7 +1035,7 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
               <span className="text-[11px] text-muted-foreground flex-shrink-0">{talhoes.length}</span>
             </div>
             <button
-              onClick={() => setShowNovoTalhao(true)}
+              onClick={() => setShowNovoCultivo(true)}
               className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-xl flex-shrink-0"
               style={{ background: `${BRAND}14`, color: BRAND }}
             >
@@ -996,7 +1047,7 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
             <div className="space-y-2">{[1].map(i => <div key={i} className="h-16 rounded-2xl bg-muted animate-pulse" />)}</div>
           ) : talhoes.length === 0 ? (
             <button
-              onClick={() => setShowNovoTalhao(true)}
+              onClick={() => setShowNovoCultivo(true)}
               className="w-full card p-6 flex flex-col items-center gap-2.5 text-center transition-transform active:scale-[0.98]"
               style={{ borderStyle: 'dashed', borderColor: `${BRAND}55` }}
             >
@@ -1035,7 +1086,7 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
               <span className="text-[11px] text-muted-foreground flex-shrink-0">{lotes.length}</span>
             </div>
             <button
-              onClick={onAddLote}
+              onClick={() => setShowNovoCultivo(true)}
               className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-xl flex-shrink-0"
               style={{ background: `${BRAND}14`, color: BRAND }}
             >
@@ -1047,7 +1098,7 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
             <div className="space-y-2">{[1,2].map(i => <div key={i} className="h-20 rounded-2xl bg-muted animate-pulse" />)}</div>
           ) : lotes.length === 0 ? (
             <button
-              onClick={onAddLote}
+              onClick={() => setShowNovoCultivo(true)}
               className="w-full card p-6 flex flex-col items-center gap-2.5 text-center transition-transform active:scale-[0.98]"
               style={{ borderStyle: 'dashed', borderColor: `${BRAND}55` }}
             >
@@ -1091,13 +1142,30 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
       )}
 
       <AnimatePresence>
+        {showNovoCultivo && (
+          <NovoCultivoDialog
+            onClose={() => setShowNovoCultivo(false)}
+            onPickPerene={(culturaId) => {
+              setTalhaoCulturaInicial(culturaId);
+              setShowNovoCultivo(false);
+              setShowNovoTalhao(true);
+            }}
+            onPickAnual={(culturaId) => {
+              setShowNovoCultivo(false);
+              onAddLote(culturaId);
+            }}
+          />
+        )}
+
         {showNovoTalhao && (
           <NovaTalhaoDialog
             propriedadeId={propriedade.id}
-            onClose={() => setShowNovoTalhao(false)}
+            culturaInicial={talhaoCulturaInicial}
+            onClose={() => { setShowNovoTalhao(false); setTalhaoCulturaInicial(''); }}
             onCreated={(talhao) => {
               setTalhoes(prev => [...prev, talhao]);
               setShowNovoTalhao(false);
+              setTalhaoCulturaInicial('');
               if (onSelectTalhao) onSelectTalhao(talhao);
             }}
           />

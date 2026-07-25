@@ -312,9 +312,16 @@ function AppInner({ session, displayName, signOut }) {
   const handleGoCompradores = () => setMainView('compradores');
   const handleBackFromCompradores = () => setMainView('dashboard');
 
-  const handleAddLoteFromPropriedade = () => {
+  const handleAddLoteFromPropriedade = (culturaId) => {
     setPickerOpenedFrom('propriedade');
-    setMainView('cultura-picker');
+    // Cultura já escolhida no seletor "Novo cultivo" → vai direto ao formulário.
+    if (culturaId && CULTURAS[culturaId]) {
+      setCulturaId(culturaId);
+      setAutoOpenLoteForm(true);
+      setMainView('cultura');
+    } else {
+      setMainView('cultura-picker');
+    }
   };
 
   const handleSelectLoteFromPropriedade = (lote) => {
