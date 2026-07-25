@@ -121,6 +121,14 @@ export function useSimulador(cultura, valores) {
     const valorEstaca = parseFloat(valores.valorEstaca) || ins.mouroes?.precoUnitario || 18;
     const custoEstacas = cultura.espaldeira ? (dim.estacas || 0) * valorEstaca : 0;
 
+    // ── Arame da espaldeira (kg, escalado pela área) ──
+    const temArame = cultura.espaldeira && ins.arame;
+    const arameKg = temArame
+      ? (parseFloat(valores.arameKg) >= 0 ? parseFloat(valores.arameKg) : (ins.arame.padrao || 0) * (isCampo ? escala : 1))
+      : 0;
+    const precoArame = parseFloat(valores.precoArame) || ins.arame?.precoUnitario || 12;
+    const custoArame = temArame ? arameKg * precoArame : 0;
+
     // ── Custos adicionais de produção ──
     const op = getOpCosts(cultura.id, isCampo);
     const custoEmbalagem   = parseFloat(valores.custoEmbalagem)  >= 0 ? parseFloat(valores.custoEmbalagem)  : op.embalagem;
@@ -130,7 +138,7 @@ export function useSimulador(cultura, valores) {
 
     const custoTotal = custoCalcareo + custoEsterco + custoNPK + custoUreia +
                        custoNitratoCa + custoSementes + custoMulching + custoMOD +
-                       custoEstacas +
+                       custoEstacas + custoArame +
                        custoEmbalagem + custoTransporte + custoDefensivos + custoEnergia;
 
     const precoVenda    = parseFloat(valores.precoVenda)    || cultura.venda.precoUnitario;
@@ -216,6 +224,7 @@ export function useSimulador(cultura, valores) {
       { name: 'Ureia',          value: +custoUreia.toFixed(2),       fill: '#40916c' },
       { name: 'Sementes/Mudas', value: +custoSementes.toFixed(2),    fill: '#d4a017' },
       { name: 'Estacas',        value: +custoEstacas.toFixed(2),     fill: '#7b4f12' },
+      { name: 'Arame',          value: +custoArame.toFixed(2),       fill: '#9ca3af' },
       { name: 'Mão de Obra',    value: +custoMOD.toFixed(2),         fill: '#b5451b' },
       { name: 'Mulching',       value: +custoMulching.toFixed(2),    fill: '#8e8e8e' },
       { name: 'Embalagem',      value: +custoEmbalagem.toFixed(2),   fill: '#7c3aed' },
@@ -234,6 +243,7 @@ export function useSimulador(cultura, valores) {
       periodo, escala, densRef: densRefCampo, lucroPorEscala,
       projecaoMultiAno, paybackAno, custoImplantacao, custoManutencao,
       composicaoCustos,
+      arameKg: +arameKg.toFixed(1), custoArame: +custoArame.toFixed(2), custoEstacas: +custoEstacas.toFixed(2),
       formatBRL, isCampo,
     };
   }, [cultura, valores]);

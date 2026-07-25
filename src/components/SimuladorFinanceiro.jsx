@@ -18,7 +18,7 @@ const loadFromStorage = (key, def) => {
   catch { return def; }
 };
 
-function NumField({ label, field, valores, onChange, prefix, suffix, width = 'w-28' }) {
+function NumField({ label, field, valores, onChange, prefix, suffix, width = 'w-28', placeholder }) {
   return (
     <div className="flex flex-col gap-1">
       <Label className="text-xs">{label}</Label>
@@ -27,6 +27,7 @@ function NumField({ label, field, valores, onChange, prefix, suffix, width = 'w-
         <Input
           type="number"
           value={valores[field] ?? ''}
+          placeholder={placeholder}
           onChange={e => { const raw = e.target.value; onChange(field, raw === '' ? '' : parseFloat(raw) || 0); }}
           className={prefix ? 'pl-8' : suffix ? 'pr-8' : ''}
         />
@@ -278,21 +279,39 @@ export default function SimuladorFinanceiro({ cultura }) {
               )}
             </div>
 
-            {/* ── Espaldeira: estacas/mourões (maracujá, uva…) ── */}
+            {/* ── Espaldeira: estacas/mourões + arame (maracujá, uva…) ── */}
             {cultura.espaldeira && (
               <div className="mt-3 rounded-xl px-4 py-3" style={{ background: `${cor}08`, border: `1px solid ${cor}22` }}>
                 <p className="text-[11px] font-bold mb-2 flex items-center gap-1.5" style={{ color: cor }}>
-                  🪵 Espaldeira — estacas/mourões
+                  🪵 Espaldeira — estacas/mourões + arame
                 </p>
                 <div className="flex flex-wrap items-end gap-3">
                   <NumField label="Espaç. estacas" field="espEstaca"   valores={valores} onChange={handleChange} suffix="m"  width="w-28" />
-                  <NumField label="Valor unitário" field="valorEstaca" valores={valores} onChange={handleChange} suffix="R$" width="w-28" />
+                  <NumField label="Valor da estaca" field="valorEstaca" valores={valores} onChange={handleChange} suffix="R$" width="w-28" />
                 </div>
                 <p className="text-[13px] font-semibold mt-2" style={{ color: cor }}>
                   {fmtNum(dim.estacas)} estacas
                   <span className="font-normal" style={{ color: `${cor}90` }}> ({fmtNum(dim.numLinhas)} linhas × 1 a cada {(parseFloat(valores.espEstaca) || cultura.espaldeira.espacamentoMourao || 5)} m)</span>
-                  {' '}· custo ≈ {resultado.formatBRL((dim.estacas || 0) * (parseFloat(valores.valorEstaca) || cultura.insumos.mouroes?.precoUnitario || 18))}
+                  {' '}· ≈ {resultado.formatBRL(resultado.custoEstacas)}
                 </p>
+
+                {cultura.insumos?.arame && (
+                  <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${cor}22` }}>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <NumField label="Arame (kg)"     field="arameKg"    valores={valores} onChange={handleChange} suffix="kg" width="w-28"
+                        placeholder={String(Math.round(resultado.arameKg))} />
+                      <NumField label="Preço do arame" field="precoArame" valores={valores} onChange={handleChange} prefix="R$" width="w-28"
+                        placeholder={String(cultura.insumos.arame.precoUnitario)} />
+                    </div>
+                    <p className="text-[13px] font-semibold mt-2" style={{ color: cor }}>
+                      {fmtNum(resultado.arameKg)} kg de arame liso
+                      {' '}· ≈ {resultado.formatBRL(resultado.custoArame)}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      {cultura.insumos.arame.padrao} kg/ha padrão — {cultura.id === 'uva' ? '2–3 fios' : '1 fio'} liso nº12. Ajuste conforme os fios.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
