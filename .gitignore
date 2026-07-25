@@ -51,3 +51,6 @@ supabase/.branches/
 # Keystore (legado — projeto agora é PWA, sem APK)
 *.keystore
 *.jks
+
+# arquivos temporarios de editores/ferramentas
+*.tmp.*
