@@ -9,7 +9,8 @@ export default function SimuladorPage({ onComparar }) {
   const [culturaId, setCulturaId] = useState('alface');
   const [open, setOpen] = useState(false);
   const pickerRef = useRef(null);
-  const cultura = CULTURAS[culturaId];
+  // Fallback defensivo: id desconhecido não pode derrubar a tela.
+  const cultura = CULTURAS[culturaId] || CULTURAS_LIST[0];
 
   // Close on outside click
   useEffect(() => {

@@ -30,6 +30,22 @@ export function clientUuid() {
   });
 }
 
+/**
+ * Detecta falha de REDE (não de regra do banco).
+ *
+ * Em campo o caso comum não é `navigator.onLine === false`, e sim sinal fraco:
+ * o navegador se diz online, mas a requisição morre (fetch failed / timeout).
+ * Sem isto, a escrita se perdia em silêncio. Erros do PostgREST trazem `code`
+ * (ex.: 23505, PGRST116) — esses são regra de negócio e NÃO devem ser enfileirados.
+ */
+export function isErroDeRede(error) {
+  if (!error) return false;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  if (error.code) return false; // erro do banco (constraint, RLS, etc.)
+  const msg = `${error.message || ''} ${error.name || ''}`.toLowerCase();
+  return /failed to fetch|networkerror|network request failed|load failed|timeout|typeerror|fetch/.test(msg);
+}
+
 function read() {
   try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; }
 }
@@ -90,8 +106,9 @@ export async function insertOfflineSafe(table, payload) {
   const { data, error } = await supabase.from(table).insert(row).select().single();
   if (!error) return { row: data, queued: false, error: null };
 
-  // Offline → enfileira e segue otimista com o mesmo id (replay é idempotente).
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+  // Sem rede (offline OU sinal fraco) → enfileira e segue otimista com o mesmo
+  // id (replay é idempotente: colisão de PK conta como sucesso).
+  if (isErroDeRede(error)) {
     enqueueInsert({ table, payload: row });
     return { row, queued: true, error: null };
   }
@@ -114,7 +131,7 @@ export async function updateOfflineSafe(table, id, patch) {
   const { data, error } = await supabase.from(table).update(patch).eq('id', id).select().single();
   if (!error) return { row: data, queued: false, error: null };
 
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+  if (isErroDeRede(error)) {
     enqueueUpsert({ table, payload: { id, ...patch }, options: { onConflict: 'id' }, sig: `upsert:${table}:${id}` });
     return { row: { id, ...patch }, queued: true, error: null };
   }

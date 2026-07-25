@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { supabase, getUserId } from '../lib/supabase';
 import { logDbError } from '../lib/logger';
 import { cacheSet, cacheGet } from './useOfflineCache';
-import { enqueueUpsert, insertOfflineSafe, updateOfflineSafe } from '../lib/outbox';
+import { enqueueUpsert, insertOfflineSafe, updateOfflineSafe, isErroDeRede } from '../lib/outbox';
 
 /**
  * Debounced upsert of simulator config values to Supabase.
@@ -316,10 +316,11 @@ export async function syncCronogramaStatus(plantioId, culturaId, atividade) {
     .single();
 
   if (error) {
-    // Offline: enfileira para reenviar quando a conexão voltar. O upsert é
-    // idempotente (chave única), então o replay é seguro. Sem id de retorno —
-    // o chamador já atualizou o estado local de forma otimista.
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    // Sem rede (offline OU sinal fraco — em campo o navegador costuma se dizer
+    // online e a requisição morrer): enfileira para reenviar ao reconectar. O
+    // upsert é idempotente (chave única), então o replay é seguro. Sem id de
+    // retorno — o chamador já atualizou o estado local de forma otimista.
+    if (isErroDeRede(error)) {
       enqueueUpsert({ table: 'cronograma_atividades', payload, options });
       return null;
     }

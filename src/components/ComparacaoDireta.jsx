@@ -41,7 +41,9 @@ function MiniInput({ value, onChange, placeholder }) {
 export default function ComparacaoDireta() {
   const [idA, setIdA] = useState('maracuja');
   const [idB, setIdB] = useState('acerola');
-  const culturaA = CULTURAS[idA], culturaB = CULTURAS[idB];
+  // Fallback defensivo: id desconhecido não pode derrubar a tela.
+  const culturaA = CULTURAS[idA] || CULTURAS_LIST[0];
+  const culturaB = CULTURAS[idB] || CULTURAS_LIST[1] || CULTURAS_LIST[0];
 
   // Inputs editáveis por lado — campos vazios caem nos padrões da cultura
   const init = (c) => (c.tipo === 'campo' ? { areaHa: 1 } : {});
