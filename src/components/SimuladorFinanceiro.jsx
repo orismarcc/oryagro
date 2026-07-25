@@ -287,12 +287,15 @@ export default function SimuladorFinanceiro({ cultura }) {
                   🪵 Espaldeira — estacas/mourões + arame
                 </p>
                 <div className="flex flex-wrap items-end gap-3">
+                  <NumField label="Compr. da linha" field="comprimentoLinha" valores={valores} onChange={handleChange} suffix="m" width="w-28"
+                    placeholder={String(Math.round(dim.comprimentoLinha || 0))} />
                   <NumField label="Espaç. estacas" field="espEstaca"   valores={valores} onChange={handleChange} suffix="m"  width="w-28" />
                   <NumField label="Valor da estaca" field="valorEstaca" valores={valores} onChange={handleChange} suffix="R$" width="w-28" />
                 </div>
                 <p className="text-[13px] font-semibold mt-2" style={{ color: cor }}>
-                  {fmtNum(dim.estacas)} estacas
-                  <span className="font-normal" style={{ color: `${cor}90` }}> ({fmtNum(dim.numLinhas)} linhas × 1 a cada {(parseFloat(valores.espEstaca) || cultura.espaldeira.espacamentoMourao || 5)} m)</span>
+                  {fmtNum(dim.numLinhas)} linhas <span className="font-normal text-[11px]" style={{ color: `${cor}90` }}>(calculado da área ÷ comprimento)</span>
+                  {' '}· {fmtNum(dim.estacas)} estacas
+                  <span className="font-normal" style={{ color: `${cor}90` }}> (1 a cada {(parseFloat(valores.espEstaca) || cultura.espaldeira.espacamentoMourao || 5)} m por linha)</span>
                   {' '}· ≈ {resultado.formatBRL(resultado.custoEstacas)}
                 </p>
 
@@ -520,7 +523,25 @@ export default function SimuladorFinanceiro({ cultura }) {
               <NumField label={`Preço / ${cultura.venda.unidade}`} field="precoVenda"   valores={valores} onChange={handleChange} prefix="R$" width="w-32" />
               <NumField label="Sobrevivência"                       field="sobrevivencia"valores={valores} onChange={handleChange} suffix="%"   width="w-28" />
               <NumField label={`Mão de obra${isCampo ? ' / ha' : ' / ciclo'}`} field="modObra" valores={valores} onChange={handleChange} prefix="R$" width="w-32" />
+
+              {/* Produção — o input segue o MODELO da cultura (fruteira = por
+                  planta; lavoura = por hectare literal), evitando o antigo
+                  desencontro entre rótulo "kg/ha" e cálculo por densidade. */}
+              {isCampo && cultura.venda.producaoModelo === 'planta' && (
+                <NumField label="Produção / planta" field="producaoKgPorPlanta" valores={valores} onChange={handleChange}
+                  suffix="kg" width="w-32" placeholder={String(resultado.kgPorPlantaPadrao)} />
+              )}
+              {isCampo && cultura.venda.producaoKgPorHa && cultura.venda.producaoModelo !== 'planta' && (
+                <NumField label="Produção / ha" field="producaoKgPorHa" valores={valores} onChange={handleChange}
+                  suffix="kg" width="w-32" placeholder={String(cultura.venda.producaoKgPorHa)} />
+              )}
             </div>
+            {isCampo && cultura.venda.producaoModelo === 'planta' && dim.areaHa > 0 && (
+              <p className="text-[10.5px] text-muted-foreground mt-2">
+                {resultado.kgPorPlanta} kg/planta × {fmtNum(dim.totalPlantas)} plantas ≈{' '}
+                <strong className="text-foreground">{fmtNum(resultado.producaoTotal / dim.areaHa)} kg/ha</strong> no seu espaçamento.
+              </p>
+            )}
           </div>
         </div>
 

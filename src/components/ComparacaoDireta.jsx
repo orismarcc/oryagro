@@ -73,10 +73,27 @@ export default function ComparacaoDireta() {
       phA: culturaA.espacamento?.plantas ?? culturaA.canteiro?.espacamentoPlantas, phB: culturaB.espacamento?.plantas ?? culturaB.canteiro?.espacamentoPlantas },
     { label: `Preço venda (R$/${culturaA.venda.unidade}${culturaB.venda.unidade !== culturaA.venda.unidade ? ' · R$/' + culturaB.venda.unidade : ''})`,
       kA: 'precoVenda', kB: 'precoVenda', phA: culturaA.venda.precoUnitario, phB: culturaB.venda.precoUnitario },
-    (culturaA.venda.producaoKgPorHa || culturaB.venda.producaoKgPorHa)
-      ? { label: 'Produção (kg/ha)', kA: 'producaoKgPorHa', kB: 'producaoKgPorHa',
-          phA: culturaA.venda.producaoKgPorHa, phB: culturaB.venda.producaoKgPorHa }
-      : null,
+    // Produção: o input respeita o MODELO de cada cultura — fruteira edita
+    // kg/PLANTA (produção acompanha o nº de plantas); lavoura edita kg/HA
+    // literal. Evita o desencontro que inflava a produção ao adensar.
+    (() => {
+      const info = (c) => {
+        if (c.tipo !== 'campo' || !c.venda.producaoKgPorHa) return null;
+        if (c.venda.producaoModelo === 'planta') {
+          const dens = Math.floor(10000 / ((c.espacamento?.linhas || 1) * (c.espacamento?.plantas || 1))) || 1;
+          return { k: 'producaoKgPorPlanta', ph: Math.round((c.venda.producaoKgPorHa / dens) * 10) / 10, un: 'kg/planta' };
+        }
+        return { k: 'producaoKgPorHa', ph: c.venda.producaoKgPorHa, un: 'kg/ha' };
+      };
+      const iA = info(culturaA), iB = info(culturaB);
+      if (!iA && !iB) return null;
+      const unA = iA?.un ?? '—', unB = iB?.un ?? '—';
+      return {
+        label: `Produção (${unA}${unB !== unA ? ' · ' + unB : ''})`,
+        kA: iA?.k ?? 'producaoKgPorHa', kB: iB?.k ?? 'producaoKgPorHa',
+        phA: iA?.ph, phB: iB?.ph,
+      };
+    })(),
     { label: 'Mão de obra (R$)', kA: 'modObra', kB: 'modObra',
       phA: culturaA.insumos?.modObra?.padrao, phB: culturaB.insumos?.modObra?.padrao },
   ].filter(Boolean);

@@ -188,6 +188,7 @@ export const CULTURAS = {
       sobrevivencia: 92,
       unidade: 'kg',
       producaoKgPorHa: 8000,
+      producaoModelo: 'ha', // producao calculada por AREA (kg/ha x ha)
     },
     cronograma: [
       { dia: 0, etapa: 'Plantio das sementes', descricao: 'Abra covas de 3 cm de profundidade no espaçamento 1,0×0,50 m. Coloque 2 a 3 sementes por cova para garantir a germinação. Cubra levemente e regue. Em 10 a 15 dias as plântulas emergem — o desbaste será feito logo após para deixar apenas a mais vigorosa por cova.', produto: 'Sementes', dose: '2-3/cova', forma: 'Covas de 3cm, espaçamento 1,0×0,50m — desbaste aos 15 dias para 1 planta/cova', tipo: 'plantio' },
@@ -235,6 +236,7 @@ export const CULTURAS = {
       sobrevivencia: 95,
       unidade: 'kg',
       producaoKgPorHa: 20000,
+      producaoModelo: 'ha', // producao calculada por AREA (kg/ha x ha)
     },
     cronograma: [
       { dia: 0, etapa: 'Plantio das manivas', descricao: 'Selecione manivas de plantas saudáveis com 20 a 25 cm de comprimento e ao menos 3 gemas. Plante deitadas ou inclinadas a 30–45° em solo úmido, cobrindo de 5 a 10 cm. O bom contato da maniva com a terra úmida define o índice de pegamento do talhão.', produto: 'Manivas (ramas)', dose: '6.000 estacas/ha', forma: 'Deitadas ou inclinadas 30–45°, 5–10 cm de profundidade', tipo: 'plantio' },
@@ -400,6 +402,7 @@ export const CULTURAS = {
       sobrevivencia: 92,
       unidade: 'kg',
       producaoKgPorHa: 25000,
+      producaoModelo: 'planta', // producao calculada por PLANTA (kg/planta x plantas)
     },
     cronograma: [
       { dia: 0, etapa: 'Plantio das mudas', descricao: 'Abra covas de 40×40×40 cm com antecedência e misture esterco curtido e calcário ao solo retirado. Plante as mudas no centro da cova com o colo (região entre raízes e tronco) ligeiramente acima do nível do solo — o torrão deve ficar num nível um pouco superior ao do solo. Amarre cada muda a um tutor resistente posicionado a 10–15 cm da planta, conduzindo a amarração em "oito" entre o caule e o tutor para evitar estrangulamento — prática indispensável pois a acerola tem crescimento inicial bastante esparramado. Prefira plantar em dias nublados ou nas horas mais frescas do dia para aumentar o índice de "pegamento". Em áreas irrigadas, o plantio pode ser realizado em qualquer época do ano. Regue levemente logo após — em solos arenosos, regar com mais frequência; em argilosos, com menos. Mantenha irrigação diária nos primeiros 15 dias.', produto: 'Mudas', dose: '625 mudas/ha', forma: 'Covas 40×40×40 cm, espaçamento 4×4 m. Tutor a 10–15 cm da planta. Colo acima do nível do solo.', tipo: 'plantio' },
@@ -507,6 +510,7 @@ export const CULTURAS = {
       sobrevivencia: 90,
       unidade: 'kg',
       producaoKgPorHa: 12000,
+      producaoModelo: 'planta', // producao calculada por PLANTA (kg/planta x plantas)
     },
     cronograma: [
       { dia: 0, etapa: 'Plantio das mudas', descricao: 'Retire o saquinho com cuidado, preservando o torrão de raízes. Plante com o colo ao nível do solo — enterrar o colo favorece podridões. Instale sombrite 50% nos primeiros 30 a 60 dias: o cupuaçu é tolerante à sombra quando jovem e o excesso de sol direto pode comprometer o pegamento. Em sistemas agroflorestais ou consórcio com bananeiras, açaí ou outras frutíferas, o sombreamento natural é suficiente. Prefira plantar em dias nublados ou nas horas mais frescas do dia. Regue farto logo após e irrigue diariamente por 20 dias.', produto: 'Mudas', dose: '400 mudas/ha', forma: 'Covas 40×40×40 cm, 5×5 m. Colo ao nível do solo. Sombrite 50% por 30–60 dias se necessário.', tipo: 'plantio' },
@@ -693,6 +697,7 @@ export const CULTURAS = {
       sobrevivencia: 90,
       unidade: 'kg',
       producaoKgPorHa: 25000,
+      producaoModelo: 'planta', // producao calculada por PLANTA (kg/planta x plantas)
     },
     cronograma: [
       { dia: 0, etapa: 'Plantio das mudas', descricao: 'Plante os rebentos ou mudas em covas de 40×40×40 cm com esterco e NPK já incorporados ao solo. Garanta bom contato das raízes com a terra e regue farto após o plantio. O espaçamento 3×2 m permite boa ventilação, reduzindo doenças foliares. O pegamento define a velocidade de chegada à produção.', produto: 'Mudas/filhotes', dose: '1.666 mudas/ha', forma: 'Covas de 40×40×40cm, espaçamento 3×2m. Plantar com bom contato das raízes', tipo: 'plantio' },
@@ -778,6 +783,7 @@ export const CULTURAS = {
       sobrevivencia: 90,
       unidade: 'kg',
       producaoKgPorHa: 35000, // ~35 t/ha — 1º ciclo produtivo Tainung 01 em MT
+      producaoModelo: 'planta', // producao calculada por PLANTA (kg/planta x plantas)
     },
     cronograma: [
       { dia: 60,  etapa: 'Adubação de arranque',              produto: 'NPK 10-10-10',                dose: '100 kg/ha',                    descricao: 'Após o pegamento das mudas, essa adubação fornece os primeiros nutrientes para impulsionar o enraizamento e o crescimento inicial da planta. Aplique o NPK em anel a 20–30 cm do caule — contato direto com o tronco queima os tecidos. Realize com o solo úmido para melhor absorção. Sem esse arranque, o desenvolvimento nos primeiros meses será lento.', forma: 'Em anel ao redor de cada muda, a 20–30 cm do caule. Irrigar em seguida', tipo: 'adubo' },
@@ -891,6 +897,7 @@ export const CULTURAS = {
       sobrevivencia: 90,
       unidade: 'kg',
       producaoKgPorHa: 20000,
+      producaoModelo: 'planta', // producao calculada por PLANTA (kg/planta x plantas)
     },
     cronograma: [
       { dia: 0, etapa: 'Plantio das mudas + tutoramento', descricao: 'Com a espaldeira montada e a cova preparada, plante a muda junto ao mourão, com o colo (região entre raízes e tronco) ao nível do solo — enterrar o colo favorece podridões. Amarre um fitilho (barbante) da base da muda até o arame e conduza a haste principal por ele, sem apertar. Plante em dias nublados ou no fim da tarde para reduzir o estresse. Regue farto logo após e mantenha irrigação diária nos primeiros 15 dias para garantir o pegamento.', produto: 'Mudas', dose: '830 mudas/ha', forma: 'Covas 40×40×40 cm, 3,0×4,0 m. Muda junto ao mourão, colo ao nível do solo, fitilho conduzindo a haste até o arame.', tipo: 'plantio' },
@@ -1008,6 +1015,7 @@ export const CULTURAS = {
       sobrevivencia: 92,
       unidade: 'kg',
       producaoKgPorHa: 25000,
+      producaoModelo: 'planta', // producao calculada por PLANTA (kg/planta x plantas)
     },
     cronograma: [
       { dia: 0, etapa: 'Plantio das mudas + tutoramento', descricao: 'Com a espaldeira montada e a cova preparada, plante a muda junto ao mourão. Em muda enxertada, o ponto de enxertia deve ficar ACIMA do nível do solo (para o enxerto não emitir raízes próprias). Amarre um tutor (barbante/fitilho) da base da muda até o 1º fio da espaldeira e conduza a haste principal por ele. Plante em dias nublados ou no fim da tarde, regue farto e mantenha irrigação diária nos primeiros 15 dias.', produto: 'Mudas', dose: '2.200 mudas/ha', forma: 'Covas 40×40×40 cm, 3,0×1,5 m. Enxerto acima do solo. Tutor até o 1º fio.', tipo: 'plantio' },

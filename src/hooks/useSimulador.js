@@ -26,11 +26,19 @@ export function calcularPlantas(cultura, valores) {
     const totalPlantas = Math.round(plantasPorHa * areaHa);
 
     // ── Layout em linhas ──────────────────────────────────────────────────
-    // Nº de linhas: informado pelo usuário ou estimado assumindo talhão ~quadrado.
-    // Comprimento de cada linha decorre da área: L = área / (nº linhas × esp. linhas).
+    // Prioridade: COMPRIMENTO da linha informado → nº de linhas calculado
+    // automaticamente (linhas = área / (comprimento × esp. linhas)). Senão,
+    // nº de linhas informado; senão, estimado assumindo talhão ~quadrado.
+    const compLinhaInput = parseFloat(valores.comprimentoLinha);
     const numLinhasDefault = spacingL > 0 ? Math.max(1, Math.round(Math.sqrt(areaMq) / spacingL)) : 1;
-    const numLinhas = Math.max(1, parseInt(valores.numLinhas, 10) || numLinhasDefault);
-    const comprimentoLinha = (numLinhas > 0 && spacingL > 0) ? (areaMq / (numLinhas * spacingL)) : 0;
+    let numLinhas, comprimentoLinha;
+    if (Number.isFinite(compLinhaInput) && compLinhaInput > 0 && spacingL > 0) {
+      comprimentoLinha = compLinhaInput;
+      numLinhas = Math.max(1, Math.round(areaMq / (comprimentoLinha * spacingL)));
+    } else {
+      numLinhas = Math.max(1, parseInt(valores.numLinhas, 10) || numLinhasDefault);
+      comprimentoLinha = (numLinhas > 0 && spacingL > 0) ? (areaMq / (numLinhas * spacingL)) : 0;
+    }
     const plantasPorLinha = spacingP > 0 ? Math.floor(comprimentoLinha / spacingP) : 0;
 
     // ── Estacas/mourões da espaldeira ─────────────────────────────────────
@@ -157,11 +165,29 @@ export function useSimulador(cultura, valores) {
     let receita, producaoTotal;
     const v = cultura.venda;
 
-    if (isCampo && (v.producaoKgPorHa || valores.producaoKgPorHa)) {
-      // Produção por PLANTA × nº de plantas (via escala), não só por área — assim
-      // um espaçamento maior (menos plantas) produz menos, e vice-versa.
+    // Modelo de produção POR CULTURA (venda.producaoModelo):
+    //  - 'planta': fruteiras (acerola, maracujá, uva…) — produção = kg/planta ×
+    //    nº de plantas. O input editável é kg/planta; o padrão deriva do kg/ha
+    //    de referência ÷ densidade padrão. Adensar aumenta a produção.
+    //  - 'ha' (default): lavouras onde a área é o limite (mandioca, quiabo) —
+    //    produção = kg/ha × área, LITERAL. O que o usuário digita em kg/ha é o
+    //    que sai por hectare, independente do espaçamento. (Antes o kg/ha era
+    //    reescalado pela densidade — com 3×4 na acerola, 24 t/ha viravam 32 t.)
+    const modeloPlanta = isCampo && v.producaoModelo === 'planta';
+    const kgPorPlantaPadrao = (modeloPlanta && densRefCampo > 0)
+      ? (v.producaoKgPorHa || 0) / densRefCampo
+      : 0;
+    const kgPorPlantaInput = parseFloat(valores.producaoKgPorPlanta);
+    const kgPorPlanta = Number.isFinite(kgPorPlantaInput) && kgPorPlantaInput > 0
+      ? kgPorPlantaInput
+      : kgPorPlantaPadrao;
+
+    if (modeloPlanta) {
+      producaoTotal = kgPorPlanta * dim.totalPlantas * (sobrevivencia / 100);
+      receita       = producaoTotal * precoVenda;
+    } else if (isCampo && (v.producaoKgPorHa || valores.producaoKgPorHa)) {
       const baseKgHa = parseFloat(valores.producaoKgPorHa) || v.producaoKgPorHa || 0;
-      producaoTotal = baseKgHa * escala * (sobrevivencia / 100);
+      producaoTotal = baseKgHa * (dim.areaHa || 0) * (sobrevivencia / 100);
       receita       = producaoTotal * precoVenda;
     } else if (v.producaoBase != null || valores.producaoBase != null) {
       // producaoBase = total sellable units per canteiro at 100% (before sobrevivência)
@@ -247,6 +273,8 @@ export function useSimulador(cultura, valores) {
       projecaoMultiAno, paybackAno, custoImplantacao, custoManutencao,
       composicaoCustos,
       arameKg: +arameKg.toFixed(1), custoArame: +custoArame.toFixed(2), custoEstacas: +custoEstacas.toFixed(2),
+      producaoModelo: modeloPlanta ? 'planta' : 'ha',
+      kgPorPlanta: +kgPorPlanta.toFixed(2), kgPorPlantaPadrao: +kgPorPlantaPadrao.toFixed(2),
       formatBRL, isCampo,
     };
   }, [cultura, valores]);
