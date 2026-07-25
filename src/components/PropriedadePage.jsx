@@ -911,6 +911,7 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
   const [showNovoTalhao, setShowNovoTalhao] = useState(false);
   const [showNovoCultivo, setShowNovoCultivo] = useState(false);
   const [talhaoCulturaInicial, setTalhaoCulturaInicial] = useState('');
+  const [showAcoes, setShowAcoes] = useState(false); // ações escondidas por padrão
   // localização salva nesta sessão (reflete na tela sem recarregar a propriedade)
   const [localProp, setLocalProp] = useState({});
 
@@ -985,12 +986,19 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
           <div className="min-w-0">
             <h1 className="font-display text-white text-xl font-extrabold leading-tight truncate">{propriedade.nome}</h1>
             <p className="text-white/60 text-[12px] mt-0.5 flex items-center gap-1.5 flex-wrap">
-              {localTxt && <span className="flex items-center gap-1"><MapPin size={11} /> {localTxt}</span>}
+              {localTxt && <span className="flex items-center gap-1"><Building2 size={11} /> {localTxt}</span>}
               {localTxt && <span className="opacity-40">·</span>}
               <span>{resumo.nPlantios} plantio{resumo.nPlantios !== 1 ? 's' : ''}</span>
               <span className="opacity-40">·</span>
               <span>{resumo.areaTotal.toLocaleString('pt-BR')} ha</span>
             </p>
+            {/* Localização (coordenadas + lápis) — base do clima/irrigação */}
+            <div className="mt-1">
+              <PropriedadeLocalCard
+                propriedade={{ ...propriedade, ...localProp }}
+                onSaved={(loc) => setLocalProp(loc)}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -1005,25 +1013,34 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
           <StatBox icon={CheckCircle2} label="P/ colheita" value={resumo.prontos} accent={resumo.prontos > 0} />
         </div>
 
-        {/* ── Localização (base do clima/irrigação de todos os lotes) ── */}
-        <PropriedadeLocalCard
-          propriedade={{ ...propriedade, ...localProp }}
-          onSaved={(loc) => setLocalProp(loc)}
-        />
-
-        {/* ── Ações ── */}
+        {/* ── Ações (colapsáveis) ── */}
         <div>
-          <p className="section-label mb-2.5">Ações</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            <ActionTile icon={Plus}      label="Novo cultivo" sub="Perene ou anual" onClick={() => setShowNovoCultivo(true)} primary />
-            <ActionTile icon={Package2}  label="Estoque"     sub="Insumos"         onClick={onGoEstoque}              badge={alertas} />
-            {canDeleteLote
-              ? <ActionTile icon={History} label="Histórico" sub="Auditoria" onClick={() => setShowHistorico(true)} />
-              : <div className="hidden sm:block" />}
-            {canDeleteLote && (
-              <ActionTile icon={Database} label="Backup" sub="Exportar dados" onClick={() => setShowBackup(true)} />
+          <button onClick={() => setShowAcoes(v => !v)}
+            className="w-full flex items-center justify-between">
+            <p className="section-label">Ações</p>
+            <span className="flex items-center gap-1 text-[11px] font-bold text-muted-foreground">
+              {showAcoes ? 'Ocultar' : 'Mostrar'}
+              <ChevronDown size={15} className={`transition-transform ${showAcoes ? 'rotate-180' : ''}`} style={{ color: BRAND }} />
+            </span>
+          </button>
+          <AnimatePresence initial={false}>
+            {showAcoes && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.22 }} style={{ overflow: 'hidden' }}>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2.5">
+                  <ActionTile icon={Plus}      label="Novo cultivo" sub="Perene ou anual" onClick={() => setShowNovoCultivo(true)} primary />
+                  <ActionTile icon={Package2}  label="Estoque"     sub="Insumos"         onClick={onGoEstoque}              badge={alertas} />
+                  {canDeleteLote
+                    ? <ActionTile icon={History} label="Histórico" sub="Auditoria" onClick={() => setShowHistorico(true)} />
+                    : <div className="hidden sm:block" />}
+                  {canDeleteLote && (
+                    <ActionTile icon={Database} label="Backup" sub="Exportar dados" onClick={() => setShowBackup(true)} />
+                  )}
+                </div>
+              </motion.div>
             )}
-          </div>
+          </AnimatePresence>
         </div>
 
 

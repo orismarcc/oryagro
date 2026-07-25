@@ -1,12 +1,13 @@
 /**
- * PropriedadeLocalCard.jsx — define a localização (lat/lon) da propriedade.
+ * PropriedadeLocalCard.jsx — localização (lat/lon) da propriedade, compacta.
  *
- * Essa coordenada é a base do clima: todo lote da propriedade que não tenha
- * geometria própria usa esse ponto para buscar a previsão e calcular o
- * balanço hídrico da irrigação.
+ * Renderiza uma linha discreta para o CABEÇALHO (coordenadas + lápis de edição).
+ * Ao editar, abre um mini-modal (portal) com GPS/entrada manual. Essa coordenada
+ * é a base do clima: todo lote sem geometria própria usa esse ponto.
  */
 import React, { useState } from 'react';
-import { MapPin, Crosshair, Check, Loader2, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { MapPin, Crosshair, Check, Loader2, X, Pencil } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { updatePropriedadeLocal } from '../hooks/useSupabaseSync';
 import { isValidLatLng } from '../lib/geo';
@@ -50,49 +51,53 @@ export default function PropriedadeLocalCard({ propriedade, onSaved }) {
   };
 
   return (
-    <div className="card p-4">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{ background: definida ? 'hsl(156 64% 31% / 0.14)' : 'hsl(205 60% 92%)' }}>
-          <MapPin size={17} style={{ color: definida ? 'hsl(156 64% 31%)' : '#0369a1' }} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[13px] font-bold text-foreground leading-tight">Localização da propriedade</p>
-          <p className="text-[11px] text-muted-foreground truncate">
-            {definida
-              ? `${Number(propriedade.latitude).toFixed(4)}, ${Number(propriedade.longitude).toFixed(4)} — clima ativo nos lotes`
-              : 'Defina para ativar a previsão do tempo e a irrigação nos lotes'}
-          </p>
-        </div>
-        <button onClick={() => setEditando(v => !v)}
-          className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-2 rounded-xl flex-shrink-0"
-          style={{ background: 'hsl(156 64% 31% / 0.10)', color: 'hsl(156 64% 31%)', border: '1px solid hsl(156 64% 31% / 0.25)' }}>
-          {editando ? <X size={13} /> : <MapPin size={13} />}
-          {editando ? 'Cancelar' : (definida ? 'Editar' : 'Definir')}
-        </button>
-      </div>
+    <>
+      {/* Linha compacta no cabeçalho */}
+      <button onClick={() => setEditando(true)}
+        className="flex items-center gap-1.5 text-white/60 text-[12px] hover:text-white/90 transition-colors">
+        <MapPin size={11} />
+        <span className="tabular-nums">
+          {definida
+            ? `${Number(propriedade.latitude).toFixed(4)}, ${Number(propriedade.longitude).toFixed(4)}`
+            : 'Definir localização'}
+        </span>
+        <Pencil size={11} className="opacity-70" />
+      </button>
 
-      {editando && (
-        <div className="mt-3 flex flex-col gap-2.5">
-          <button onClick={usarGps}
-            className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-[12px] text-white"
-            style={{ background: 'hsl(156 64% 31%)' }}>
-            <Crosshair size={14} /> Usar meu GPS agora
-          </button>
-          <div className="grid grid-cols-2 gap-2">
-            <input value={lat} onChange={e => setLat(e.target.value)} placeholder="Latitude (-15.7942)"
-              className="w-full rounded-xl border px-3 py-2 text-sm bg-background" style={{ borderColor: 'hsl(156 30% 80%)' }} />
-            <input value={lon} onChange={e => setLon(e.target.value)} placeholder="Longitude (-47.8825)"
-              className="w-full rounded-xl border px-3 py-2 text-sm bg-background" style={{ borderColor: 'hsl(156 30% 80%)' }} />
+      {/* Mini-modal de edição */}
+      {editando && createPortal(
+        <div className="fixed inset-0 z-[2000] bg-black/50 flex items-end sm:items-center justify-center" onClick={() => setEditando(false)}>
+          <div className="bg-background w-full max-w-sm rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}>
+            <div className="gradient-hero text-white px-4 py-3 flex items-center gap-2">
+              <MapPin size={16} />
+              <p className="text-[14px] font-bold flex-1">Localização da propriedade</p>
+              <button onClick={() => setEditando(false)} className="p-1.5 rounded-lg hover:bg-white/15"><X size={18} /></button>
+            </div>
+            <div className="p-4 flex flex-col gap-2.5" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}>
+              <p className="text-[11px] text-muted-foreground">Base do clima e da irrigação para os lotes desta propriedade.</p>
+              <button onClick={usarGps}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-[12px] text-white"
+                style={{ background: 'hsl(156 64% 31%)' }}>
+                <Crosshair size={14} /> Usar meu GPS agora
+              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <input value={lat} onChange={e => setLat(e.target.value)} placeholder="Latitude (-15.7942)"
+                  className="w-full rounded-xl border px-3 py-2 text-sm bg-background" style={{ borderColor: 'hsl(156 30% 80%)' }} />
+                <input value={lon} onChange={e => setLon(e.target.value)} placeholder="Longitude (-47.8825)"
+                  className="w-full rounded-xl border px-3 py-2 text-sm bg-background" style={{ borderColor: 'hsl(156 30% 80%)' }} />
+              </div>
+              <button onClick={salvar} disabled={salvando}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-[13px] text-white disabled:opacity-40"
+                style={{ background: 'hsl(156 64% 31%)' }}>
+                {salvando ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                {salvando ? 'Salvando…' : 'Salvar localização'}
+              </button>
+            </div>
           </div>
-          <button onClick={salvar} disabled={salvando}
-            className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-[12px] text-white disabled:opacity-40"
-            style={{ background: 'hsl(156 64% 31%)' }}>
-            {salvando ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-            {salvando ? 'Salvando…' : 'Salvar localização'}
-          </button>
-        </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   );
 }
