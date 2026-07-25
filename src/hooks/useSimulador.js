@@ -142,7 +142,10 @@ export function useSimulador(cultura, valores) {
                        custoEmbalagem + custoTransporte + custoDefensivos + custoEnergia;
 
     const precoVenda    = parseFloat(valores.precoVenda)    || cultura.venda.precoUnitario;
-    const sobrevivencia = parseFloat(valores.sobrevivencia) != null && valores.sobrevivencia !== ''
+    // Guarda robusta: `parseFloat(undefined) != null` é TRUE (NaN != null), o que
+    // deixava NaN passar quando o campo não vinha preenchido — contaminando
+    // produção, receita e lucro. Number.isFinite só aceita número de verdade.
+    const sobrevivencia = Number.isFinite(parseFloat(valores.sobrevivencia))
       ? parseFloat(valores.sobrevivencia)
       : cultura.venda.sobrevivencia;
     const plantasViaveis = Math.round(dim.totalPlantas * sobrevivencia / 100);

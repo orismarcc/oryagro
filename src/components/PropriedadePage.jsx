@@ -1017,8 +1017,7 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
         <div>
           {!showAcoes ? (
             <button onClick={() => setShowAcoes(true)}
-              className="w-full flex items-center gap-3 p-3.5 rounded-2xl transition-all active:scale-[0.99]"
-              style={{ background: `${BRAND}0e`, border: `1.5px solid ${BRAND}33`, boxShadow: `0 4px 14px -8px ${BRAND}66` }}>
+              className="card w-full flex items-center gap-3 p-3.5 transition-all active:scale-[0.99]">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${BRAND}1a` }}>
                 <Zap size={17} style={{ color: BRAND }} />
               </div>
