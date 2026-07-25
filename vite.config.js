@@ -144,6 +144,9 @@ export default defineConfig({
           'charts':       ['recharts'],
           'pdf':          ['jspdf'],
           'supabase':     ['@supabase/supabase-js'],
+          // Mapa em chunk próprio: só quem abre o mapa baixa, e atualizações do
+          // app não invalidam esse cache (importa em conexão fraca no campo).
+          'map':          ['leaflet'],
         },
       },
     },
