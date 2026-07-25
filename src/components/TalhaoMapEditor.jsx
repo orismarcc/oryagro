@@ -1,24 +1,30 @@
 /**
  * TalhaoMapEditor.jsx — define a geometria/localização de um talhão (#7).
  *
- * Três formas, todas funcionais:
- *   1. Mapa   — desenhar o polígono tocando no mapa; várias fontes de satélite
- *              selecionáveis (a cobertura varia por região — ver data/mapTiles).
- *   2. Caminhar — andar a borda do talhão; o GPS grava os vértices (offline).
- *   3. Ponto  — marcar só a coordenada central (GPS atual ou digitada).
+ * Três formas:
+ *   1. Mapa     — tocar no mapa de satélite para marcar os cantos.
+ *   2. Caminhar — ir até cada canto e MARCAR manualmente, só com o GPS calibrado
+ *                 (precisão ≤ 4 m). Marcação manual evita dois erros do modo
+ *                 automático: pegar o trajeto com desvios e gravar pontos antes
+ *                 do GPS assentar (que jogava o início dezenas de metros longe).
+ *   3. Ponto    — só a coordenada central.
  *
- * Área calculada localmente (lib/geo, projeção equiretangular) — confiável
- * mesmo sem os tiles do mapa.
+ * Em ambos os modos com mapa os vértices são ARRASTÁVEIS: dá para puxar qualquer
+ * canto para ajustar. Área/perímetro calculados localmente (lib/geo).
  */
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { motion } from 'framer-motion';
-import { X, MapPin, Footprints, Crosshair, Undo2, Trash2, Check, Loader2, Map as MapIcon } from 'lucide-react';
+import {
+  X, MapPin, Footprints, Crosshair, Undo2, Trash2, Check, Loader2,
+  Map as MapIcon, Satellite, CheckCircle2,
+} from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import {
-  polygonAreaHa, polygonPerimeter, centroid, pointsToGeojson, geojsonToPoints, isValidLatLng, haversine, simplifyRDP,
+  polygonAreaHa, polygonPerimeter, centroid, pointsToGeojson, geojsonToPoints,
+  isValidLatLng, haversine,
 } from '../lib/geo';
 import { updateTalhaoGeo } from '../hooks/useSupabaseSync';
 import { FONTES_MAPA, FONTE_PADRAO, getFonte } from '../data/mapTiles';
@@ -29,9 +35,38 @@ const MODOS = [
   { id: 'ponto', label: 'Ponto', Icon: Crosshair },
 ];
 
+/** Precisão máxima do GPS (m) para permitir marcar um canto. */
+const PRECISAO_OK = 4;
+/** Distância do 1º ponto (m) a partir da qual oferecemos fechar a área. */
+const RAIO_FECHAMENTO = 12;
+
+/** Ícone de vértice (arrastável), numerado. */
+function iconeVertice(n, destaque = false) {
+  const cor = destaque ? '#f59e0b' : '#22c55e';
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:22px;height:22px;border-radius:50%;background:${cor};border:2.5px solid #0f5132;
+      box-shadow:0 2px 6px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;
+      color:#0f5132;font:700 11px/1 system-ui">${n}</div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  });
+}
+
+/** Ícone da posição atual do GPS. */
+function iconeGps(preciso) {
+  const cor = preciso ? '#2563eb' : '#9ca3af';
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:16px;height:16px;border-radius:50%;background:${cor};border:3px solid #fff;
+      box-shadow:0 0 0 2px ${cor}66,0 2px 6px rgba(0,0,0,.4)"></div>`,
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
+  });
+}
+
 export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly = false }) {
-  // captureOnly (ou talhão ainda sem id): não grava no banco — apenas devolve a
-  // geometria (geojson/área/centro) para o formulário de cadastro usar.
+  // captureOnly (ou talhão sem id): não grava no banco — devolve a geometria.
   const soCaptura = captureOnly || !talhao?.id;
   const toast = useToast();
   const [modo, setModo] = useState('mapa');
@@ -42,68 +77,100 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly 
   const [latManual, setLatManual] = useState(talhao?.latitude != null ? String(talhao.latitude) : '');
   const [lngManual, setLngManual] = useState(talhao?.longitude != null ? String(talhao.longitude) : '');
 
-  // caminhar
-  const [watching, setWatching] = useState(false);
-  const [gpsAcc, setGpsAcc] = useState(null);
+  // GPS ao vivo (modo caminhar)
+  const [gps, setGps] = useState(null);            // { lat, lng, acc }
+  const [rastreando, setRastreando] = useState(false);
   const watchIdRef = useRef(null);
 
   const area = polygonAreaHa(pontos);
   const perimetro = polygonPerimeter(pontos);
+  const comMapa = modo !== 'ponto';
 
-  // ── Leaflet (modo mapa) ────────────────────────────────────────────────
+  // ── Leaflet ───────────────────────────────────────────────────────────────
   const mapDivRef = useRef(null);
   const mapRef = useRef(null);
   const layerRef = useRef(null);
+  const gpsLayerRef = useRef(null);
   const tileRef = useRef(null);
   const [fonteId, setFonteId] = useState(FONTE_PADRAO);
   const [ready, setReady] = useState(false);
+  // Mantém o modo acessível dentro dos handlers do Leaflet (criados uma vez).
+  const modoRef = useRef(modo);
+  useEffect(() => { modoRef.current = modo; }, [modo]);
 
+  /** Redesenha polígono + vértices arrastáveis. */
   const redraw = useCallback(() => {
     const map = mapRef.current;
     if (!map) return;
     if (layerRef.current) { map.removeLayer(layerRef.current); layerRef.current = null; }
     const grp = L.layerGroup();
+
     if (pontos.length >= 3) {
-      L.polygon(pontos.map(p => [p.lat, p.lng]), { color: '#16a34a', weight: 2, fillOpacity: 0.25 }).addTo(grp);
-    } else if (pontos.length >= 2) {
-      L.polyline(pontos.map(p => [p.lat, p.lng]), { color: '#16a34a', weight: 2, dashArray: '4' }).addTo(grp);
+      L.polygon(pontos.map(p => [p.lat, p.lng]), { color: '#16a34a', weight: 2.5, fillOpacity: 0.22 }).addTo(grp);
+    } else if (pontos.length === 2) {
+      L.polyline(pontos.map(p => [p.lat, p.lng]), { color: '#16a34a', weight: 2.5, dashArray: '5' }).addTo(grp);
     }
+
     pontos.forEach((p, i) => {
-      L.circleMarker([p.lat, p.lng], { radius: 5, color: '#0f5132', fillColor: '#22c55e', fillOpacity: 1, weight: 2 })
-        .bindTooltip(String(i + 1), { permanent: false }).addTo(grp);
+      const m = L.marker([p.lat, p.lng], {
+        icon: iconeVertice(i + 1, i === 0),
+        draggable: true,
+        autoPan: true,
+      });
+      m.on('dragend', (e) => {
+        const { lat, lng } = e.target.getLatLng();
+        setPontos(prev => prev.map((q, j) => (j === i ? { lat, lng } : q)));
+      });
+      // arrastar não deve criar ponto novo no mapa
+      m.on('click', (e) => L.DomEvent.stopPropagation(e));
+      m.addTo(grp);
     });
+
     grp.addTo(map);
     layerRef.current = grp;
   }, [pontos]);
 
+  /** Desenha a posição atual do GPS (só no modo caminhar). */
+  const redrawGps = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (gpsLayerRef.current) { map.removeLayer(gpsLayerRef.current); gpsLayerRef.current = null; }
+    if (modo !== 'caminhar' || !gps) return;
+    const grp = L.layerGroup();
+    const preciso = gps.acc <= PRECISAO_OK;
+    L.circle([gps.lat, gps.lng], {
+      radius: Math.max(gps.acc, 1), color: preciso ? '#2563eb' : '#9ca3af',
+      weight: 1, fillOpacity: 0.12, dashArray: '4',
+    }).addTo(grp);
+    L.marker([gps.lat, gps.lng], { icon: iconeGps(preciso), interactive: false }).addTo(grp);
+    grp.addTo(map);
+    gpsLayerRef.current = grp;
+  }, [gps, modo]);
+
+  // init do mapa (compartilhado entre 'mapa' e 'caminhar')
   useEffect(() => {
-    if (modo !== 'mapa' || !mapDivRef.current || mapRef.current) return;
+    if (!comMapa || !mapDivRef.current || mapRef.current) return;
     const el = mapDivRef.current;
     const start = pontos.length ? centroid(pontos)
       : (isValidLatLng(talhao?.latitude, talhao?.longitude) ? { lat: talhao.latitude, lng: talhao.longitude }
-      : { lat: -14.24, lng: -51.93 }); // centro do Brasil (fallback)
+      : { lat: -14.24, lng: -51.93 });
 
-    // Ícone padrão do Leaflet quebra sob bundler — removemos a resolução automática
     delete L.Icon.Default.prototype._getIconUrl;
 
     const map = L.map(el, { zoomControl: true, attributionControl: true });
     map.setView([start.lat, start.lng], pontos.length ? 17 : 5);
 
     const fonte = getFonte(fonteId);
-    const tile = L.tileLayer(fonte.url, { maxZoom: fonte.maxZoom, attribution: fonte.attribution });
-    tile.addTo(map);
-    tileRef.current = tile;
+    tileRef.current = L.tileLayer(fonte.url, { maxZoom: fonte.maxZoom, attribution: fonte.attribution }).addTo(map);
 
-    map.getContainer().style.cursor = 'crosshair';
+    // No modo caminhar os pontos vêm do GPS — tocar no mapa não cria vértice.
     map.on('click', (e) => {
+      if (modoRef.current !== 'mapa') return;
       setPontos(prev => [...prev, { lat: e.latlng.lat, lng: e.latlng.lng }]);
     });
 
     mapRef.current = map;
 
-    // O mapa nasce dentro de um modal com animação: o container pode ter altura 0
-    // no momento da criação, o que deixa o mapa em branco. Recalculamos o tamanho
-    // logo, de novo após a animação, e sempre que o container mudar de tamanho.
     const fix = () => { try { map.invalidateSize(); } catch { /* ok */ } };
     requestAnimationFrame(fix);
     const t1 = setTimeout(fix, 150);
@@ -118,95 +185,88 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly 
       clearTimeout(t1); clearTimeout(t2);
       ro?.disconnect();
       try { map.remove(); } catch { /* ok */ }
-      mapRef.current = null; layerRef.current = null; tileRef.current = null;
+      mapRef.current = null; layerRef.current = null; gpsLayerRef.current = null; tileRef.current = null;
       setReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modo]);
+  }, [comMapa]);
 
-  // Troca de fonte de imagem sem recriar o mapa
+  // cursor conforme o modo
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    map.getContainer().style.cursor = modo === 'mapa' ? 'crosshair' : 'grab';
+  }, [modo, ready]);
+
+  // troca de fonte sem recriar o mapa
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
     if (tileRef.current) { try { tileRef.current.remove(); } catch { /* ok */ } }
     const fonte = getFonte(fonteId);
-    const tile = L.tileLayer(fonte.url, { maxZoom: fonte.maxZoom, attribution: fonte.attribution });
-    tile.addTo(map);
-    tileRef.current = tile;
+    tileRef.current = L.tileLayer(fonte.url, { maxZoom: fonte.maxZoom, attribution: fonte.attribution }).addTo(map);
   }, [fonteId, ready]);
 
-  useEffect(() => { if (modo === 'mapa') redraw(); }, [pontos, modo, redraw]);
+  useEffect(() => { if (comMapa) redraw(); }, [pontos, comMapa, redraw]);
+  useEffect(() => { redrawGps(); }, [redrawGps]);
 
   const localizarNoMapa = () => {
     if (!navigator.geolocation) { toast.error('GPS indisponível neste dispositivo.'); return; }
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        if (mapRef.current) mapRef.current.setView([latitude, longitude], 18);
-      },
+      (pos) => { mapRef.current?.setView([pos.coords.latitude, pos.coords.longitude], 18); },
       () => toast.error('Não foi possível obter a localização.'),
       { enableHighAccuracy: true, timeout: 10000 },
     );
   };
 
-  // ── Caminhar (GPS) ───────────────────────────────────────────────────────
-  const toggleWalk = () => {
-    if (watching) {
-      if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-      setWatching(false);
-      // Ao parar: simplifica trechos retos (mantém X e Y, remove os pontos entre
-      // eles que estão sobre a reta, com garantia de desvio < 3 m). Cantos ficam.
-      setPontos(prev => {
-        if (prev.length < 4) return prev;
-        const simp = simplifyRDP(prev, 3);
-        if (simp.length >= 3 && simp.length < prev.length) {
-          toast.info(`Trajeto simplificado: ${prev.length} → ${simp.length} pontos (trechos retos unidos).`);
-          return simp;
-        }
-        return prev;
-      });
-      return;
-    }
+  // ── GPS ao vivo (modo caminhar) ──────────────────────────────────────────
+  const iniciarGps = useCallback(() => {
     if (!navigator.geolocation) { toast.error('GPS indisponível neste dispositivo.'); return; }
-    setWatching(true);
+    if (watchIdRef.current != null) return;
+    setRastreando(true);
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude, accuracy } = pos.coords;
-        setGpsAcc(Math.round(accuracy));
-        setPontos(prev => {
-          const last = prev[prev.length - 1];
-          // filtra ruído: só grava se andou > 4 m desde o último vértice
-          if (last && haversine(last, { lat: latitude, lng: longitude }) < 4) return prev;
-          return [...prev, { lat: latitude, lng: longitude }];
-        });
+        setGps({ lat: latitude, lng: longitude, acc: Math.round(accuracy) });
       },
-      () => { toast.error('Falha no GPS. Verifique a permissão de localização.'); setWatching(false); },
-      { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 },
+      () => { toast.error('Falha no GPS. Verifique a permissão de localização.'); setRastreando(false); },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 },
     );
-  };
+  }, [toast]);
 
-  useEffect(() => () => {
+  const pararGps = useCallback(() => {
     if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
+    watchIdRef.current = null;
+    setRastreando(false);
   }, []);
 
-  const usarGpsPonto = () => {
-    if (!navigator.geolocation) { toast.error('GPS indisponível neste dispositivo.'); return; }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLatManual(pos.coords.latitude.toFixed(6));
-        setLngManual(pos.coords.longitude.toFixed(6));
-        toast.success('Localização capturada!');
-      },
-      () => toast.error('Não foi possível obter a localização.'),
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
+  // liga/desliga o GPS ao entrar/sair do modo caminhar
+  useEffect(() => {
+    if (modo === 'caminhar') iniciarGps(); else pararGps();
+    return () => pararGps();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modo]);
+
+  const precisoOk = gps != null && gps.acc <= PRECISAO_OK;
+
+  /** Distância da posição atual ao 1º ponto — para oferecer fechar a área. */
+  const distAoPrimeiro = (gps && pontos.length >= 3)
+    ? haversine({ lat: gps.lat, lng: gps.lng }, pontos[0])
+    : null;
+  const podeFechar = distAoPrimeiro != null && distAoPrimeiro <= RAIO_FECHAMENTO;
+
+  const marcarPonto = () => {
+    if (!gps) { toast.error('Aguardando o GPS…'); return; }
+    if (!precisoOk) { toast.error(`Precisão ±${gps.acc} m — aguarde chegar a ±${PRECISAO_OK} m.`); return; }
+    const novo = { lat: gps.lat, lng: gps.lng };
+    setPontos(prev => [...prev, novo]);
+    mapRef.current?.setView([novo.lat, novo.lng], Math.max(mapRef.current.getZoom(), 18));
   };
 
-  // ── Ações comuns ───────────────────────────────────────────────────────
   const desfazer = () => setPontos(prev => prev.slice(0, -1));
   const limpar = () => setPontos([]);
 
+  // ── Salvar ───────────────────────────────────────────────────────────────
   const salvar = async () => {
     let payload;
     if (modo === 'ponto') {
@@ -221,10 +281,10 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly 
         latitude: c.lat, longitude: c.lng,
         geojson: pointsToGeojson(pontos),
         area_gps_ha: Math.round(a * 1000) / 1000,
-        area_ha: Math.round(a * 100) / 100, // atualiza a área do talhão com a medida real
+        area_ha: Math.round(a * 100) / 100,
       };
     }
-    // Cadastro novo: só devolve a geometria, sem tocar no banco.
+
     if (soCaptura) {
       onSaved?.(payload);
       toast.success('Área demarcada!');
@@ -252,8 +312,19 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly 
     ? isValidLatLng(parseFloat(latManual), parseFloat(lngManual))
     : pontos.length >= 3;
 
-  // Portal para o <body>: escapa do stacking context da página (framer-motion),
-  // garantindo que o modal fique ACIMA da barra de navegação inferior.
+  const usarGpsPonto = () => {
+    if (!navigator.geolocation) { toast.error('GPS indisponível neste dispositivo.'); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLatManual(pos.coords.latitude.toFixed(6));
+        setLngManual(pos.coords.longitude.toFixed(6));
+        toast.success('Localização capturada!');
+      },
+      () => toast.error('Não foi possível obter a localização.'),
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
   return createPortal(
     <div className="fixed inset-0 z-[2000] bg-black/50 flex items-end sm:items-center justify-center" onClick={onClose}>
       <motion.div
@@ -263,7 +334,7 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly 
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="gradient-hero text-white px-4 py-3 flex items-center gap-2">
+        <div className="gradient-hero text-white px-4 py-3 flex items-center gap-2 flex-shrink-0">
           <MapPin size={17} />
           <div className="flex-1 min-w-0">
             <p className="text-[14px] font-bold leading-tight">Localização do talhão</p>
@@ -273,7 +344,7 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly 
         </div>
 
         {/* Seletor de modo */}
-        <div className="flex gap-1 p-1.5 bg-muted/40">
+        <div className="flex gap-1 p-1.5 bg-muted/40 flex-shrink-0">
           {MODOS.map(({ id, label, Icon }) => (
             <button key={id} onClick={() => setModo(id)}
               className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11.5px] font-bold transition-all"
@@ -284,14 +355,18 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly 
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto p-4">
-          {/* ── MAPA ── */}
-          {modo === 'mapa' && (
-            <div>
+          {/* ── MAPA (compartilhado por 'mapa' e 'caminhar') ── */}
+          {comMapa && (
+            <>
               <div style={{ position: 'relative', isolation: 'isolate' }}>
-                <div ref={mapDivRef} style={{ height: 320, width: '100%', borderRadius: 12, overflow: 'hidden', border: '1px solid hsl(152 14% 84%)', background: '#dddddd', position: 'relative', zIndex: 0, isolation: 'isolate' }} />
+                <div ref={mapDivRef} style={{
+                  height: 300, width: '100%', borderRadius: 12, overflow: 'hidden',
+                  border: '1px solid hsl(152 14% 84%)', background: '#dddddd',
+                  position: 'relative', zIndex: 0, isolation: 'isolate',
+                }} />
               </div>
 
-              {/* Seletor de fonte de imagem — cobertura de satélite varia por região */}
+              {/* Fontes de satélite */}
               <div className="flex gap-1.5 mt-2 overflow-x-auto -mx-1 px-1 pb-0.5">
                 {FONTES_MAPA.map(f => (
                   <button key={f.id} type="button" onClick={() => setFonteId(f.id)}
@@ -299,15 +374,14 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly 
                     style={fonteId === f.id
                       ? { background: 'hsl(156 64% 31%)', color: 'white' }
                       : { background: 'hsl(156 25% 93%)', color: 'hsl(156 40% 30%)' }}>
-                    {f.tipo === 'satelite' ? '🛰 ' : '🗺 '}{f.label}
+                    {f.tipo === 'satelite' ? <Satellite size={11} className="inline mr-1" /> : '🗺 '}{f.label}
                   </button>
                 ))}
               </div>
-              <p className="text-[10px] text-muted-foreground mt-1">{getFonte(fonteId).nota}</p>
 
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
                 <button onClick={localizarNoMapa} className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'hsl(156 30% 92%)', color: 'hsl(156 45% 28%)' }}>
-                  <Crosshair size={13} /> Minha localização
+                  <Crosshair size={13} /> Centralizar em mim
                 </button>
                 <button onClick={desfazer} disabled={!pontos.length} className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg disabled:opacity-40" style={{ background: 'hsl(38 60% 92%)', color: '#b45309' }}>
                   <Undo2 size={13} /> Desfazer
@@ -316,31 +390,80 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly 
                   <Trash2 size={13} /> Limpar
                 </button>
               </div>
-              <p className="text-[10.5px] text-muted-foreground mt-2">Toque no mapa para marcar os cantos do talhão (mín. 3).</p>
-            </div>
+
+              <p className="text-[10.5px] text-muted-foreground mt-2">
+                {modo === 'mapa'
+                  ? 'Toque no mapa para marcar os cantos (mín. 3). Arraste qualquer ponto para ajustar.'
+                  : 'Arraste qualquer ponto no mapa para corrigir a posição.'}
+              </p>
+            </>
           )}
 
-          {/* ── CAMINHAR ── */}
+          {/* ── CAMINHAR: painel de GPS + marcação manual ── */}
           {modo === 'caminhar' && (
-            <div className="flex flex-col items-center text-center gap-3 py-2">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: watching ? 'hsl(156 64% 31% / 0.15)' : 'hsl(156 20% 92%)' }}>
-                <Footprints size={30} style={{ color: 'hsl(156 64% 31%)' }} className={watching ? 'animate-pulse' : ''} />
+            <div className="mt-3 rounded-2xl p-3.5" style={{ background: 'hsl(156 30% 96%)', border: '1px solid hsl(156 30% 86%)' }}>
+              {/* Estado do GPS */}
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: precisoOk ? 'hsl(142 60% 88%)' : 'hsl(38 80% 90%)' }}>
+                  <Satellite size={16} className={rastreando && !precisoOk ? 'animate-pulse' : ''}
+                    style={{ color: precisoOk ? '#15803d' : '#b45309' }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  {!gps ? (
+                    <p className="text-[12px] font-bold text-foreground">Procurando satélites…</p>
+                  ) : (
+                    <>
+                      <p className="text-[12px] font-bold text-foreground">
+                        Precisão ±{gps.acc} m
+                        <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                          style={precisoOk
+                            ? { background: 'hsl(142 60% 88%)', color: '#15803d' }
+                            : { background: 'hsl(38 80% 90%)', color: '#b45309' }}>
+                          {precisoOk ? 'pronto' : `aguarde ±${PRECISAO_OK} m`}
+                        </span>
+                      </p>
+                      <p className="text-[10.5px] text-muted-foreground">
+                        {precisoOk ? 'Pode marcar este canto.' : 'Fique parado alguns segundos até o GPS assentar.'}
+                      </p>
+                    </>
+                  )}
+                </div>
               </div>
-              <p className="text-[12px] text-muted-foreground max-w-xs">
-                Fique num canto do talhão e toque em <strong>Iniciar</strong>. Caminhe pela borda; o app grava um ponto a cada ~4 m. Ao voltar ao início, toque em <strong>Parar</strong>.
-              </p>
-              <button onClick={toggleWalk}
-                className="px-5 py-2.5 rounded-xl font-bold text-[13px] text-white"
-                style={{ background: watching ? '#dc2626' : 'hsl(156 64% 31%)' }}>
-                {watching ? 'Parar' : 'Iniciar caminhada'}
+
+              {/* Marcar canto */}
+              <button onClick={marcarPonto} disabled={!precisoOk}
+                className="w-full mt-3 py-3 rounded-xl font-bold text-[14px] text-white flex items-center justify-center gap-2 disabled:opacity-40"
+                style={{ background: 'hsl(156 64% 31%)' }}>
+                <MapPin size={16} />
+                {pontos.length === 0 ? 'Marcar 1º canto (aqui)' : `Marcar canto ${pontos.length + 1}`}
               </button>
-              <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
-                <span>Pontos: <strong className="text-foreground">{pontos.length}</strong></span>
-                {gpsAcc != null && <span>Precisão GPS: <strong className="text-foreground">±{gpsAcc} m</strong></span>}
-              </div>
-              {pontos.length > 0 && (
-                <button onClick={limpar} className="text-[11px] font-bold text-red-500 flex items-center gap-1"><Trash2 size={12} /> Recomeçar</button>
+
+              {/* Fechar área ao voltar perto do 1º ponto */}
+              {podeFechar && (
+                <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+                  className="mt-2 rounded-xl p-2.5 flex items-center gap-2"
+                  style={{ background: 'hsl(142 55% 92%)', border: '1px solid hsl(142 50% 78%)' }}>
+                  <CheckCircle2 size={15} style={{ color: '#15803d' }} />
+                  <p className="text-[11px] flex-1" style={{ color: '#166534' }}>
+                    Você está a {Math.round(distAoPrimeiro)} m do 1º canto — a área já pode ser fechada.
+                  </p>
+                </motion.div>
               )}
+
+              <div className="flex items-center justify-between mt-2.5 text-[11px] text-muted-foreground">
+                <span>Cantos marcados: <strong className="text-foreground">{pontos.length}</strong></span>
+                {pontos.length > 0 && (
+                  <button onClick={desfazer} className="font-bold flex items-center gap-1" style={{ color: '#b45309' }}>
+                    <Undo2 size={12} /> Desfazer último
+                  </button>
+                )}
+              </div>
+
+              <p className="text-[10px] text-muted-foreground mt-2 leading-snug">
+                Vá até cada canto do talhão e marque com o GPS calibrado. Assim o
+                contorno não pega os desvios do caminho.
+              </p>
             </div>
           )}
 
@@ -369,8 +492,8 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly 
             </div>
           )}
 
-          {/* Resumo área (mapa/caminhar) */}
-          {modo !== 'ponto' && pontos.length >= 3 && (
+          {/* Resumo da área */}
+          {comMapa && pontos.length >= 3 && (
             <div className="mt-3 rounded-xl p-3 flex items-center justify-around" style={{ background: 'hsl(156 40% 95%)', border: '1px solid hsl(156 40% 85%)' }}>
               <div className="text-center">
                 <p className="text-[17px] font-black leading-none" style={{ color: 'hsl(156 64% 28%)' }}>{area.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</p>
@@ -392,9 +515,12 @@ export default function TalhaoMapEditor({ talhao, onClose, onSaved, captureOnly 
         <div className="p-3 border-t border-border flex-shrink-0" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 12px)' }}>
           <button onClick={salvar} disabled={!podeSalvar || salvando}
             className="w-full py-3 rounded-xl font-bold text-[14px] text-white flex items-center justify-center gap-2 disabled:opacity-40"
-            style={{ background: 'hsl(156 64% 31%)' }}>
+            style={{ background: podeFechar ? '#15803d' : 'hsl(156 64% 31%)' }}>
             {salvando ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-            {salvando ? 'Salvando…' : (modo === 'ponto' ? 'Salvar localização' : `Salvar talhão (${area.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha)`)}
+            {salvando ? 'Salvando…'
+              : modo === 'ponto' ? 'Salvar localização'
+              : podeFechar ? `Fechar área e salvar (${area.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha)`
+              : `Salvar talhão (${area.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha)`}
           </button>
         </div>
       </motion.div>
