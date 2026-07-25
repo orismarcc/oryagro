@@ -40,6 +40,7 @@ import { geojsonToPoints } from '../lib/geo';
 import IrrigacaoKitForm from './IrrigacaoKitForm';
 import TabDespesas from './lote/TabDespesas';
 import TabReceitas from './lote/TabReceitas';
+import * as safeStorage from '../lib/safeStorage';
 
 // ─── WeatherWidget ──────────────────────────────────────────────────────────
 
@@ -167,8 +168,8 @@ function TabColheita({ cultura, lote }) {
         setDoneStatus(statusMap);
         if (custom.length) setCustomRows(custom);
         // Update cache
-        localStorage.setItem(`cronograma_status_lote_${lote.id}`, JSON.stringify(statusMap));
-        if (custom.length) localStorage.setItem(`cronograma_custom_lote_${lote.id}`, JSON.stringify(custom));
+        safeStorage.set(`cronograma_status_lote_${lote.id}`, JSON.stringify(statusMap));
+        if (custom.length) safeStorage.set(`cronograma_custom_lote_${lote.id}`, JSON.stringify(custom));
       });
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps

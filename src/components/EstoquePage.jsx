@@ -84,7 +84,11 @@ function MovModal({ insumo, propriedadeId, onClose, onMoved, canEdit = false }) 
   const [loteSelecionado, setLoteSelecionado] = useState('');
 
   useEffect(() => {
-    loadMovimentos(insumo.id).then(setHistorico);
+    // Guarda de corrida: histórico de outro insumo não pode chegar depois e
+    // sobrescrever o do insumo aberto agora.
+    let cancelado = false;
+    loadMovimentos(insumo.id).then(r => { if (!cancelado) setHistorico(r); });
+    return () => { cancelado = true; };
   }, [insumo.id]);
 
   useEffect(() => {

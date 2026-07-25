@@ -9,6 +9,7 @@ import PropagacaoSelector from './PropagacaoSelector';
 import AnaliseSoloForm from './AnaliseSoloForm';
 import TalhaoMapEditor from './TalhaoMapEditor';
 import TalhaoMapPreview from './TalhaoMapPreview';
+import * as safeStorage from '../lib/safeStorage';
 
 /** Converte o painel de análise (strings do form) em números para o banco. */
 function sanitizeAnalise(analise) {
@@ -341,7 +342,7 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
 
     const novo = await registrarPlantio(payload);
     if (novo) {
-      localStorage.setItem(`lote_mudas_${novo.id}`, diasViveiro > 0 ? '1' : '0');
+      safeStorage.set(`lote_mudas_${novo.id}`, diasViveiro > 0 ? '1' : '0');
       // Pre-load default schedule steps so the cronograma is not empty on first open
       preCarregarEtapasPadrao(novo, cultura, diasViveiro).catch(() => {});
       onLoteAdded(novo);

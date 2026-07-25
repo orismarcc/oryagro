@@ -68,7 +68,19 @@ export function useAplicacoes(plantioId) {
     setLoading(false);
   };
 
-  useEffect(() => { reload(); }, [plantioId]);
+  useEffect(() => {
+    // Guarda de corrida: ao trocar de lote, a lista antiga não pode chegar
+    // depois e aparecer no caderno do lote atual.
+    let cancelado = false;
+    if (!plantioId) { setLoading(false); return undefined; }
+    setLoading(true);
+    loadAplicacoes(plantioId).then(rows => {
+      if (cancelado) return;
+      setAplicacoes(rows);
+      setLoading(false);
+    });
+    return () => { cancelado = true; };
+  }, [plantioId]);
 
   const add = async (form) => {
     const row = await addAplicacao(plantioId, form);

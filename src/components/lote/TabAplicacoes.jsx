@@ -54,7 +54,13 @@ export default function TabAplicacoes({ lote, cultura, propriedade = null, canDe
 
   const propId = propriedade?.id ?? lote.propriedade_id ?? null;
   useEffect(() => {
-    loadEstoque(propId).then(setEstoque).catch(() => setEstoque([]));
+    // Guarda de corrida: ao trocar de propriedade, a resposta antiga não pode
+    // sobrescrever o estoque da propriedade atual.
+    let cancelado = false;
+    loadEstoque(propId)
+      .then(r => { if (!cancelado) setEstoque(r); })
+      .catch(() => { if (!cancelado) setEstoque([]); });
+    return () => { cancelado = true; };
   }, [propId]);
 
   const insumoBaixa = estoque.find(i => i.id === baixaInsumoId) || null;

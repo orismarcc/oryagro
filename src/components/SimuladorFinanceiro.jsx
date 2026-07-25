@@ -12,6 +12,7 @@ import { getPrecosPadrao, getOpCosts } from '../data/precos';
 import { RotateCcw, Database, CheckCircle2, Pencil, Check, Package, Truck, Zap, ShieldCheck, MapPin } from 'lucide-react';
 import TalhaoMapEditor from './TalhaoMapEditor';
 import { useToast } from '../context/ToastContext';
+import * as safeStorage from '../lib/safeStorage';
 
 const loadFromStorage = (key, def) => {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; }
@@ -134,7 +135,7 @@ export default function SimuladorFinanceiro({ cultura }) {
     prevAreaRef.current = currentArea;
   }, [isCampo ? valores.areaHa : valores.comprimento, isCampo ? valores.espacamentoLinhas : valores.largura]);
 
-  useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(valores)); }, [storageKey, valores]);
+  useEffect(() => { safeStorage.set(storageKey, JSON.stringify(valores)); }, [storageKey, valores]);
 
   // Called by NumField: onChange(campo, parsedValue)
   const handleChange = useCallback((campo, val) => setValores(v => ({ ...v, [campo]: val })), []);

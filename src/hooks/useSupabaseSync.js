@@ -749,12 +749,24 @@ export async function criarSafraDeTalhao(talhaoId, dataSafra, talhaoData) {
   const ultimaSafra = safrasExistentes?.[0]?.safra_numero ?? 0;
   const proximaSafra = ultimaSafra + 1;
 
+  // plantios.propriedade_id é NOT NULL, mas talhoes.propriedade_id é opcional —
+  // se o talhaoData vier sem (ou parcial), buscamos no banco para não falhar.
+  let propriedadeId = talhaoData?.propriedade_id ?? null;
+  if (!propriedadeId) {
+    const { data: t } = await supabase.from('talhoes').select('propriedade_id').eq('id', talhaoId).maybeSingle();
+    propriedadeId = t?.propriedade_id ?? null;
+  }
+  if (!propriedadeId) {
+    logDbError('criarSafraDeTalhao', new Error('talhão sem propriedade — não é possível criar a safra'));
+    return null;
+  }
+
   const { data, error } = await supabase
     .from('plantios')
     .insert({
       user_id:             userId,
       talhao_id:           talhaoId,
-      propriedade_id:      talhaoData.propriedade_id || null,
+      propriedade_id:      propriedadeId,
       cultura_id:          talhaoData.cultura_id,
       nome:                `${talhaoData.nome || 'Talhão'} — Safra ${proximaSafra}`,
       data_plantio:        dataSafra,

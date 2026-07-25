@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, X } from 'lucide-react';
+import * as safeStorage from '../lib/safeStorage';
 
 const DISMISSED_KEY = 'pwa_install_dismissed_at';
 const DISMISS_DAYS = 7;
@@ -62,14 +63,14 @@ export default function InstallPWA() {
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === 'dismissed') {
-      localStorage.setItem(DISMISSED_KEY, String(Date.now()));
+      safeStorage.set(DISMISSED_KEY, String(Date.now()));
     }
     setDeferredPrompt(null);
     setVisible(false);
   };
 
   const handleDismiss = () => {
-    localStorage.setItem(DISMISSED_KEY, String(Date.now()));
+    safeStorage.set(DISMISSED_KEY, String(Date.now()));
     setVisible(false);
   };
 

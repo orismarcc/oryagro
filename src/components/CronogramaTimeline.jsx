@@ -16,6 +16,7 @@ import { montarPlanoAdubacao } from '../lib/analiseSolo';
 import { logDbError } from '../lib/logger';
 import { TIPO_META, TIPOS, todayISO, formatDate, stepDate, formatStepDate, migrateLegacyStatus, parseNumericDose, scaleDose, isoToDate, dateToISO } from './cronograma/helpers';
 import { Toggle, LotePicker } from './cronograma/ui';
+import * as safeStorage from '../lib/safeStorage';
 
 // ── Main component ────────────────────────────────────────────────────────
 
@@ -90,7 +91,7 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
     try {
       const raw = JSON.parse(localStorage.getItem(storageKey)) || {};
       const migrated = migrateLegacyStatus(raw, vivSteps, cultura.cronograma);
-      if (migrated !== raw) localStorage.setItem(storageKey, JSON.stringify(migrated));
+      if (migrated !== raw) safeStorage.set(storageKey, JSON.stringify(migrated));
       localStatus = migrated;
     } catch { localStatus = {}; }
     try { localCustomRows = JSON.parse(localStorage.getItem(customKey)) || []; } catch { localCustomRows = []; }
@@ -161,8 +162,8 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
         const finalCustomRows = hasSomeCustomInDb ? dbCustomDefs : localCustomRows;
 
         // Mantém localStorage sincronizado (cache offline)
-        localStorage.setItem(storageKey, JSON.stringify(merged));
-        if (hasSomeCustomInDb) localStorage.setItem(customKey, JSON.stringify(finalCustomRows));
+        safeStorage.set(storageKey, JSON.stringify(merged));
+        if (hasSomeCustomInDb) safeStorage.set(customKey, JSON.stringify(finalCustomRows));
 
         setStatus(merged);
         setCustomRows(finalCustomRows);
@@ -171,8 +172,8 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey, customKey]);
 
-  useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(status)); }, [storageKey, status]);
-  useEffect(() => { localStorage.setItem(customKey, JSON.stringify(customRows)); }, [customKey, customRows]);
+  useEffect(() => { safeStorage.set(storageKey, JSON.stringify(status)); }, [storageKey, status]);
+  useEffect(() => { safeStorage.set(customKey, JSON.stringify(customRows)); }, [customKey, customRows]);
 
   // Scroll the inline confirm form into view whenever it opens
   useEffect(() => {
@@ -193,12 +194,12 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
     // Merge: DB wins. Preserves local-only keys (e.g. _migrated flag).
     setStatus(prev => {
       const merged = { ...prev, ...dbStatus };
-      localStorage.setItem(storageKey, JSON.stringify(merged));
+      safeStorage.set(storageKey, JSON.stringify(merged));
       return merged;
     });
     if (dbCustomRows.length) {
       setCustomRows(dbCustomRows);
-      localStorage.setItem(customKey, JSON.stringify(dbCustomRows));
+      safeStorage.set(customKey, JSON.stringify(dbCustomRows));
     }
   };
   useCronogramaRealtime(selectedLote?.id, React.useCallback((dbRows) => {

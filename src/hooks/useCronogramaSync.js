@@ -16,6 +16,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { logDbError } from '../lib/logger';
+import * as safeStorage from '../lib/safeStorage';
 
 // ── Shared ID builders ───────────────────────────────────────────────────────
 /** MUST stay in sync with CronogramaTimeline's makeStableId. */
@@ -149,9 +150,9 @@ export function useCronogramaStatusBatch(loteIds) {
           newStatus[loteId] = statusMap;
           if (customRows.length) newCustom[loteId] = customRows;
           // Keep localStorage in sync (offline cache)
-          localStorage.setItem(`cronograma_status_lote_${loteId}`, JSON.stringify(statusMap));
+          safeStorage.set(`cronograma_status_lote_${loteId}`, JSON.stringify(statusMap));
           if (customRows.length) {
-            localStorage.setItem(`cronograma_custom_lote_${loteId}`, JSON.stringify(customRows));
+            safeStorage.set(`cronograma_custom_lote_${loteId}`, JSON.stringify(customRows));
           }
         });
 
