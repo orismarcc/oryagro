@@ -347,27 +347,96 @@ function montarCoberturas({ cultura, classes, phAcido, perene }) {
     ];
   }
 
-  // ── Genérico ───────────────────────────────────────────────────────────────
-  // N total/ha da cultura (insumos.ureia.padrao) parcelado; K conforme classe.
-  const nKgHa = (cultura.insumos?.ureia?.padrao) || (perene ? 90 : 120);
+  // ── Genérico, porém ESPECÍFICO por perfil da cultura ────────────────────────
+  // Sem programa de marca (não há fonte técnica para cada cultura), mas a
+  // recomendação reflete a real necessidade de cada TIPO: folhosa puxa N;
+  // raiz/tubérculo e fruteira puxam K; fruteira ainda pede boro na frutificação.
+  // As doses vêm dos próprios dados da cultura (N de insumos.ureia; K de
+  // insumos.sulfatoPotassio quando existe, senão o patamar típico do perfil) e
+  // são ajustadas pela análise (classe de K, acidez do solo).
+  const perfil = perfilNutricional(cultura, perene);
+  const nKgHa = (cultura.insumos?.ureia?.padrao) || perfil.nDefault;
+  const kKgHaTotal = ((cultura.insumos?.sulfatoPotassio?.padrao) ?? perfil.kDefault) * ajusteK;
   const baseDias = (cultura.cronograma || []).filter(e => e.tipo === 'adubo').map(e => e.dia);
-  const dias = baseDias.length >= 2 ? baseDias
-    : perene ? [30, 120, 210] : [15, 35];
+  const dias = baseDias.length >= 2 ? baseDias : perfil.diasFallback;
   const n = dias.length;
-  const kKgHaTotal = ((cultura.insumos?.sulfatoPotassio?.padrao) || (perene ? 150 : 80)) * ajusteK;
+  const pesosN = curvaParcelas(perfil.curvaN, n);
+  const pesosK = curvaParcelas(perfil.curvaK, n);
+  const pBaixo = classes.p === 'Baixo' || classes.p === 'Muito Baixo';
   return dias.map((dia, i) => {
     const fonte = nFonte(i + 1);
-    const nDose = nKgHa / n;
-    const kDose = kKgHaTotal / n;
+    const nDose = nKgHa * pesosN[i];
+    const kDose = kKgHaTotal * pesosK[i];
+    const frutif = perfil.foco === 'fruto' && i >= Math.floor(n / 2); // 2ª metade do ciclo
+    const boro = frutif && perfil.boro;
+    const notaAcidez = (i + 1) >= 2 && phAcido ? ' Sulfato de Amônio no lugar da ureia por causa da acidez (perde menos N e fornece enxofre).' : '';
+    const notaP = i === 0 && pBaixo ? ' Fósforo baixo na análise: reforce com superfosfato simples na adubação de base.' : '';
     return {
       ordem: i + 1, offset: dia,
-      etapa: `${i + 1}ª Cobertura (solo) — ${fonte.sigla} + K`,
-      produto: `${fonte.nome} + Cloreto de Potássio (KCl 60%)`,
-      dose: `${fmtKg(nDose)} ${fonte.sigla}/ha + ${fmtKg(kDose)} KCl/ha`,
+      etapa: `${i + 1}ª Cobertura (solo) — ${fonte.sigla} + K${frutif ? ' (frutificação)' : ''}`,
+      produto: `${fonte.nome} + Cloreto de Potássio (KCl 60%)${boro ? ' + Boro foliar' : ''}`,
+      dose: `${fmtKg(nDose)} ${fonte.sigla}/ha + ${fmtKg(kDose)} KCl/ha${boro ? ' + boro foliar (conforme rótulo)' : ''}`,
       forma: 'Aplicar em cobertura, parcelado, e irrigar logo após. Em solo arenoso nunca aplicar a dose toda de uma vez (lixivia/queima).',
-      descricao: `Parcelamento da adubação de cobertura ajustado à análise (K ${classes.k?.toLowerCase() || '—'}).${(i + 1) >= 2 && phAcido ? ' Sulfato de Amônio em vez de ureia por causa da acidez.' : ''}`,
+      descricao: perfil.descricao(i, n) + notaAcidez + notaP,
     };
   });
+}
+
+/**
+ * Perfil nutricional por categoria da cultura — classificação agronômica (não é
+ * programa de marca). Define de onde puxar o K quando a cultura não traz o total,
+ * como distribuir N e K ao longo do ciclo e as notas específicas de cada tipo.
+ * Só é usado pelo ramo genérico (acerola, abacaxi e maracujá têm ramo próprio).
+ */
+function perfilNutricional(cultura, perene) {
+  const id = cultura.id;
+  const FOLHOSAS    = ['alface', 'cebolinha', 'coentro', 'couve', 'rucula'];
+  const RAIZ        = ['mandioca'];
+  const FRUTO_ANUAL = ['quiabo'];
+
+  if (FOLHOSAS.includes(id)) return {
+    categoria: 'folhosa', foco: 'folha', boro: false,
+    nDefault: 200, kDefault: 60, diasFallback: [10, 20, 30],
+    curvaN: 'constante', curvaK: 'constante',
+    descricao: (i, n) => i === n - 1
+      ? 'Folhosa: nesta última cobertura, evite excesso de nitrogênio — perto da colheita ele acumula nitrato na folha e reduz a conservação.'
+      : 'Folhosa: a prioridade é o nitrogênio, que forma a massa de folhas; o potássio entra em dose menor, dando firmeza e pós-colheita. Parcelar mantém o crescimento contínuo.',
+  };
+  if (RAIZ.includes(id)) return {
+    categoria: 'raiz', foco: 'raiz', boro: false,
+    nDefault: 100, kDefault: 160, diasFallback: [30, 60, 120],
+    curvaN: 'frente', curvaK: 'tras',
+    descricao: (i, n) => i < n / 2
+      ? 'Raiz/tubérculo: nitrogênio no início forma a parte aérea que alimenta a raiz. Não exagere no N — excesso vira folha e atrasa o engrossamento.'
+      : 'Fase de engrossamento: é o potássio que enche a raiz e acumula amido, por isso domina a adubação agora.',
+  };
+  if (FRUTO_ANUAL.includes(id)) return {
+    categoria: 'fruto_anual', foco: 'fruto', boro: true,
+    nDefault: 120, kDefault: 100, diasFallback: [15, 35, 55],
+    curvaN: 'frente', curvaK: 'tras',
+    descricao: (i, n) => i < n / 2
+      ? 'Fase vegetativa: nitrogênio para a planta crescer e emitir ramos.'
+      : 'Fase de produção: o potássio ganha peso na adubação (enche e dá qualidade ao fruto) e o boro foliar ajuda o pegamento.',
+  };
+  // Fruteira perene (banana, mamão, cupuaçu, uva) — o K vem dos próprios insumos.
+  return {
+    categoria: 'fruteira', foco: 'fruto', boro: true,
+    nDefault: 120, kDefault: perene ? 200 : 120, diasFallback: [30, 120, 210],
+    curvaN: 'constante', curvaK: 'tras',
+    descricao: (i, n) => i < n / 2
+      ? 'Fruteira: nitrogênio e potássio equilibrados na formação e no crescimento da planta.'
+      : 'Fase de frutificação: o potássio domina (peso, açúcar e conservação do fruto) e o boro foliar melhora o pegamento. Cálcio (calagem/nitrato) dá firmeza à casca.',
+  };
+}
+
+/** Reparte um total em n parcelas: 'frente' decrescente, 'tras' crescente, 'constante' igual. */
+function curvaParcelas(tipo, n) {
+  if (n <= 0) return [];
+  const pesos = tipo === 'frente' ? Array.from({ length: n }, (_, i) => n - i)
+    : tipo === 'tras' ? Array.from({ length: n }, (_, i) => i + 1)
+    : Array.from({ length: n }, () => 1);
+  const soma = pesos.reduce((a, b) => a + b, 0);
+  return pesos.map(p => p / soma);
 }
 
 function cobPlanta(ordem, offset, fonte, nG, kG, dist, obsSA) {

@@ -76,3 +76,66 @@ describe('analiseSolo — plano de adubação', () => {
     expect(diagnostico.join(' ')).toMatch(/[Ff]ósforo/);
   });
 });
+
+// ── Plano genérico específico por perfil da cultura ──────────────────────────
+// A recomendação sem programa de marca ainda precisa fazer sentido para o TIPO
+// da cultura: folhosa puxa N, raiz/fruteira puxam K, fruteira pede boro.
+import { CULTURAS } from '../data/culturas';
+
+// Solo pobre e ácido, K baixo — força o plano a reagir.
+const SOLO_POBRE = { ph: 5.4, mo: 2.2, p: 9, k: 45, ca: 2.0, mg: 0.7, ctc: 6.8, v: 48, al: 0.4, zn: 0.9, prnt: 85 };
+
+/** Extrai os kg de N e KCl de uma etapa de cobertura ('123 kg X/ha + 45 kg KCl/ha'). */
+function doses(etapa) {
+  const n = parseFloat((etapa.dose.match(/([\d.,]+)\s*kg\s*(?:Ureia|SA)/) || [])[1]?.replace(',', '.') || '0');
+  const k = parseFloat((etapa.dose.match(/([\d.,]+)\s*kg\s*KCl/) || [])[1]?.replace(',', '.') || '0');
+  return { n, k };
+}
+const cobs = (id) => montarPlanoAdubacao({ analise: SOLO_POBRE, cultura: CULTURAS[id], lote: { area_ha: 1 } })
+  .etapas.filter(e => e.fase === 'Cobertura');
+
+describe('plano genérico — específico por perfil', () => {
+  it('folhosa (alface): nitrogênio domina o potássio e não há boro', () => {
+    const c = cobs('alface');
+    expect(c.length).toBeGreaterThan(0);
+    const { n, k } = doses(c[0]);
+    expect(n).toBeGreaterThan(k);                       // N >> K
+    expect(c.some(e => /boro/i.test(e.dose))).toBe(false);
+  });
+
+  it('folhosa: última cobertura alerta sobre nitrato perto da colheita', () => {
+    const c = cobs('couve');
+    expect(c[c.length - 1].descricao).toMatch(/nitrato/i);
+  });
+
+  it('raiz (mandioca): potássio cresce e supera o N no engrossamento', () => {
+    const c = cobs('mandioca');
+    const ini = doses(c[0]);
+    const fim = doses(c[c.length - 1]);
+    expect(fim.k).toBeGreaterThan(ini.k);              // K back-loaded
+    expect(fim.k).toBeGreaterThan(fim.n);              // K domina no fim
+  });
+
+  it('fruteira (banana): K cresce até a frutificação e entra boro foliar', () => {
+    const c = cobs('banana_ana');
+    const ini = doses(c[0]);
+    const fim = doses(c[c.length - 1]);
+    expect(fim.k).toBeGreaterThan(ini.k);
+    expect(c.some(e => /boro/i.test(e.dose))).toBe(true);
+    expect(c.some(e => /frutifica/i.test(e.etapa))).toBe(true);
+  });
+
+  it('fruto anual (quiabo): N cai e K sobe ao longo do ciclo', () => {
+    const c = cobs('quiabo');
+    const ini = doses(c[0]);
+    const fim = doses(c[c.length - 1]);
+    expect(fim.n).toBeLessThanOrEqual(ini.n);          // N front-loaded
+    expect(fim.k).toBeGreaterThan(ini.k);              // K back-loaded
+  });
+
+  it('solo ácido: troca ureia por Sulfato de Amônio a partir da 2ª cobertura', () => {
+    const c = cobs('quiabo');
+    expect(c[0].produto).toMatch(/Ureia/);
+    expect(c[1].produto).toMatch(/Sulfato de Am|SA/);
+  });
+});
