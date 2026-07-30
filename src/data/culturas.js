@@ -830,7 +830,7 @@ export const CULTURAS = {
     // Cada item traz a FUNÇÃO do produto, para o produtor entender o porquê.
     programaNutricional: {
       referencia: 'Quadro técnico Horta Minas — doses por cova / por planta',
-      observacao: 'Guia de referência. Para precisão, a análise de solo é indispensável. Os produtos citados podem ser substituídos por equivalentes da sua preferência.',
+      observacao: 'Guia de referência. Para precisão, a análise de solo é indispensável. Os produtos citados podem ser substituídos por equivalentes da sua preferência. Nota sobre potássio: seguido à risca, este programa entrega 120 kg de K₂O/ha — as recomendações usuais para lavouras de 35 a 50 t/ha ficam acima disso, e o próprio guia reforça na dica nº 5 "adube com potássio para garantir peso no fruto". Se a sua análise de solo indicar, aumente a dose do 20-00-20 no simulador.',
       blocos: [
         {
           titulo: 'Adubação de fundação (na cova, antes do plantio)',
@@ -859,7 +859,7 @@ export const CULTURAS = {
             { produto: 'Sulfato de amônia', dose: '30 g/planta a partir do 25º dia; 50 g/planta após 50 dias', funcao: 'Motor do crescimento na formação da planta: nitrogênio para emitir a haste e as folhas que vão sustentar a produção, com enxofre para aproveitá-lo.' },
             { produto: 'Nitrato de cálcio', dose: '20 g/planta a partir do 25º dia; 45 g/planta após 60 dias — contínuo', funcao: 'Nitrogênio nítrico (absorção imediata) + cálcio solúvel. O cálcio dá firmeza à casca, reduz rachadura e aumenta a vida do fruto após a colheita. Altamente solúvel — ideal para fertirrigação.' },
             { produto: 'Superfosfato simples 18%', dose: '50 a 60 g/planta a cada 30 dias, a partir do 30º dia', funcao: 'SUBSTITUI o MAP 12-61-00. Fósforo para raiz e floração, cálcio para a casca e enxofre para o metabolismo. Aplicar no solo em volta da planta (na projeção da copa) e irrigar — não usar em gotejamento.' },
-            { produto: 'Adubo granulado 20-00-20', dose: '70 g/planta a cada 30 dias, a partir do 90º dia', funcao: 'A dupla da produção: nitrogênio mantém as brotações novas (é nelas que nascem as flores) e potássio enche o fruto — peso, açúcar e acidez. O maracujá é muito exigente em potássio; faltando K, o fruto fica leve e murcho.' },
+            { produto: 'Adubo granulado 20-00-20', dose: '70 g/planta a cada 30 dias, a partir do 90º dia (contínuo)', funcao: 'A dupla da produção: nitrogênio mantém as brotações novas (é nelas que nascem as flores) e potássio enche o fruto — peso, açúcar e acidez. O maracujá é muito exigente em potássio; faltando K, o fruto fica leve e murcho. Seguindo o guia (9 aplicações do dia 90 ao fim do ciclo), são 600 kg/ha de 20-00-20 = 120 kg de K₂O/ha.' },
           ],
         },
         {
@@ -938,7 +938,10 @@ export const CULTURAS = {
     insumos: {
       calcareo: { padrao: 2000, min: 1000, max: 4000, unidade: 'kg/ha', porHa: 2000 },
       esterco: { padrao: 8000, min: 5000, max: 12000, unidade: 'kg/ha', porHa: 8000 },
-      npk: { formula: '10-10-10 (cova) + 20-00-20 (produção)', padrao: 610, min: 350, max: 850, unidade: 'kg/ha', porHa: 610 },
+      // 145 kg de 10-10-10 na cova (150 g/cova) + 600 kg de 20-00-20 na produção
+      // (70 g/planta a cada 30 dias, do dia 90 ao fim do ciclo = 9 aplicações,
+      // exatamente como o quadro do cap. 11 do guia). Entrega 120 kg de K2O/ha.
+      npk: { formula: '10-10-10 (cova) + 20-00-20 (produção)', padrao: 745, min: 400, max: 1000, unidade: 'kg/ha', porHa: 745 },
       // Fonte de nitrogênio do guia: sulfato de amônia (21% N + 24% S), não ureia.
       ureia: { nome: 'Sulfato de Amônia (21% N + 24% S)', padrao: 250, min: 120, max: 400, unidade: 'kg/ha', parcelamento: [{ dia: 25, dose: 30 }, { dia: 50, dose: 60 }, { dia: 90, dose: 60 }, { dia: 150, dose: 50 }, { dia: 210, dose: 50 }] },
       nitratoCalcio: { padrao: 300, min: 150, max: 450, unidade: 'kg/ha' },
@@ -947,7 +950,11 @@ export const CULTURAS = {
       yoorin: { nome: 'Yoorin (termofosfato magnesiano)', padrao: 260, min: 190, max: 335, unidade: 'kg/ha', precoUnitario: 2.60 },
       aminoacidos: { padrao: 3, min: 0, max: 8, unidade: 'L/ha' },
       fte: { padrao: 15, min: 5, max: 30, unidade: 'kg/ha' },
-      sulfatoPotassio: { padrao: 300, min: 150, max: 500, unidade: 'kg/ha' },
+      // Total de FERTILIZANTE POTÁSSICO por ha (lido por lib/analiseSolo, que o
+      // aplica como KCl 60%). Derivado do guia: o programa entrega 120 kg de
+      // K2O/ha, o que equivale a 200 kg de KCl 60% — mesmo potássio, outra fonte.
+      // (O guia usa 20-00-20; aqui o número existe para a recomendação por análise.)
+      sulfatoPotassio: { padrao: 200, min: 120, max: 350, unidade: 'kg/ha' },
       boro: { padrao: 4, min: 2, max: 8, unidade: 'L/ha' },
       mouroes: { padrao: 400, min: 300, max: 500, unidade: 'mourões/ha', precoUnitario: 18.00 },
       arame: { padrao: 165, min: 120, max: 220, unidade: 'kg/ha', precoUnitario: 12.00 },
@@ -956,7 +963,9 @@ export const CULTURAS = {
       modObra: { padrao: 10200 },
     },
     venda: {
-      precoUnitario: 3.20,
+      // Preço praticado pelo produtor (o guia usa R$ 3,20/kg como média nacional
+      // de referência no cap. 18 — aqui vale o preço real de venda dele).
+      precoUnitario: 7.00,
       sobrevivencia: 90,
       unidade: 'kg',
       producaoKgPorHa: 35000,
