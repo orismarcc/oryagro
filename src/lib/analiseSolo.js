@@ -68,6 +68,8 @@ export const classificarPh  = (ph) => faixa(num(ph), [4.4, 5.0, 5.5, 6.0], ['Mui
 export const METAS_CULTURA = {
   acerola: { v2: 65, phIdeal: '5,5–6,0' },
   abacaxi: { v2: 55, phIdeal: '4,5–5,5' },
+  // Maracujá — guia Horta Minas, cap. 5: pH 6,0–6,5 e saturação por bases 70–80%.
+  maracuja: { v2: 75, phIdeal: '6,0–6,5' },
   _perene: { v2: 60, phIdeal: '5,5–6,5' },
   _anual:  { v2: 70, phIdeal: '6,0–7,0' },
 };
@@ -274,6 +276,67 @@ function montarCoberturas({ cultura, classes, phAcido, perene }) {
       cobPlanta(4, 195, nFonte(4), 90, 50 * ajusteK, '50–60 cm', obsSA),
     ];
   }
+  // ── Maracujá ───────────────────────────────────────────────────────────────
+  // Mantém os PRODUTOS e o calendário do guia (Horta Minas, cap. 11) e usa a
+  // análise só para AJUSTAR as doses — em vez de trocar tudo por ureia + KCl.
+  // Superfosfato simples no lugar do MAP 12-61-00 (decisão do produtor).
+  if (cultura.id === 'maracuja') {
+    const ajusteP = classes.p === 'Muito Baixo' ? 1.4 : classes.p === 'Baixo' ? 1.2
+      : classes.p === 'Bom' || classes.p === 'Muito Bom' ? 0.8 : 1.0;
+    const caBaixo = classes.ca === 'Baixo' || classes.ca === 'Muito Baixo';
+    const ajusteCa = caBaixo ? 1.25 : 1.0;
+    const notaAcidez = phAcido
+      ? ' Atenção: sulfato de amônia e superfosfato simples acidificam o solo — com o pH já baixo, monitore e reavalie a calagem na próxima análise. O nitrato de cálcio ajuda a contrabalançar.'
+      : '';
+    const notaCa = caBaixo ? ' Cálcio baixo na análise: dose de nitrato de cálcio elevada em 25%.' : '';
+    const notaK = classes.k === 'Baixo' || classes.k === 'Muito Baixo'
+      ? ' Potássio baixo na análise: dose do 20-00-20 elevada em 25%.'
+      : (classes.k === 'Bom' || classes.k === 'Muito Bom') ? ' Potássio bom na análise: dose do 20-00-20 reduzida em 20%.' : '';
+
+    return [
+      {
+        ordem: 1, offset: 25,
+        etapa: '1ª Cobertura — Sulfato de amônia + Nitrato de cálcio',
+        produto: 'Sulfato de amônia (21% N + 24% S) + Nitrato de cálcio (15,5% N + 19% Ca)',
+        dose: `${fmtG(30)} sulfato de amônia + ${fmtG(20 * ajusteCa)} nitrato de cálcio / planta`,
+        forma: 'Solo na projeção da copa, sem encostar no caule, e irrigar após. O nitrato pode ir por fertirrigação.',
+        descricao: `Arranque da planta: o sulfato de amônia entrega nitrogênio rápido com enxofre (é o S que permite converter o N em proteína) e o nitrato de cálcio traz N nítrico imediato + cálcio, que firma a casca do futuro fruto. Doses do guia ajustadas pela análise.${notaCa}${notaAcidez}`,
+      },
+      {
+        ordem: 2, offset: 30,
+        etapa: '2ª Cobertura — Superfosfato simples (fósforo)',
+        produto: 'Superfosfato Simples (SSP 18% P₂O₅ + Ca + S)',
+        dose: `${fmtG(55 * ajusteP)} / planta — repetir a cada 30 dias`,
+        forma: 'Aplicar no solo em volta da planta e irrigar por cima. NÃO usar em gotejamento: é pouco solúvel e entope o emissor.',
+        descricao: `Substitui o MAP 12-61-00 do guia. Fósforo para raiz e floração, mais cálcio (parede celular) e enxofre. Dose ajustada para fósforo ${classes.p?.toLowerCase() || '—'} na análise.`,
+      },
+      {
+        ordem: 3, offset: 50,
+        etapa: '3ª Cobertura — Reforço de nitrogênio e cálcio',
+        produto: 'Sulfato de amônia + Nitrato de cálcio',
+        dose: `${fmtG(50)} sulfato de amônia + ${fmtG(45 * ajusteCa)} nitrato de cálcio / planta`,
+        forma: 'Solo na projeção da copa + irrigação. Cuidado com capina mecânica: 80% das raízes estão nos primeiros 45 cm.',
+        descricao: `A planta entra em crescimento acelerado e a demanda sobe — o guia eleva o sulfato de amônia para 50 g e o nitrato de cálcio para 45 g por planta a partir dos 50–60 dias.${notaCa}`,
+      },
+      {
+        ordem: 4, offset: 90,
+        etapa: '4ª Cobertura — 20-00-20 (início da produção)',
+        produto: 'Adubo granulado 20-00-20',
+        dose: `${fmtG(70 * ajusteK)} / planta — repetir a cada 30 dias`,
+        forma: 'Solo na projeção da copa + irrigação.',
+        descricao: `Começa a fase que define o peso do fruto: nitrogênio mantém as brotações novas (onde nascem as flores) e potássio enche o fruto — peso, açúcar e acidez.${notaK}`,
+      },
+      {
+        ordem: 5, offset: 180,
+        etapa: '5ª Cobertura — 20-00-20 + Nitrato de cálcio (produção)',
+        produto: 'Adubo granulado 20-00-20 + Nitrato de cálcio',
+        dose: `${fmtG(70 * ajusteK)} de 20-00-20 + ${fmtG(45 * ajusteCa)} de nitrato de cálcio / planta`,
+        forma: 'Solo na projeção da copa + irrigação. Manter a cada 30 dias enquanto houver colheita.',
+        descricao: `Com frutos formando, o potássio garante peso e Brix e o cálcio dá casca firme e mais vida pós-colheita — o cálcio não se redistribui na planta, então precisa chegar continuamente enquanto o fruto enche.${notaK}`,
+      },
+    ];
+  }
+
   if (cultura.id === 'abacaxi') {
     // Abacaxi: aplicação no sulco/axila; sem cova. Reduz N e eleva K na pré-floração.
     return [
