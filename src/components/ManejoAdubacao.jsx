@@ -32,6 +32,23 @@ const PRAGAS = {
     { praga: 'Cochonilha-da-raiz', sintoma: 'Amarelecimento geral; murcha',         controle: 'Imidacloprido drench 0,5g/L' },
     { praga: 'Fusariose',          sintoma: 'Podridão na base das folhas centrais', controle: 'Propiconazol preventivo' },
   ],
+  // Maracujá — referência: Guia Definitivo do Maracujá (Horta Minas), caps. 12 e 13.
+  // Doses por bomba de 20 L. Uso de agrotóxico exige receituário agronômico:
+  // confira sempre dose, carência e EPI no rótulo do produto.
+  maracuja: [
+    { praga: 'Mosca do botão floral', sintoma: 'Larvas dentro do botão; botão cai antes de abrir',       controle: 'Connect 20 mL (fase de botão) ou Cypermil 25 mL + armadilhas e eliminação dos botões atacados' },
+    { praga: 'Mosca das frutas',      sintoma: 'Picada no fruto; larvas apodrecem a polpa',              controle: 'Armadilha McPhail para monitorar + iscas tóxicas (melaço + inseticida) na bordadura' },
+    { praga: 'Tripes',                sintoma: 'Prateamento e deformação das folhas novas',              controle: 'Dicarzol 20 g — aplicação preventiva' },
+    { praga: 'Cigarrinha / pulgão',   sintoma: 'Sugadores; pulgão transmite a virose do endurecimento',  controle: 'Actara 20 g (sistêmico) — controlar pulgão é prevenir virose' },
+    { praga: 'Ácaros',                sintoma: 'Folha bronzeada/amarelada e desfolha precoce (seca)',    controle: 'Acaricida específico (abamectina, enxofre)' },
+    { praga: 'Lagartas',              sintoma: 'Folhas perfuradas; vivem em grupos',                     controle: 'Bacillus thuringiensis (biológico, muito eficiente) ou Cypermil 25 mL' },
+    { praga: 'Percevejos',            sintoma: 'Injetam toxina; fruto deforma e cai',                    controle: 'Decis 20 mL ou neem 60 mL + detergente neutro 100 mL — aplicar SEMPRE ao anoitecer (praga noturna)' },
+    { praga: 'Antracnose',            sintoma: 'Manchas escuras e deprimidas em folhas e frutos',        controle: 'Manzate WG 40 g ou Cercobin 20 g — alternar os princípios ativos' },
+    { praga: 'Verrugose',             sintoma: 'Crostas ásperas ("verrugas") no fruto jovem',            controle: 'Fungicida preventivo; polpa em geral não é afetada (serve para indústria)' },
+    { praga: 'Fungos e bactérias',    sintoma: 'Lesões diversas em folhas e ramos',                       controle: 'Kasumin 25 mL — aplicação preventiva' },
+    { praga: 'Fusariose (murcha)',    sintoma: 'Planta murcha e morre rapidamente — NÃO tem cura',       controle: 'Prevenção: solo drenado, muda sadia, não ferir raízes e NUNCA replantar maracujá na mesma área sem rotação' },
+    { praga: 'Virose (endurecimento)', sintoma: 'Fruto duro e deformado, sem polpa; folha com mosaico',  controle: 'Sem cura: erradicar a planta doente, controlar pulgões e usar muda certificada' },
+  ],
 };
 
 function Section({ icon: Icon, title, accent, defaultOpen = false, children }) {
@@ -78,6 +95,47 @@ function InfoRow({ label, value, highlight }) {
   );
 }
 
+/**
+ * Programa nutricional detalhado da cultura (quando existe em
+ * cultura.programaNutricional): mostra cada produto com a DOSE e, principalmente,
+ * a FUNÇÃO — para o produtor entender o porquê de cada aplicação.
+ */
+function ProgramaNutricional({ programa, accent }) {
+  return (
+    <div className="pt-2 space-y-4">
+      {programa.blocos.map((bloco) => (
+        <div key={bloco.titulo}>
+          <p className="text-[11.5px] font-bold text-foreground">{bloco.titulo}</p>
+          {bloco.nota && (
+            <p className="text-[10.5px] mt-1 rounded-lg px-2.5 py-1.5 leading-snug"
+              style={{ background: 'hsl(38 90% 96%)', color: '#92400e', border: '1px solid hsl(38 85% 88%)' }}>
+              {bloco.nota}
+            </p>
+          )}
+          <div className="mt-2 space-y-2">
+            {bloco.itens.map((item) => (
+              <div key={item.produto} className="rounded-xl p-2.5"
+                style={{ background: `${accent}0a`, border: `1px solid ${accent}20` }}>
+                <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                  <span className="text-[12px] font-bold text-foreground">{item.produto}</span>
+                  <span className="text-[11px] font-semibold" style={{ color: accent }}>{item.dose}</span>
+                </div>
+                <p className="text-[10.5px] text-muted-foreground mt-1 leading-snug">{item.funcao}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      {programa.observacao && (
+        <p className="text-[10px] text-muted-foreground/80 leading-snug">{programa.observacao}</p>
+      )}
+      {programa.referencia && (
+        <p className="text-[10px] text-muted-foreground/70">Referência: {programa.referencia}</p>
+      )}
+    </div>
+  );
+}
+
 export default function ManejoAdubacao({ cultura, calc }) {
   const ins = cultura.insumos;
   const isCampo = cultura.tipo === 'campo';
@@ -116,6 +174,13 @@ export default function ManejoAdubacao({ cultura, calc }) {
             {' '}(fator {fator.toFixed(2)}×)
           </p>
         </div>
+      )}
+
+      {/* Programa nutricional detalhado (culturas com referência técnica) */}
+      {cultura.programaNutricional && (
+        <Section icon={FlaskConical} title="Programa nutricional completo" accent={cor} defaultOpen>
+          <ProgramaNutricional programa={cultura.programaNutricional} accent={cor} />
+        </Section>
       )}
 
       <Section icon={Sprout} title="Preparo do Solo e Correção" accent={cor}>
@@ -194,6 +259,13 @@ export default function ManejoAdubacao({ cultura, calc }) {
               <p className="text-[11px] font-semibold pl-3.5" style={{ color: cor }}>{p.controle}</p>
             </div>
           ))}
+          {/* Uso de agrotóxico é regulado (Lei 7.802/1989) — o app não substitui receituário. */}
+          <p className="text-[10px] leading-snug rounded-lg px-2.5 py-2"
+            style={{ background: 'hsl(38 90% 96%)', color: '#92400e', border: '1px solid hsl(38 85% 88%)' }}>
+            Produtos citados são referência técnica, não prescrição. A aplicação de agrotóxico exige
+            <strong> receituário agronômico</strong>: confirme dose, alvo, carência e EPI no rótulo do
+            produto e registre cada aplicação no Caderno de Campo.
+          </p>
         </div>
       </Section>
     </div>
