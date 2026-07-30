@@ -392,7 +392,7 @@ function perfilNutricional(cultura, perene) {
   const id = cultura.id;
   const FOLHOSAS    = ['alface', 'cebolinha', 'coentro', 'couve', 'rucula'];
   const RAIZ        = ['mandioca'];
-  const FRUTO_ANUAL = ['quiabo'];
+  const FRUTO_ANUAL = ['quiabo', 'melancia'];
 
   if (FOLHOSAS.includes(id)) return {
     categoria: 'folhosa', foco: 'folha', boro: false,

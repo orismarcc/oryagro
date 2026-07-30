@@ -49,6 +49,20 @@ const PRAGAS = {
     { praga: 'Fusariose (murcha)',    sintoma: 'Planta murcha e morre rapidamente — NÃO tem cura',       controle: 'Prevenção: solo drenado, muda sadia, não ferir raízes e NUNCA replantar maracujá na mesma área sem rotação' },
     { praga: 'Virose (endurecimento)', sintoma: 'Fruto duro e deformado, sem polpa; folha com mosaico',  controle: 'Sem cura: erradicar a planta doente, controlar pulgões e usar muda certificada' },
   ],
+  // Melancia (Citrullus lanatus, cv. Liverpool) — agronomia geral da cultura.
+  // Uso de agrotóxico exige receituário; poupe as abelhas (não pulverizar na florada).
+  melancia: [
+    { praga: 'Mosca-branca',        sintoma: 'Sugadora; transmite viroses (mosaico, amarelões)',          controle: 'Monitorar cedo; inseticida sistêmico conforme receituário — controlar é prevenir a virose' },
+    { praga: 'Pulgões',             sintoma: 'Colônias nas folhas novas; também transmitem vírus',         controle: 'Controle na primeira infestação; preservar inimigos naturais' },
+    { praga: 'Broca-das-cucurbitáceas', sintoma: 'Lagarta (Diaphania) fura ramas e frutos',              controle: 'Monitorar; Bacillus thuringiensis (biológico) ou inseticida específico ao anoitecer' },
+    { praga: 'Tripes / ácaros',     sintoma: 'Prateamento e bronzeamento das folhas (épocas secas)',      controle: 'Acaricida/inseticida específico; manejo da irrigação' },
+    { praga: 'Oídio',               sintoma: 'Mofo branco pulverulento sobre as folhas',                   controle: 'Enxofre ou fungicida específico; arejar a lavoura' },
+    { praga: 'Míldio',              sintoma: 'Manchas amareladas na face superior, mofo por baixo',        controle: 'Fungicida preventivo (cobre/mancozebe); evitar molhar as folhas' },
+    { praga: 'Antracnose',          sintoma: 'Lesões escuras e deprimidas em folhas e frutos',             controle: 'Fungicida à base de cobre/mancozebe; alternar princípios ativos' },
+    { praga: 'Crestamento-gomoso',  sintoma: 'Cancros nas ramas com goma; podridão dos frutos',            controle: 'Semente sadia, rotação e fungicida preventivo; evitar ferimentos' },
+    { praga: 'Fusariose (murcha)',  sintoma: 'Planta murcha e morre — doença de solo, NÃO tem cura',       controle: 'Prevenção: solo drenado, rotação de cultura e NUNCA repetir cucurbitácea na mesma área' },
+    { praga: 'Coração-oco / rachadura', sintoma: 'Rachadura interna, casca grossa, sabor ruim (carência de boro)', controle: 'Não é praga: corrigir com boro (solo + foliar) e cálcio; ajustar a irrigação' },
+  ],
 };
 
 function Section({ icon: Icon, title, accent, defaultOpen = false, children }) {

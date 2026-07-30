@@ -1110,6 +1110,101 @@ export const CULTURAS = {
       { dia: 450, etapa: 'Poda pós-colheita + 2ª safra (dupla poda)', descricao: 'Manejo de DUPLA PODA (típico do cultivo tropical): logo após a colheita, faça a poda de limpeza/formação, elimine ramos secos e doentes e reequilibre o cordão; adube para recompor a planta. Cerca de 120 dias depois, repita a poda de produção (com quebra de dormência) para induzir a 2ª safra do ano. Alternar as podas ao longo do ano permite escalonar a produção. Repita esse ciclo a cada safra, mantendo a inspeção fitossanitária e a nutrição.', produto: 'Poda de limpeza + adubação de recomposição', dose: 'Adubação pós-colheita (NPK + K) conforme análise', forma: 'Poda pós-colheita, reequilíbrio do cordão e adubação. Nova poda de produção ~120 dias depois (2ª safra).', tipo: 'manejo' },
     ],
   },
+  melancia: {
+    id: 'melancia',
+    tipoCultura: 'anual',
+    tipo: 'campo',
+    nome: 'Melancia',
+    nomesCientifico: 'Citrullus lanatus — cultivar Liverpool (tipo Crimson Sweet)',
+    cor: '#d1345b',
+    corClara: '#ffe1e8',
+    emoji: '🍉',
+    ciclo: '~70–90 dias até a colheita · cultivo anual',
+    espacamentoPadrao: '2,5 × 0,9 m (≈ 4.400 plantas/ha)',
+    areaPadrao: '1 ha',
+    referencia: 'Agronomia geral da melancia (base Embrapa Hortaliças) + características da cultivar Liverpool — CONFIRA com a bula do seu lote de sementes.',
+    descricao: 'Cucurbitácea rasteira de ciclo curto e alta rentabilidade. A cultivar LIVERPOOL é um híbrido do tipo Crimson Sweet: fruto redondo a oval, casca verde-clara com listras verde-escuras, polpa vermelha firme, sementes pequenas, e frutos grandes (na faixa de 10 a 14 kg) — muito procurados pelo mercado por casca resistente ao transporte e boa conservação pós-colheita. Dois pontos definem o sucesso da lavoura: (1) POLINIZAÇÃO — a melancia tem flores masculinas e femininas separadas na mesma planta e depende de ABELHAS (principalmente a Apis mellifera) para levar o pólen; sem abelhas o fruto não pega ou sai deformado, então recomenda-se instalar colmeias na área (referência de 2 a 3 colmeias/ha) e evitar inseticida no horário da florada. (2) BORO — a melancia é muito sensível à falta de boro, que causa coração-oco (rachadura interna), casca grossa e sabor ruim; boro e cálcio bem fornecidos garantem casca firme e polpa doce. É exigente em POTÁSSIO na fase de enchimento (peso, açúcar e cor da polpa). NÃO plantar melancia (nem outra cucurbitácea) na mesma área em anos seguidos: faça rotação de cultura para escapar da fusariose (Fusarium oxysporum f. sp. niveum), que é doença de solo e não tem cura.',
+    soloTipo: 'Arenoso a franco-arenoso, profundo, solto e bem drenado — não tolera encharcamento',
+    pH: '6,0–6,5 (elevar saturação por bases a 70–80%)',
+    necessidadeHidrica: 'Alta e regular no crescimento; REDUZIR na maturação para elevar o °Brix e não rachar o fruto',
+    clima: 'Tropical quente e ensolarado — ótimo 24–30 °C; sensível ao frio e à geada',
+    area: { padrao: 1, unidade: 'ha' },
+    espacamento: { linhas: 2.5, plantas: 0.9 },
+    metodosPropagacao: [
+      {
+        key: 'semeadura_direta', label: 'Semeadura direta', saquinho: false, diasViveiro: 0,
+        descricao: 'Semeadura direto no campo, na cova/sulco definitivo. É o método mais usado na melancia porque a cultura tem raiz sensível e não gosta de transplante. Semeia-se 2 a 3 sementes por cova e faz-se o desbaste depois, deixando a plântula mais vigorosa. Exige sementes de qualidade (o híbrido Liverpool é caro, então o gasto com semente pesa) e solo bem preparado e úmido para uma germinação uniforme.',
+        lifecycle: {
+          diasPrimeiraProducao: 80, diasProducaoPlena: 88, cicloDias: 100,
+          fases: ['Germinação e estabelecimento', 'Ramação (crescimento)', 'Floração e polinização', 'Frutificação e enchimento', 'Maturação e colheita'],
+          faseLimites: [18, 38, 52, 78],
+          minDiasBioRealista: 65,
+        },
+        etapasViveiro: [
+          { dia: -60, etapa: 'Análise de solo', descricao: 'Colete subamostras em zigue-zague na área, nas profundidades de 0–20 cm e 20–40 cm, 60 a 90 dias antes do plantio. A análise define a calagem e a adubação corretas — a meta é pH entre 6,0 e 6,5 e saturação por bases (V%) de 70 a 80%. Peça também o BORO no laudo: a melancia é muito sensível a ele.', produto: 'Análise de solo (0–20 e 20–40 cm)', dose: 'Amostragem em zigue-zague', forma: 'Laboratório — pedir pH, V%, macronutrientes e boro', tipo: 'manejo' },
+          { dia: -45, etapa: 'Calagem e preparo do solo', descricao: 'Aplique o calcário conforme a análise para elevar a saturação por bases a 70–80% e incorpore com aração (20–30 cm) mais gradagem niveladora. O calcário precisa de 30 a 45 dias e umidade para reagir. Solo solto, profundo e bem drenado é essencial: a melancia apodrece em solo encharcado.', produto: 'Calcário dolomítico', dose: 'Conforme análise (referência 2 t/ha)', forma: 'A lanço + aração e gradagem, 30–45 dias antes', tipo: 'adubo' },
+          { dia: -5, etapa: 'Preparo do sulco/cova + adubação de base', descricao: 'Prepare o sulco ou as covas no espaçamento 2,5 × 0,9 m e faça a adubação de base 4 a 5 dias antes, misturando bem ao solo e molhando: esterco bem curtido (matéria orgânica e retenção de água — a melancia responde muito a solo rico em orgânica), NPK de plantio rico em fósforo (raízes e futura floração) e boro (indispensável desde o início). Onde se usa, o plástico (mulching) no canteiro é instalado agora: economiza água, controla mato e mantém o fruto limpo.', produto: 'Esterco curtido + NPK 04-14-08 + Boro', dose: '15 t/ha esterco + 400–500 kg/ha NPK + 2–3 kg/ha de boro', forma: 'No sulco/cova, misturar ao solo e molhar bem. Mulching opcional.', tipo: 'adubo' },
+        ],
+      },
+      {
+        key: 'muda_bandeja', label: 'Muda em bandeja', saquinho: true, diasViveiro: 12,
+        descricao: 'Mudas produzidas em bandeja de isopor/plástico (substrato comercial) e transplantadas com 10 a 15 dias, ainda pequenas, para o campo. Dá um estande mais uniforme e economiza sementes caras do híbrido (uma por célula), mas exige cuidado no transplante — a raiz da melancia é delicada, então plante o torrão inteiro, sem desmanchar, para não haver choque.',
+        lifecycle: {
+          diasPrimeiraProducao: 90, diasProducaoPlena: 98, cicloDias: 110,
+          fases: ['Viveiro (bandeja)', 'Estabelecimento', 'Ramação (crescimento)', 'Floração e polinização', 'Frutificação e enchimento', 'Maturação e colheita'],
+          faseLimites: [12, 28, 48, 62, 88],
+          minDiasBioRealista: 75,
+        },
+        etapasViveiro: [
+          { dia: -60, etapa: 'Análise de solo', descricao: 'Colete subamostras em zigue-zague (0–20 e 20–40 cm) 60 a 90 dias antes do plantio. Meta: pH 6,0–6,5 e saturação por bases 70–80%. Peça o boro no laudo — a melancia é muito sensível à sua falta.', produto: 'Análise de solo', dose: 'Amostragem em zigue-zague', forma: 'Laboratório — pH, V%, macronutrientes e boro', tipo: 'manejo' },
+          { dia: -45, etapa: 'Calagem e preparo do solo', descricao: 'Aplique o calcário conforme a análise e incorpore com aração de 20–30 cm mais gradagem. Solo profundo, solto e bem drenado é decisivo — a melancia não tolera encharcamento.', produto: 'Calcário dolomítico', dose: 'Conforme análise (referência 2 t/ha)', forma: 'A lanço + aração e gradagem, 30–45 dias antes', tipo: 'adubo' },
+          { dia: 0, etapa: 'Semeadura em bandeja', descricao: 'Semeie 1 semente por célula da bandeja em substrato comercial para hortaliças, a ~1,5 cm de profundidade. Mantenha em ambiente protegido, com umidade constante e boa luz. A germinação ocorre em 4 a 7 dias. Usar 1 semente por célula aproveita ao máximo o híbrido Liverpool, que é caro.', produto: 'Sementes Liverpool + substrato comercial', dose: '1 semente/célula a 1,5 cm', forma: 'Bandeja em ambiente protegido, irrigação constante', tipo: 'plantio' },
+          { dia: 8, etapa: 'Preparo do sulco + adubação de base no campo', descricao: 'Enquanto as mudas crescem, prepare o sulco/cova no espaçamento 2,5 × 0,9 m e faça a adubação de base, misturando ao solo e molhando: esterco curtido, NPK rico em fósforo e boro. Deixe pronto 4 a 5 dias antes do transplante. Instale o mulching plástico aqui, se for usar.', produto: 'Esterco curtido + NPK 04-14-08 + Boro', dose: '15 t/ha esterco + 400–500 kg/ha NPK + 2–3 kg/ha de boro', forma: 'No sulco/cova, misturar e molhar. Mulching opcional.', tipo: 'adubo' },
+          { dia: 12, etapa: 'Transplante ao campo', descricao: 'Com 10 a 15 dias e 2 a 3 folhas verdadeiras, leve a muda ao campo. Transplante o TORRÃO INTEIRO, sem desmanchar, para não ferir a raiz — a melancia é sensível a isso. Plante no fim da tarde ou em dia nublado, com o colo ao nível do solo, e regue farto. Mantenha irrigação diária nos primeiros dias para o pegamento.', produto: 'Mudas em torrão', dose: '≈4.400 mudas/ha (2,5 × 0,9 m)', forma: 'Torrão inteiro, colo ao nível do solo, no fim da tarde', tipo: 'especial' },
+        ],
+      },
+    ],
+    insumos: {
+      calcareo: { padrao: 2000, min: 1000, max: 4000, unidade: 'kg/ha', porHa: 2000 },
+      esterco: { padrao: 15000, min: 8000, max: 25000, unidade: 'kg/ha', porHa: 15000 },
+      npk: { formula: '04-14-08 (base) + 20-00-20 (cobertura)', padrao: 700, min: 400, max: 1000, unidade: 'kg/ha', porHa: 700 },
+      ureia: { padrao: 180, min: 100, max: 280, unidade: 'kg/ha', parcelamento: [{ dia: 15, dose: 60 }, { dia: 30, dose: 60 }, { dia: 45, dose: 60 }] },
+      nitratoCalcio: { padrao: 40, min: 0, max: 90, unidade: 'kg/ha' },
+      // Potássio é crítico na melancia (peso, açúcar e cor da polpa) — total real
+      // por ha para a recomendação por análise de solo usar dado da cultura.
+      sulfatoPotassio: { padrao: 250, min: 120, max: 400, unidade: 'kg/ha' },
+      // Boro: a melancia é MUITO sensível à carência (coração-oco, rachadura).
+      boro: { padrao: 4, min: 2, max: 6, unidade: 'kg/ha' },
+      aminoacidos: { padrao: 4, min: 0, max: 12, unidade: 'L/ha' },
+      fte: { padrao: 25, min: 10, max: 50, unidade: 'kg/ha' },
+      sementes: { padrao: 5000, precoUnitario: 1.00, unidade: 'sementes/ha' },
+      mulching: { multiplicador: 0 },
+      modObra: { padrao: 6000 },
+    },
+    venda: {
+      // Preço de venda na porteira — a melancia costuma ter preço baixo por kg,
+      // compensado pelo grande volume por hectare. Ajuste ao seu mercado.
+      precoUnitario: 2.00,
+      sobrevivencia: 90,
+      unidade: 'kg',
+      producaoKgPorHa: 45000,
+      producaoModelo: 'planta', // producao calculada por PLANTA (kg/planta x plantas)
+    },
+    cronograma: [
+      { dia: 0, etapa: 'Plantio (semeadura direta ou transplante)', descricao: 'Na semeadura direta, coloque 2 a 3 sementes por cova a ~2 cm de profundidade, em solo úmido. No transplante, plante o torrão inteiro da muda sem desmanchar, no fim da tarde. Nos dois casos regue farto e mantenha o solo úmido nos primeiros dias — a germinação/pegamento uniforme define a lavoura toda.', produto: 'Sementes Liverpool ou mudas em torrão', dose: '≈4.400 plantas/ha (2,5 × 0,9 m)', forma: 'Cova a 2 cm (direta) ou torrão ao nível do solo (muda). Irrigar bem.', tipo: 'plantio' },
+      { dia: 10, etapa: 'Desbaste + capina + 1º arranque', descricao: 'Na semeadura direta, faça o desbaste deixando só a plântula mais vigorosa por cova. Mantenha a área limpa de mato (a melancia sofre muito com competição no início), tomando cuidado com a raiz superficial. Aplique um arranque leve de nitrogênio em cobertura, longe do colo, e irrigue.', produto: 'Ureia (arranque leve)', dose: 'Deixar 1 planta/cova · ~30 kg/ha de ureia', forma: 'Cobertura a 15 cm da planta + irrigação', tipo: 'adubo' },
+      { dia: 18, etapa: 'Foliar de micronutrientes + boro (prevenção)', descricao: 'Comece cedo a nutrição de boro, porque a melancia é muito sensível à sua falta — carência causa coração-oco, casca grossa e sabor ruim. Faça uma pulverização foliar com micronutrientes e boro pela manhã, com a planta hidratada. Não exagere: boro em excesso também é tóxico.', produto: 'Adubo foliar com boro + micronutrientes', dose: 'Conforme rótulo (boro ~0,5% na calda)', forma: 'Pulverização foliar pela manhã', tipo: 'foliar' },
+      { dia: 25, etapa: '1ª Cobertura — Nitrogênio + Potássio', descricao: 'Fase de ramação (a planta emite as ramas que cobrirão o solo): o nitrogênio sustenta o crescimento vegetativo e o potássio começa a preparar a planta para a produção. Aplique em cobertura ao lado das plantas, sem encostar no colo, e irrigue. Prefira sulfato de potássio ao cloreto para não salinizar em solo arenoso.', produto: 'Ureia 46% + Sulfato de Potássio', dose: '60 kg/ha ureia + 80 kg/ha de sulfato de potássio', forma: 'Cobertura ao lado das ramas + irrigação', tipo: 'adubo' },
+      { dia: 32, etapa: 'Floração — instalar abelhas e proteger a polinização', descricao: 'A melancia tem flores machos e fêmeas separadas e NÃO se poliniza sozinha: depende das abelhas para carregar o pólen de uma flor para a outra. Sem polinização a flor cai ou o fruto sai torto e pequeno. Instale colmeias na área (referência de 2 a 3 colmeias/ha, sobretudo se houver pouca abelha nativa) e — MUITO IMPORTANTE — NÃO pulverize inseticida no horário em que as abelhas trabalham (da manhã até o começo da tarde). Se precisar aplicar, faça no fim da tarde.', produto: 'Colmeias de abelhas (Apis mellifera)', dose: '2 a 3 colmeias/ha', forma: 'Instalar no início da florada. Não aplicar inseticida no horário das abelhas.', tipo: 'especial' },
+      { dia: 40, etapa: 'Pegamento e seleção dos frutos', descricao: 'Após a polinização, os frutinhos começam a "pegar". Para a Liverpool render frutos grandes e uniformes (10–14 kg), selecione 1 a 2 frutos bem formados por planta, na parte firme da rama, e elimine os frutinhos excedentes, tortos ou mal posicionados. Menos frutos por planta = frutos maiores e mais doces. Coloque uma forração (palha/plástico) sob o fruto para não encostar na terra úmida.', produto: 'Raleio de frutos', dose: '1 a 2 frutos/planta', forma: 'Selecionar frutos firmes e bem formados; forrar o fruto contra a umidade do solo', tipo: 'manejo' },
+      { dia: 45, etapa: '2ª Cobertura — foco no Potássio (enchimento)', descricao: 'Começa o enchimento do fruto, a fase que mais consome potássio: é o K que dá peso, açúcar (°Brix) e a cor vermelha intensa da polpa. Aumente o potássio e reduza a proporção de nitrogênio (excesso de N agora atrasa a maturação e deixa a polpa "aguada"). Aplique em cobertura e irrigue.', produto: 'Adubo 20-00-20 + Sulfato de Potássio', dose: '150 kg/ha de 20-00-20 (reforço de K conforme carga de frutos)', forma: 'Cobertura ao lado das plantas + irrigação', tipo: 'adubo' },
+      { dia: 50, etapa: 'Manejo fitossanitário', descricao: 'Monitore semanalmente. Pragas comuns: mosca-branca e pulgões (sugam e transmitem viroses — controle é prevenção da virose), broca-das-cucurbitáceas (Diaphania, que fura ramas e frutos), lagartas, ácaros e tripes. Doenças: oídio (mofo branco nas folhas), míldio (manchas amareladas com mofo por baixo), antracnose, crestamento-gomoso e a fusariose (murcha, doença de solo sem cura — por isso a rotação). Toda aplicação de agrotóxico exige receituário agronômico; respeite dose, carência e EPI, e registre no Caderno de Campo. Lembre-se das abelhas: evite inseticida no horário da florada.', produto: 'Conforme diagnóstico e receituário (ver Caderno de Campo)', dose: 'Ver rótulo do produto', forma: 'Monitorar semanalmente; aplicar no fim da tarde para poupar as abelhas', tipo: 'manejo' },
+      { dia: 55, etapa: 'Foliar Cálcio + Boro (qualidade da casca)', descricao: 'Reforce cálcio e boro no enchimento: o cálcio dá firmeza à casca e reduz rachaduras e a podridão-estilar (mancha preta na ponta do fruto); o boro completa o combate ao coração-oco. É a dupla que garante fruto inteiro, casca resistente ao transporte (forte da Liverpool) e polpa sadia. Pulverize pela manhã.', produto: 'Cálcio + Boro (foliar)', dose: 'Conforme rótulo', forma: 'Pulverização foliar pela manhã', tipo: 'foliar' },
+      { dia: 68, etapa: 'Virar os frutos + reduzir nitrogênio', descricao: 'Vire os frutos com cuidado de vez em quando para a parte que fica no chão não amarelar/manchar e para amadurecerem por igual (faça isso com o fruto ainda não muito pesado, sem torcer a rama). Suspenda o nitrogênio: daqui em diante a planta só precisa de potássio para adoçar. Continue a irrigação regular, mas sem encharcar.', produto: '—', dose: '—', forma: 'Virar os frutos periodicamente; parar o nitrogênio; manter só o potássio', tipo: 'manejo' },
+      { dia: 75, etapa: 'Redução da irrigação (elevar o °Brix)', descricao: 'Cerca de 1 a 2 semanas antes da colheita, reduza a irrigação. Menos água concentra o açúcar (aumenta o °Brix, deixando a melancia mais doce) e evita que o fruto rache ou fique "lavado". Não corte a água de vez em solo muito seco/quente — reduza gradualmente. Este ajuste fino é o que separa uma melancia boa de uma excelente.', produto: 'Manejo de irrigação', dose: 'Reduzir gradualmente 1–2 semanas antes da colheita', forma: 'Diminuir a lâmina de água para concentrar açúcar e firmar o fruto', tipo: 'manejo' },
+      { dia: 80, etapa: 'Colheita', descricao: 'Colha no ponto certo, conferindo os sinais: a gavinha (a "mola" da rama) mais próxima do fruto seca e fica marrom; a mancha do chão (onde o fruto encosta no solo) passa de branca a amarelo-creme; e o som fica surdo/oco ao bater. Na dúvida, abra um fruto-amostra e meça o °Brix (bom ponto ~10–12). A melancia NÃO amadurece depois de colhida — o ponto é definitivo. Corte o pedúnculo com tesoura, deixando um toco, e manuseie com cuidado (fruto pesado racha ao cair). Colha nas horas frescas.', produto: '—', dose: '—', forma: 'Gavinha seca + mancha amarelada + som oco. Cortar com tesoura, deixar toco. Horas frescas.', tipo: 'colheita' },
+    ],
+  },
 };
 
 // Lista para os seletores de cultura — em ordem alfabética (pt-BR, respeita acentos).
