@@ -59,17 +59,10 @@ export default function SimuladorFinanceiro({ cultura }) {
       modObra: ins.modObra.padrao,
       precoVenda: cultura.venda.precoUnitario,
       sobrevivencia: cultura.venda.sobrevivencia,
-      // Layout em linhas (campo): nº de linhas pré-preenchido (talhão ~quadrado)
-      ...(isCampo
-        ? { numLinhas: Math.max(1, Math.round(Math.sqrt(cultura.area.padrao * 10000) / cultura.espacamento.linhas)) }
-        : {}),
-      // Espaldeira (maracujá, uva…): espaçamento entre estacas + valor unitário
-      ...(cultura.espaldeira
-        ? {
-            espEstaca: cultura.espaldeira.espacamentoMourao || 5,
-            valorEstaca: cultura.insumos.mouroes?.precoUnitario || 18,
-          }
-        : {}),
+      // Campos DERIVADOS (nº de linhas, comprimento da linha, espaçamento/valor da
+      // estaca) NÃO entram aqui: ficam vazios e mostram o valor calculado ao vivo
+      // como placeholder, atualizando conforme a área/espaçamento mudam. Digitar
+      // um valor "fixa" o campo; apagar volta ao cálculo automático.
       // Preços dos insumos — médias MT 2024/2025
       ...getPrecosPadrao(isCampo),
       // Custos operacionais — por cultura, médias MT
@@ -226,20 +219,25 @@ export default function SimuladorFinanceiro({ cultura }) {
             <div className="flex flex-wrap gap-3">
               {isCampo ? (
                 <>
-                  <NumField label="Área (ha)"       field="areaHa"            valores={valores} onChange={handleChange} suffix="ha" />
-                  <NumField label="Espaç. linhas"   field="espacamentoLinhas" valores={valores} onChange={handleChange} suffix="m"  />
-                  <NumField label="Espaç. plantas"  field="espacamentoPlantas"valores={valores} onChange={handleChange} suffix="m"  />
-                  <NumField label="Nº de linhas"    field="numLinhas"         valores={valores} onChange={handleChange} suffix="un" />
+                  <NumField label="Área (ha)"       field="areaHa"            valores={valores} onChange={handleChange} suffix="ha" placeholder={String(cultura.area.padrao)} />
+                  <NumField label="Espaç. linhas"   field="espacamentoLinhas" valores={valores} onChange={handleChange} suffix="m"  placeholder={String(cultura.espacamento.linhas)} />
+                  <NumField label="Espaç. plantas"  field="espacamentoPlantas"valores={valores} onChange={handleChange} suffix="m"  placeholder={String(cultura.espacamento.plantas)} />
+                  <NumField label="Nº de linhas"    field="numLinhas"         valores={valores} onChange={handleChange} suffix="un" placeholder={String(dim.numLinhas || 0)} />
                 </>
               ) : (
                 <>
-                  <NumField label="Comprimento"     field="comprimento"       valores={valores} onChange={handleChange} suffix="m" width="w-28" />
-                  <NumField label="Largura"         field="largura"           valores={valores} onChange={handleChange} suffix="m" width="w-24" />
-                  <NumField label="Espaç. linhas"   field="espacamentoLinhas" valores={valores} onChange={handleChange} suffix="m" width="w-28" />
-                  <NumField label="Espaç. plantas"  field="espacamentoPlantas"valores={valores} onChange={handleChange} suffix="m" width="w-28" />
+                  <NumField label="Comprimento"     field="comprimento"       valores={valores} onChange={handleChange} suffix="m" width="w-28" placeholder={String(cultura.canteiro.comprimento)} />
+                  <NumField label="Largura"         field="largura"           valores={valores} onChange={handleChange} suffix="m" width="w-24" placeholder={String(cultura.canteiro.largura)} />
+                  <NumField label="Espaç. linhas"   field="espacamentoLinhas" valores={valores} onChange={handleChange} suffix="m" width="w-28" placeholder={String(cultura.canteiro.espacamentoLinhas)} />
+                  <NumField label="Espaç. plantas"  field="espacamentoPlantas"valores={valores} onChange={handleChange} suffix="m" width="w-28" placeholder={String(cultura.canteiro.espacamentoPlantas)} />
                 </>
               )}
             </div>
+            {isCampo && (
+              <p className="text-[10px] text-muted-foreground mt-2">
+                Campos em cinza são <strong>calculados automaticamente</strong> conforme a área e o espaçamento — digite para fixar um valor, apague para voltar ao cálculo.
+              </p>
+            )}
 
             {/* Demarcar a área no mapa (opcional) — preenche a área medida por GPS */}
             {isCampo && (
@@ -289,8 +287,10 @@ export default function SimuladorFinanceiro({ cultura }) {
                 <div className="flex flex-wrap items-end gap-3">
                   <NumField label="Compr. da linha" field="comprimentoLinha" valores={valores} onChange={handleChange} suffix="m" width="w-28"
                     placeholder={String(Math.round(dim.comprimentoLinha || 0))} />
-                  <NumField label="Espaç. estacas" field="espEstaca"   valores={valores} onChange={handleChange} suffix="m"  width="w-28" />
-                  <NumField label="Valor da estaca" field="valorEstaca" valores={valores} onChange={handleChange} suffix="R$" width="w-28" />
+                  <NumField label="Espaç. estacas" field="espEstaca"   valores={valores} onChange={handleChange} suffix="m"  width="w-28"
+                    placeholder={String(cultura.espaldeira.espacamentoMourao || 5)} />
+                  <NumField label="Valor da estaca" field="valorEstaca" valores={valores} onChange={handleChange} prefix="R$" width="w-28"
+                    placeholder={String(cultura.insumos.mouroes?.precoUnitario || 18)} />
                 </div>
                 <p className="text-[13px] font-semibold mt-2" style={{ color: cor }}>
                   {fmtNum(dim.numLinhas)} linhas <span className="font-normal text-[11px]" style={{ color: `${cor}90` }}>(calculado da área ÷ comprimento)</span>
