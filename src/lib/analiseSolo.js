@@ -279,14 +279,16 @@ function montarCoberturas({ cultura, classes, phAcido, perene }) {
   // ── Maracujá ───────────────────────────────────────────────────────────────
   // Mantém os PRODUTOS e o calendário do guia (Horta Minas, cap. 11) e usa a
   // análise só para AJUSTAR as doses — em vez de trocar tudo por ureia + KCl.
-  // Superfosfato simples no lugar do MAP 12-61-00 (decisão do produtor).
+  // Na COBERTURA o fósforo vai como MAP 11-52 (solúvel, para fertirrigação): o P
+  // é pouco móvel no solo e o superfosfato mal se dissolve, então não serve para
+  // cobertura. Superfosfato só na base/incorporado (fora deste ramo).
   if (cultura.id === 'maracuja') {
     const ajusteP = classes.p === 'Muito Baixo' ? 1.4 : classes.p === 'Baixo' ? 1.2
       : classes.p === 'Bom' || classes.p === 'Muito Bom' ? 0.8 : 1.0;
     const caBaixo = classes.ca === 'Baixo' || classes.ca === 'Muito Baixo';
     const ajusteCa = caBaixo ? 1.25 : 1.0;
     const notaAcidez = phAcido
-      ? ' Atenção: sulfato de amônia e superfosfato simples acidificam o solo — com o pH já baixo, monitore e reavalie a calagem na próxima análise. O nitrato de cálcio ajuda a contrabalançar.'
+      ? ' Atenção: o sulfato de amônia acidifica o solo — com o pH já baixo, monitore e reavalie a calagem na próxima análise. O nitrato de cálcio ajuda a contrabalançar.'
       : '';
     const notaCa = caBaixo ? ' Cálcio baixo na análise: dose de nitrato de cálcio elevada em 25%.' : '';
     const notaK = classes.k === 'Baixo' || classes.k === 'Muito Baixo'
@@ -304,11 +306,11 @@ function montarCoberturas({ cultura, classes, phAcido, perene }) {
       },
       {
         ordem: 2, offset: 30,
-        etapa: '2ª Cobertura — Superfosfato simples (fósforo)',
-        produto: 'Superfosfato Simples (SSP 18% P₂O₅ + Ca + S)',
-        dose: `${fmtG(55 * ajusteP)} / planta — repetir a cada 30 dias`,
-        forma: 'Aplicar no solo em volta da planta e irrigar por cima. NÃO usar em gotejamento: é pouco solúvel e entope o emissor.',
-        descricao: `Substitui o MAP 12-61-00 do guia. Fósforo para raiz e floração, mais cálcio (parede celular) e enxofre. Dose ajustada para fósforo ${classes.p?.toLowerCase() || '—'} na análise.`,
+        etapa: '2ª Cobertura — MAP 11-52 (fósforo, fertirrigação)',
+        produto: 'MAP 11-52 (fosfato monoamônico)',
+        dose: `${fmtG(20 * ajusteP)} / planta`,
+        forma: 'Dissolver na água e aplicar por fertirrigação/rega. O MAP é solúvel — ideal para cobertura. Não se usa superfosfato aqui: o fósforo é pouco móvel no solo e o superfosfato mal se dissolve.',
+        descricao: `Fósforo solúvel + nitrogênio em cobertura, para raiz e floração. Como o P é pouco móvel no solo, entrega-se dissolvido (MAP), levando o nutriente até a zona radicular pela água. Dose ajustada para fósforo ${classes.p?.toLowerCase() || '—'} na análise.`,
       },
       {
         ordem: 3, offset: 50,
