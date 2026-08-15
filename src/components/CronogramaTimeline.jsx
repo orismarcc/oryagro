@@ -288,7 +288,11 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
     : 0;
 
   const scaleBaseDia = (originalDia) => {
-    if (!diasPrimeiraProducaoAtual || maxBaseDia === 0 || !selectedLote) {
+    // Culturas com cronograma completo do guia (ex.: maracujá) NÃO são
+    // reescalonadas: os dias e intervalos do guia são preservados exatamente
+    // (foliar a cada 15 dias, MAP a cada 20, etc.), só deslocados pelo viveiro.
+    // Reescalonar comprimia os intervalos e desrespeitava o guia.
+    if (!diasPrimeiraProducaoAtual || maxBaseDia === 0 || !selectedLote || cultura.cronogramaGuiaCompleto) {
       return originalDia + diasViveiroAtual;
     }
     return Math.round(
