@@ -18,6 +18,44 @@ import { TIPO_META, TIPOS, todayISO, formatDate, stepDate, formatStepDate, migra
 import { Toggle, LotePicker } from './cronograma/ui';
 import * as safeStorage from '../lib/safeStorage';
 
+// ── Dose helpers ───────────────────────────────────────────────────────────
+/**
+ * Converte uma dose "por planta/cova" no TOTAL do lote (× nº de plantas),
+ * convertendo g→kg e mL→L quando passa de 1000. Ex.: "70 g/planta" com 440
+ * plantas → "30,8 kg". Devolve null quando a dose não é por planta.
+ */
+function totalNoLote(dose, plantas) {
+  if (!dose || !plantas || !/planta|cova/i.test(dose)) return null;
+  const partes = [];
+  const re = /(\d+(?:[.,]\d+)?)\s*(kg|g|mL|ml|L)\b/g;
+  let m;
+  while ((m = re.exec(dose)) !== null) {
+    const val = parseFloat(m[1].replace(',', '.'));
+    if (!Number.isFinite(val)) continue;
+    let total = val * plantas;
+    let un = m[2];
+    const ul = un.toLowerCase();
+    if (ul === 'g' && total >= 1000) { total /= 1000; un = 'kg'; }
+    else if (ul === 'ml' && total >= 1000) { total /= 1000; un = 'L'; }
+    const arred = total >= 100 ? Math.round(total) : Math.round(total * 10) / 10;
+    partes.push(`${arred.toLocaleString('pt-BR')} ${un}`);
+  }
+  return partes.length ? partes.join(' + ') : null;
+}
+
+/**
+ * Como exibir a dose: concentração de calda (ex.: "50 mL/20 L") e dose "por
+ * planta/cova" ficam como estão (não faz sentido escalar pela área); as demais
+ * (por ha / absolutas) escalam pela área do lote, como antes.
+ */
+function doseParaExibir(dose, fator, noScale) {
+  if (!dose || dose === '—') return dose;
+  const concentracao = /\/\s*\d+\s*L|\bL de água/i.test(dose);
+  const porPlanta = /planta|cova/i.test(dose);
+  if (noScale || concentracao || porPlanta) return dose;
+  return scaleDose(dose, fator);
+}
+
 // ── Main component ────────────────────────────────────────────────────────
 
 export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId = null, cidade = null, estado = null }) {
@@ -310,7 +348,9 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
   // ── Plano de adubação a partir da análise de solo do lote (se houver) ───────
   // Quando o lote tem análise, as etapas de adubo/calagem do cronograma padrão
   // são SUBSTITUÍDAS pelas calculadas a partir da análise (método V%).
-  const planoSolo = (selectedLote?.analise_solo)
+  // Exceção: culturas com cronogramaGuiaCompleto (ex.: maracujá) mantêm o próprio
+  // cronograma detalhado do guia — a análise não resume a adubação.
+  const planoSolo = (selectedLote?.analise_solo && !cultura.cronogramaGuiaCompleto)
     ? montarPlanoAdubacao({ analise: selectedLote.analise_solo, cultura, lote: selectedLote })
     : null;
 
@@ -801,7 +841,8 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
           const isToday    = diasDecorridosRaw !== null && !isLoteFuturo && diasDecorridosRaw === ev.dia && !isDone;
           const isTomorrow = diasDecorridosRaw !== null && !isLoteFuturo && ev.dia - diasDecorridosRaw === 1 && !isDone;
           const stepDateStr = selectedLote ? formatStepDate(selectedLote.data_plantio, ev.dia) : null;
-          const scaledDose  = ev._noScaleDose ? ev.dose : scaleDose(ev.dose, fator);
+          const scaledDose  = doseParaExibir(ev.dose, fator, ev._noScaleDose);
+          const totalLote   = selectedLote ? totalNoLote(ev.dose, selectedLote.total_plantas) : null;
 
           // 🌧️ Sugestão climática: cruza a data da etapa com a previsão de chuva.
           // Só para etapas futuras/próximas não concluídas (forecast cobre 5 dias).
@@ -996,6 +1037,14 @@ export default function CronogramaTimeline({ cultura, lotes = [], propriedadeId 
                           <>
                             <span className="opacity-40">·</span>
                             <span className="font-semibold text-foreground">{scaledDose}</span>
+                          </>
+                        )}
+                        {totalLote && (
+                          <>
+                            <span className="opacity-40">·</span>
+                            <span className="font-semibold" style={{ color: meta.color }}>
+                              ≈ {totalLote} no lote
+                            </span>
                           </>
                         )}
                       </p>

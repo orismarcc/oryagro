@@ -804,6 +804,11 @@ export const CULTURAS = {
     tipo: 'campo',
     nome: 'Maracujá',
     nomesCientifico: 'Passiflora edulis (maracujá-azedo / amarelo)',
+    // O cronograma do maracujá já é o programa completo do guia (viveiro +
+    // adubação de fundação + coberturas detalhadas por data). Com este flag, o
+    // lote mantém esse cronograma detalhado mesmo com análise de solo cadastrada
+    // (a análise não resume a adubação em poucas coberturas). Ver CronogramaTimeline.
+    cronogramaGuiaCompleto: true,
     cor: '#ca8a04',
     corClara: '#fef9c3',
     emoji: '🟡',
