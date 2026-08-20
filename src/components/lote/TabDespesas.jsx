@@ -284,17 +284,17 @@ function TabDespesas({ lote, cor, canDelete }) {
         )}
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Data</label>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Data</label>
             <input
               type="date"
               value={form.data}
               onChange={e => setForm(f => ({ ...f, data: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
+              className="w-full rounded-xl border px-3 py-2.5 text-[13px] font-semibold focus:outline-none focus:ring-2"
+              style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)', '--tw-ring-color': cor }}
             />
           </div>
           <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Valor (R$)</label>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Valor (R$)</label>
             <input
               type="number"
               min="0"
@@ -302,19 +302,19 @@ function TabDespesas({ lote, cor, canDelete }) {
               placeholder="0,00"
               value={form.valor}
               onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
+              className="w-full rounded-xl border px-3 py-2.5 text-[13px] font-semibold focus:outline-none focus:ring-2"
+              style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)', '--tw-ring-color': cor }}
             />
           </div>
         </div>
 
         <div className="mb-3">
-          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Categoria</label>
+          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Categoria</label>
           <select
             value={form.categoria}
             onChange={e => setForm(f => ({ ...f, categoria: e.target.value, subcategoria: '' }))}
-            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-            style={{ '--tw-ring-color': cor }}
+            className="w-full rounded-xl border px-3 py-2.5 text-[13px] font-semibold focus:outline-none focus:ring-2"
+            style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)', '--tw-ring-color': cor }}
           >
             {CATEGORIAS_DESPESA.map(c => (
               <option key={c.label} value={c.label}>{c.label}</option>
@@ -324,12 +324,12 @@ function TabDespesas({ lote, cor, canDelete }) {
 
         {subcats.length > 0 && (
           <div className="mb-3">
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Subcategoria (opcional)</label>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Subcategoria (opcional)</label>
             <select
               value={form.subcategoria}
               onChange={e => setForm(f => ({ ...f, subcategoria: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
+              className="w-full rounded-xl border px-3 py-2.5 text-[13px] font-semibold focus:outline-none focus:ring-2"
+              style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)', '--tw-ring-color': cor }}
             >
               <option value="">Selecionar…</option>
               {subcats.map(s => (
@@ -342,7 +342,7 @@ function TabDespesas({ lote, cor, canDelete }) {
         {/* Produto (nome/título) — vira o nome do item no estoque, para não ficar
             genérico. Ex.: "Superfosfato Simples 18%" em vez de "Fertilizantes". */}
         <div className="mb-3">
-          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">
+          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
             Produto (nome do que comprou)
           </label>
           <input
@@ -350,8 +350,8 @@ function TabDespesas({ lote, cor, canDelete }) {
             placeholder="Ex: Superfosfato Simples 18% — Marca X"
             value={form.produto}
             onChange={e => setForm(f => ({ ...f, produto: e.target.value }))}
-            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-            style={{ '--tw-ring-color': cor }}
+            className="w-full rounded-xl border px-3 py-2.5 text-[13px] font-semibold focus:outline-none focus:ring-2"
+            style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)', '--tw-ring-color': cor }}
           />
           <p className="text-[10.5px] text-muted-foreground mt-1">
             É o nome que aparece no lançamento e no estoque. Deixe em branco para usar a categoria.
@@ -360,7 +360,7 @@ function TabDespesas({ lote, cor, canDelete }) {
 
         {/* Quantidade + unidade auto */}
         <div className="mb-3">
-          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">
+          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
             Quantidade (opcional)
           </label>
           <div className="flex gap-2">
@@ -371,15 +371,15 @@ function TabDespesas({ lote, cor, canDelete }) {
               placeholder="0"
               value={form.quantidade}
               onChange={e => setForm(f => ({ ...f, quantidade: e.target.value }))}
-              className="flex-1 rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
+              className="flex-1 rounded-xl border px-3 py-2.5 text-[13px] font-semibold focus:outline-none focus:ring-2"
+              style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)', '--tw-ring-color': cor }}
             />
             <input
               type="text"
               value={form.unidade}
               onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))}
-              className="w-[64px] rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-bold text-center focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor, color: cor }}
+              className="w-[64px] rounded-xl border px-3 py-2.5 text-[13px] font-bold text-center focus:outline-none focus:ring-2"
+              style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)', '--tw-ring-color': cor, color: cor }}
               placeholder="un"
             />
           </div>
@@ -387,25 +387,25 @@ function TabDespesas({ lote, cor, canDelete }) {
 
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Descrição (opcional)</label>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Descrição (opcional)</label>
             <input
               type="text"
               placeholder="Ex: Capina geral"
               value={form.descricao}
               onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
+              className="w-full rounded-xl border px-3 py-2.5 text-[13px] focus:outline-none focus:ring-2"
+              style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)', '--tw-ring-color': cor }}
             />
           </div>
           <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Prestador (opcional)</label>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Prestador (opcional)</label>
             <input
               type="text"
               placeholder="Ex: João Silva"
               value={form.prestador}
               onChange={e => setForm(f => ({ ...f, prestador: e.target.value }))}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': cor }}
+              className="w-full rounded-xl border px-3 py-2.5 text-[13px] focus:outline-none focus:ring-2"
+              style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)', '--tw-ring-color': cor }}
             />
           </div>
         </div>
@@ -451,20 +451,20 @@ function TabDespesas({ lote, cor, canDelete }) {
                     </p>
 
                     <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Nome do insumo</label>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Nome do insumo</label>
                       <input
                         type="text"
                         placeholder="Ex: Fertilizante NPK"
                         value={estoqueForm.nomeInsumo}
                         onChange={e => setEstoqueForm(f => ({ ...f, nomeInsumo: e.target.value }))}
-                        className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
-                        style={{ '--tw-ring-color': cor }}
+                        className="w-full rounded-xl border px-3 py-2.5 text-[13px] focus:outline-none focus:ring-2"
+                        style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)', '--tw-ring-color': cor }}
                       />
                       <p className="text-[10px] text-muted-foreground mt-0.5">Se já existir no estoque com esse nome, a entrada será adicionada ao mesmo item.</p>
                     </div>
 
                     <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Qtd. mínima</label>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Qtd. mínima</label>
                       <div className="flex items-center gap-1">
                         <input
                           type="number"
@@ -473,8 +473,8 @@ function TabDespesas({ lote, cor, canDelete }) {
                           placeholder="0"
                           value={estoqueForm.qtdMinima}
                           onChange={e => setEstoqueForm(f => ({ ...f, qtdMinima: e.target.value }))}
-                          className="flex-1 rounded-xl border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2"
-                          style={{ '--tw-ring-color': cor }}
+                          className="flex-1 rounded-xl border px-3 py-2.5 text-[13px] focus:outline-none focus:ring-2"
+                          style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)', '--tw-ring-color': cor }}
                         />
                         <span className="text-[11px] font-bold text-muted-foreground flex-shrink-0">{form.unidade || 'un'}</span>
                       </div>
