@@ -214,7 +214,7 @@ export async function loadTodasDespesas(propriedadeId = null) {
 /**
  * Add a new despesa record.
  */
-export async function addDespesa({ plantioId, propriedadeId, categoria, subcategoria, descricao, prestador, quantidade, unidade, valor, data, observacao }) {
+export async function addDespesa({ plantioId, propriedadeId, categoria, subcategoria, produto, descricao, prestador, quantidade, unidade, valor, data, observacao }) {
   const userId = await getUserId();
   if (!userId) return null;
 
@@ -226,6 +226,7 @@ export async function addDespesa({ plantioId, propriedadeId, categoria, subcateg
       propriedade_id: propriedadeId || null,
       categoria,
       subcategoria:   subcategoria  || null,
+      produto:        produto       || null,
       descricao:      descricao     || null,
       prestador:      prestador     || null,
       quantidade:     quantidade != null && quantidade !== '' ? parseFloat(quantidade) : null,
@@ -250,6 +251,7 @@ export async function updateDespesa(id, updates) {
     .update({
       categoria:    updates.categoria    ?? undefined,
       subcategoria: updates.subcategoria ?? null,
+      produto:      updates.produto      ?? null,
       descricao:    updates.descricao    ?? null,
       prestador:    updates.prestador    ?? null,
       quantidade:   updates.quantidade != null ? parseFloat(updates.quantidade) : null,

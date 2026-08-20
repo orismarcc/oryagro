@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useToast } from '../../context/ToastContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Plus, Trash2, Receipt, PackagePlus } from 'lucide-react';
+import { Loader2, Plus, Trash2, Receipt, PackagePlus, Pencil, X, Check } from 'lucide-react';
 import {
   CATEGORIAS_DESPESA,
   addDespesa,
+  updateDespesa,
   loadDespesasByLote,
   deleteDespesa,
   getUnidade,
@@ -21,11 +22,13 @@ function TabDespesas({ lote, cor, canDelete }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [editId, setEditId] = useState(null); // despesa em edição (null = modo adicionar)
 
   const [form, setForm] = useState({
     data: today(),
     categoria: CATEGORIAS_DESPESA[0].label,
     subcategoria: '',
+    produto: '',
     quantidade: '',
     unidade: getUnidade(CATEGORIAS_DESPESA[0].label, ''),
     descricao: '',
@@ -58,14 +61,15 @@ function TabDespesas({ lote, cor, canDelete }) {
     }
   }, [form.categoria]);
 
-  // Pre-fill nome insumo from subcategoria or categoria
+  // Pre-fill nome insumo com o PRODUTO (título) informado; se vazio, cai para
+  // subcategoria/categoria. Assim o item de estoque deixa de ser genérico.
   useEffect(() => {
     if (!estoqueForm.enabled) return;
     setEstoqueForm(e => ({
       ...e,
-      nomeInsumo: form.subcategoria || form.categoria,
+      nomeInsumo: form.produto || form.subcategoria || form.categoria,
     }));
-  }, [form.subcategoria, form.categoria, estoqueForm.enabled]);
+  }, [form.produto, form.subcategoria, form.categoria, estoqueForm.enabled]);
 
   const fetchRegistros = useCallback(async () => {
     setLoading(true);
@@ -91,6 +95,7 @@ function TabDespesas({ lote, cor, canDelete }) {
         propriedadeId: lote.propriedade_id || null,
         categoria:     form.categoria,
         subcategoria:  form.subcategoria || null,
+        produto:       form.produto      || null,
         quantidade:    form.quantidade   || null,
         unidade:       form.quantidade ? form.unidade : null,
         descricao:     form.descricao    || null,
@@ -143,6 +148,72 @@ function TabDespesas({ lote, cor, canDelete }) {
         observacao: '',
       });
       setEstoqueForm({ enabled: false, nomeInsumo: '', qtdMinima: '0' });
+    } catch {
+      toast.error('Erro ao salvar despesa. Verifique sua conexão.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Preenche o formulário com a despesa e entra em modo de edição.
+  const startEdit = (r) => {
+    setConfirmDeleteId(null);
+    setEditId(r.id);
+    setEstoqueForm({ enabled: false, nomeInsumo: '', qtdMinima: '0' });
+    setForm({
+      data:         r.data || today(),
+      categoria:    r.categoria || CATEGORIAS_DESPESA[0].label,
+      subcategoria: r.subcategoria || '',
+      produto:      r.produto || '',
+      quantidade:   r.quantidade != null ? String(r.quantidade) : '',
+      unidade:      r.unidade || getUnidade(r.categoria, r.subcategoria),
+      descricao:    r.descricao || '',
+      prestador:    r.prestador || '',
+      valor:        r.valor != null ? String(r.valor) : '',
+      observacao:   r.observacao || '',
+    });
+    // leva o formulário para a vista (fica no topo da aba)
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const resetForm = () => setForm({
+    data: today(),
+    categoria: CATEGORIAS_DESPESA[0].label,
+    subcategoria: '',
+    produto: '',
+    quantidade: '',
+    unidade: getUnidade(CATEGORIAS_DESPESA[0].label, ''),
+    descricao: '',
+    prestador: '',
+    valor: '',
+    observacao: '',
+  });
+
+  const cancelEdit = () => { setEditId(null); resetForm(); };
+
+  // Salva as alterações de uma despesa existente.
+  const handleSave = async () => {
+    if (!editId || !form.data || !form.valor || parseFloat(form.valor) <= 0) return;
+    setSaving(true);
+    try {
+      const updated = await updateDespesa(editId, {
+        categoria:    form.categoria,
+        subcategoria: form.subcategoria || null,
+        produto:      form.produto || null,
+        quantidade:   form.quantidade || null,
+        unidade:      form.quantidade ? form.unidade : null,
+        descricao:    form.descricao || null,
+        prestador:    form.prestador || null,
+        valor:        parseFloat(form.valor),
+        data:         form.data,
+        observacao:   form.observacao || null,
+      });
+      if (!updated) { toast.error('Erro ao salvar. Tente novamente.'); return; }
+      // atualização otimista + refetch (o realtime também sincroniza)
+      setRegistros(prev => prev.map(r => (r.id === editId ? { ...r, ...updated } : r)));
+      cancelEdit();
+      await fetchRegistros();
+      toast.success('Despesa atualizada!');
     } catch {
       toast.error('Erro ao salvar despesa. Verifique sua conexão.');
     } finally {
@@ -203,8 +274,14 @@ function TabDespesas({ lote, cor, canDelete }) {
       )}
 
       {/* Form */}
-      <p className="section-label mb-3">Registrar Despesa</p>
-      <div className="card p-4 mb-5">
+      <p className="section-label mb-3">{editId ? 'Editar Despesa' : 'Registrar Despesa'}</p>
+      <div className="card p-4 mb-5" style={editId ? { boxShadow: `0 0 0 2px ${cor}55` } : undefined}>
+        {editId && (
+          <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg text-[12px] font-semibold"
+            style={{ background: `${cor}12`, color: cor }}>
+            <Pencil size={13} /> Editando uma despesa já registrada — altere e clique em “Salvar alterações”.
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
             <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Data</label>
@@ -262,6 +339,25 @@ function TabDespesas({ lote, cor, canDelete }) {
           </div>
         )}
 
+        {/* Produto (nome/título) — vira o nome do item no estoque, para não ficar
+            genérico. Ex.: "Superfosfato Simples 18%" em vez de "Fertilizantes". */}
+        <div className="mb-3">
+          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">
+            Produto (nome do que comprou)
+          </label>
+          <input
+            type="text"
+            placeholder="Ex: Superfosfato Simples 18% — Marca X"
+            value={form.produto}
+            onChange={e => setForm(f => ({ ...f, produto: e.target.value }))}
+            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] font-semibold focus:outline-none focus:ring-2"
+            style={{ '--tw-ring-color': cor }}
+          />
+          <p className="text-[10.5px] text-muted-foreground mt-1">
+            É o nome que aparece no lançamento e no estoque. Deixe em branco para usar a categoria.
+          </p>
+        </div>
+
         {/* Quantidade + unidade auto */}
         <div className="mb-3">
           <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1">
@@ -314,8 +410,9 @@ function TabDespesas({ lote, cor, canDelete }) {
           </div>
         </div>
 
-        {/* Estoque toggle — só aparece para categorias relevantes */}
-        {showEstoqueToggle && (
+        {/* Estoque toggle — só aparece para categorias relevantes, e não na edição
+            (a vinculação com o estoque é feita apenas ao registrar a despesa). */}
+        {showEstoqueToggle && !editId && (
           <div className="mb-3">
             <button
               type="button"
@@ -411,16 +508,40 @@ function TabDespesas({ lote, cor, canDelete }) {
           </div>
         )}
 
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={handleAdd}
-          disabled={saving || !form.data || !form.valor || parseFloat(form.valor) <= 0}
-          className="w-full py-3 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
-          style={{ background: cor }}
-        >
-          {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-          Registrar Despesa
-        </motion.button>
+        {editId ? (
+          <div className="flex gap-2">
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={handleSave}
+              disabled={saving || !form.data || !form.valor || parseFloat(form.valor) <= 0}
+              className="flex-1 py-3 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
+              style={{ background: cor }}
+            >
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+              Salvar alterações
+            </motion.button>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={cancelEdit}
+              disabled={saving}
+              className="px-4 py-3 rounded-xl text-[13px] font-bold flex items-center justify-center gap-1.5 disabled:opacity-40"
+              style={{ background: 'hsl(140 14% 94%)', color: 'hsl(150 8% 40%)' }}
+            >
+              <X size={15} /> Cancelar
+            </motion.button>
+          </div>
+        ) : (
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={handleAdd}
+            disabled={saving || !form.data || !form.valor || parseFloat(form.valor) <= 0}
+            className="w-full py-3 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
+            style={{ background: cor }}
+          >
+            {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+            Registrar Despesa
+          </motion.button>
+        )}
       </div>
 
       {/* List */}
@@ -463,8 +584,11 @@ function TabDespesas({ lote, cor, canDelete }) {
                     <span className="text-[10px] text-muted-foreground">{r.subcategoria}</span>
                   )}
                 </div>
+                {r.produto && (
+                  <p className="text-[13px] font-bold text-foreground mb-0.5">{r.produto}</p>
+                )}
                 {r.descricao && (
-                  <p className="text-[12px] text-foreground mb-0.5">{r.descricao}</p>
+                  <p className="text-[12px] text-muted-foreground mb-0.5">{r.descricao}</p>
                 )}
                 {r.prestador && (
                   <p className="text-[11px] text-muted-foreground mb-0.5">👤 {r.prestador}</p>
@@ -495,13 +619,25 @@ function TabDespesas({ lote, cor, canDelete }) {
                     </button>
                   </div>
                 ) : (
-                  <motion.button
-                    whileTap={{ scale: 0.85 }}
-                    onClick={() => setConfirmDeleteId(r.id)}
-                    className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0"
-                  >
-                    <Trash2 size={14} />
-                  </motion.button>
+                  <div className="flex items-center flex-shrink-0">
+                    <motion.button
+                      whileTap={{ scale: 0.85 }}
+                      onClick={() => startEdit(r)}
+                      aria-label="Editar despesa"
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-muted-foreground hover:text-blue-500 transition-colors"
+                      style={editId === r.id ? { color: cor } : undefined}
+                    >
+                      <Pencil size={14} />
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.85 }}
+                      onClick={() => setConfirmDeleteId(r.id)}
+                      aria-label="Excluir despesa"
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </motion.button>
+                  </div>
                 )
               )}
             </motion.div>
