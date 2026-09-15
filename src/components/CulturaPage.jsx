@@ -9,7 +9,9 @@ import { loadLotes } from '../hooks/useSupabaseSync';
 const TABS = [
   { value: 'lotes',      label: 'Lotes',      Icon: Layers },
   { value: 'manejo',     label: 'Manejo',      Icon: FlaskConical },
-  { value: 'cronograma', label: 'Cronograma',  Icon: CalendarDays },
+  // Guia = cronograma de REFERÊNCIA da cultura (o que o guia técnico recomenda).
+  // O cronograma do lote é registro do produtor (LotePage → aba Cronograma).
+  { value: 'cronograma', label: 'Guia',        Icon: CalendarDays },
 ];
 
 const GLASS_STATS = (c) => [

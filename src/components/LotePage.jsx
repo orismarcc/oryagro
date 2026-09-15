@@ -7,7 +7,7 @@ import {
   BookOpen, Loader2,
   Receipt, DollarSign, SprayCan,
 } from 'lucide-react';
-import CronogramaTimeline from './CronogramaTimeline';
+import TabCronograma from './lote/TabCronograma';
 import CurvaProducaoChart from './CurvaProducaoChart';
 import { useCurvasProducao } from '../hooks/useCurvasProducao';
 import { useWeather } from '../hooks/useWeather';
@@ -832,12 +832,13 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
                 producaoPlena={producaoPlena}
                 totalPlantas={lote.total_plantas}
               />
-              <CronogramaTimeline
+              {/* Cronograma do LOTE = lançamentos do produtor (agendado/realizado).
+                  O plano-guia da cultura fica na página da cultura, aba "Guia". */}
+              <TabCronograma
+                lote={lote}
                 cultura={cultura}
-                lotes={[lote]}
-                propriedadeId={lote.propriedade_id ?? null}
-                cidade={propriedade?.cidade}
-                estado={propriedade?.estado}
+                cor={cor}
+                canDelete={canDelete}
               />
             </div>
           )}
