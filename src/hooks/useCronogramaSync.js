@@ -103,6 +103,7 @@ export function useCronogramaStatusBatch(loteIds) {
 
   const [statusByLote, setStatusByLote] = useState({});
   const [customByLote, setCustomByLote] = useState({});
+  const [atividadesPorLote, setAtividadesPorLote] = useState({});
   const [loading, setLoading]           = useState(false);
 
   useEffect(() => {
@@ -158,10 +159,13 @@ export function useCronogramaStatusBatch(loteIds) {
 
         setStatusByLote(prev => ({ ...prev, ...newStatus }));
         setCustomByLote(prev => ({ ...prev, ...newCustom }));
+        // Linhas cruas por lote: são os LANÇAMENTOS do produtor (agendado/realizado).
+        // Dashboard, Calendário e Propriedade usam isto em vez do cronograma-guia.
+        setAtividadesPorLote(prev => ({ ...prev, ...grouped }));
       });
   }, [stableKey]); // re-runs only when the set of IDs changes
 
-  return { statusByLote, customByLote, loading };
+  return { statusByLote, customByLote, atividadesPorLote, loading };
 }
 
 // ── Realtime subscription ─────────────────────────────────────────────────────

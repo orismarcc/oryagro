@@ -3,52 +3,26 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CULTURAS } from '../data/culturas';
 import { loadTodosLotes, loadPropriedades } from '../hooks/useSupabaseSync';
 import { loadEstoque } from '../hooks/useGestao';
-import { useCronogramaStatusBatch, makeStableId } from '../hooks/useCronogramaSync';
-import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
+import { useCronogramaStatusBatch } from '../hooks/useCronogramaSync';
+import { resumoAgendados, STATUS, getCategoria } from '../hooks/useAtividades';
+import { resolveLifecycle, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
 import { Plus, CalendarDays, Sprout, CheckCircle2, Layers, AlertCircle, Clock, ArrowRight, Leaf, Building2, ChevronRight, AlertTriangle } from 'lucide-react';
 import Logo from './Logo';
 
 
 
-/** doneStatus is passed in — never read from localStorage directly */
-function getStatusEtapas(cultura, lote, doneStatus = {}) {
-  if (!cultura?.cronograma) return { atrasadas: 0, hoje: null, amanha: null, proxima: null };
-  try {
-    const diasDecorridosRaw = Math.floor(
-      (Date.now() - new Date(lote.data_plantio + 'T12:00:00')) / 86_400_000
-    );
-    const isLoteFuturo = diasDecorridosRaw < 0;
-    const metodoObj = lote.metodo_propagacao && cultura.metodosPropagacao
-      ? cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao) ?? null
-      : null;
-    const shift = metodoObj?.diasViveiro ?? 0;
+const hojeISO = () => new Date().toISOString().slice(0, 10);
 
-    const steps = [
-      // I-01: use slug-based stable IDs (matches CronogramaTimeline post-migration)
-      ...(metodoObj?.etapasViveiro?.map(e => ({
-        ...e,
-        _id: makeStableId('viveiro', e.etapa),
-        done: doneStatus[makeStableId('viveiro', e.etapa)]?.status === 'feito',
-      })) ?? []),
-      ...cultura.cronograma.map(e => ({
-        ...e,
-        dia: e.dia + shift,
-        _id: makeStableId('default', e.etapa),
-        done: doneStatus[makeStableId('default', e.etapa)]?.status === 'feito',
-      })),
-    ].filter(s => doneStatus[s._id]?.status !== 'removida');
-    const pending = steps.filter(s => !s.done);
-    const atrasadas = isLoteFuturo ? 0 : pending.filter(s => s.dia < diasDecorridosRaw).length;
-    const hoje      = isLoteFuturo ? null : (pending.find(s => s.dia === diasDecorridosRaw) || null);
-    const amanha    = isLoteFuturo ? null : (pending.find(s => s.dia === diasDecorridosRaw + 1) || null);
-    const proxima   = pending.find(s => s.dia > Math.max(0, diasDecorridosRaw) + 1) || null;
-    return { atrasadas, hoje, amanha, proxima };
-  } catch { return { atrasadas: 0, hoje: null, amanha: null, proxima: null }; }
+/** 'YYYY-MM-DD' → 'DD/MM' sem passar por UTC (evita perder um dia). */
+function fmtDiaMes(iso) {
+  if (!iso) return '—';
+  const [, m, d] = String(iso).split('-');
+  return d && m ? `${d}/${m}` : String(iso);
 }
 
 // ── Lot card ─────────────────────────────────────────────────────────────────
 
-function LoteCard({ lote, onSelect, index, doneStatus = {} }) {
+function LoteCard({ lote, onSelect, index, atividades = [] }) {
   const cultura = CULTURAS[lote.cultura_id];
   if (!cultura) return null;
 
@@ -142,9 +116,9 @@ function LoteCard({ lote, onSelect, index, doneStatus = {} }) {
         />
       </div>
 
-      {/* ── Próxima etapa / alertas ── */}
-      {!prontoParaColheita && (() => {
-        const { atrasadas, hoje, amanha, proxima } = getStatusEtapas(cultura, lote, doneStatus);
+      {/* ── Agendamentos do produtor (nada é previsto pelo sistema) ── */}
+      {(() => {
+        const { atrasadas, hoje, amanha, proxima } = resumoAgendados(atividades);
         if (!atrasadas && !hoje && !amanha && !proxima) return null;
         return (
           <div className="mt-2.5 pt-2.5 flex flex-wrap gap-1.5"
@@ -170,7 +144,7 @@ function LoteCard({ lote, onSelect, index, doneStatus = {} }) {
             {!hoje && !amanha && proxima && (
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
                 style={{ background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 45%)' }}>
-                <ArrowRight size={9} /> {proxima.etapa} · D{proxima.dia}
+                <ArrowRight size={9} /> {proxima.etapa} · {fmtDiaMes(proxima.data_prevista)}
               </span>
             )}
           </div>
@@ -331,12 +305,13 @@ function dismissAlerta(id) {
 }
 
 /**
- * Compute alertas from lotes + statusByLote without any extra queries.
+ * Alertas a partir dos lotes + dos LANÇAMENTOS do produtor (sem consultas extra).
+ * Nada é "previsto" pelo sistema: só atrasa o que o produtor agendou.
  * Returns array of { id, level, text, emoji, lote }
  */
-function computeAlertas(lotes, statusByLote) {
+function computeAlertas(lotes, atividadesPorLote = {}) {
   const alertas = [];
-  const now = Date.now();
+  const hoje = hojeISO();
 
   lotes.forEach(lote => {
     if (lote.status !== 'ativo') return;
@@ -347,75 +322,32 @@ function computeAlertas(lotes, statusByLote) {
     try { lc = resolveLifecycle(lote, cultura); } catch { return; }
 
     const { diasDecorridos, prontoParaColheita } = lc;
-    const doneStatus = statusByLote[lote.id] || {};
 
-    // ── 1. Lotes com etapas atrasadas ──────────────────────────────────────
-    if (!prontoParaColheita && diasDecorridos >= 0) {
-      const metodoObj = lote.metodo_propagacao && cultura.metodosPropagacao
-        ? cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao) ?? null
-        : null;
-      const shift = metodoObj?.diasViveiro ?? 0;
-
-      // Para etapas viveiro: o useCronogramaStatusBatch salva com prefixo 'default_'
-      // (BUG-5 — não recebe vivSteps). Checamos ambos os prefixos para não gerar
-      // falsos alertas em etapas já concluídas.
-      const getStepStatus = (id, etapa) => {
-        return doneStatus[id] || doneStatus[makeStableId('default', etapa)] || null;
-      };
-
-      const steps = [
-        ...(metodoObj?.etapasViveiro?.map(e => ({
-          ...e,
-          _id: makeStableId('viveiro', e.etapa),
-        })) ?? []),
-        ...cultura.cronograma.map(e => ({
-          ...e,
-          dia: e.dia + shift,
-          _id: makeStableId('default', e.etapa),
-        })),
-      ].filter(s => {
-        const st = getStepStatus(s._id, s.etapa);
-        return st?.status !== 'removida';
-      });
-
-      const atrasadas = steps.filter(s => {
-        // Só alertar se:
-        // 1. A etapa é do PASSADO (dia < diasDecorridos)
-        // 2. O status NÃO é 'feito' nem 'removida' (inclui undefined — não carregado = pendente)
-        // NÃO usar !st sozinho pois isso inclui etapas futuras sem status
-        if (s.dia >= diasDecorridos) return false; // etapa futura → não é alerta
-        const st = getStepStatus(s._id, s.etapa)?.status;
-        return st !== 'feito' && st !== 'removida';
-      });
-
-      atrasadas.forEach(step => {
-        const diasAtraso = diasDecorridos - step.dia;
-        if (diasAtraso <= 0) return; // sanity check: não gerar alertas com 0 ou menos dias
-        const id = `etapa_atrasada_${lote.id}_${step._id}`;
+    // ── 1. Agendamentos do produtor vencidos ───────────────────────────────
+    (atividadesPorLote[lote.id] || [])
+      .filter(a => a.status === STATUS.AGENDADO && a.data_prevista && a.data_prevista < hoje)
+      .forEach(a => {
+        const diasAtraso = Math.round(
+          (new Date(`${hoje}T12:00:00`) - new Date(`${a.data_prevista}T12:00:00`)) / 86_400_000
+        );
+        if (diasAtraso <= 0) return;
+        const id = `agendado_atrasado_${a.id}`;
         if (isDismissed(id)) return;
         alertas.push({
           id,
           level: diasAtraso > 3 ? 'vermelho' : 'amarelo',
-          text: `${cultura.emoji} ${lote.nome} — etapa "${step.etapa}" atrasada ${diasAtraso} dia${diasAtraso !== 1 ? 's' : ''}`,
+          text: `${cultura.emoji} ${lote.nome} — "${a.etapa}" agendada há ${diasAtraso} dia${diasAtraso !== 1 ? 's' : ''}`,
           emoji: cultura.emoji,
           lote,
           diasAtraso,
         });
       });
-    }
 
     // ── 2. Colheita pronta sem venda ────────────────────────────────────────
     if (prontoParaColheita) {
-      // Estimate how many days the lote has been ready by checking diasDecorridos vs expected harvest day
-      // Use the last cronograma step's dia as reference for readiness
-      const colheitaStep = cultura.cronograma.find(e =>
-        e.tipo === 'colheita' || e.etapa?.toLowerCase().includes('colheita')
-      );
-      const metodoObj = lote.metodo_propagacao && cultura.metodosPropagacao
-        ? cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao) ?? null
-        : null;
-      const shift = metodoObj?.diasViveiro ?? 0;
-      const diasColheita = colheitaStep ? (colheitaStep.dia + shift) : (lc.diasPrimeiraProducao ?? diasDecorridos);
+      // Há quantos dias está pronto = dias decorridos − ciclo até a 1ª produção.
+      // Vem do CICLO da cultura (lifecycle), não de um cronograma previsto.
+      const diasColheita = lc.diasPrimeiraProducao ?? diasDecorridos;
       const diasPronto = Math.max(0, diasDecorridos - diasColheita);
 
       const id = `colheita_pronta_${lote.id}`;
@@ -443,13 +375,13 @@ function computeAlertas(lotes, statusByLote) {
   return alertas;
 }
 
-function AlertasUrgencias({ lotes, statusByLote, onSelectLote }) {
+function AlertasUrgencias({ lotes, atividadesPorLote, onSelectLote }) {
   const [dismissed, setDismissed] = useState(0); // counter to force re-render on dismiss
 
   const alertas = useMemo(
-    () => computeAlertas(lotes, statusByLote),
+    () => computeAlertas(lotes, atividadesPorLote),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lotes, statusByLote, dismissed]
+    [lotes, atividadesPorLote, dismissed]
   );
 
   if (alertas.length === 0) return null;
@@ -547,44 +479,30 @@ function AlertasUrgencias({ lotes, statusByLote, onSelectLote }) {
 
 // ── EstaSemanaSection ─────────────────────────────────────────────────────────
 
-function EstaSemanaSection({ lotes, statusByLote = {} }) {
+function EstaSemanaSection({ lotes, atividadesPorLote = {} }) {
   const [collapsed, setCollapsed] = useState(false);
 
-  const hoje = new Date();
-  const em7dias = new Date(hoje.getTime() + 7 * 86_400_000);
+  const hoje = hojeISO();
+  const limite = new Date(`${hoje}T12:00:00`);
+  limite.setDate(limite.getDate() + 7);
+  const limiteISO = limite.toISOString().slice(0, 10);
 
-  // Collect all upcoming steps in the next 7 days across all lotes
+  // Só o que o produtor AGENDOU (incl. atrasados) nos próximos 7 dias.
   const itens = [];
   lotes.forEach(lote => {
     const cultura = CULTURAS[lote.cultura_id];
-    if (!cultura?.cronograma) return;
-    try {
-      const dataPlantio = new Date(lote.data_plantio + 'T12:00:00');
-      // Use Supabase-loaded status (already includes localStorage fallback from hook)
-      const doneStatus = statusByLote[lote.id] || {};
-      const metodoObj = lote.metodo_propagacao && cultura.metodosPropagacao
-        ? cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao) ?? null
-        : null;
-      const shift = metodoObj?.diasViveiro ?? 0;
-
-      const steps = [
-        ...(metodoObj?.etapasViveiro?.map(e => ({ ...e, _id: makeStableId('viveiro', e.etapa) })) ?? []),
-        ...cultura.cronograma.map(e => ({ ...e, dia: e.dia + shift, _id: makeStableId('default', e.etapa) })),
-      ];
-
-      steps.forEach(step => {
-        const st = doneStatus[step._id]?.status;
-        if (st === 'feito' || st === 'removida') return;
-        const dataEtapa = new Date(dataPlantio.getTime() + step.dia * 86_400_000);
-        if (dataEtapa >= hoje && dataEtapa <= em7dias) {
-          itens.push({ lote, cultura, etapa: step.etapa, data: dataEtapa, dia: step.dia });
-        }
+    if (!cultura) return;
+    (atividadesPorLote[lote.id] || []).forEach(a => {
+      if (a.status !== STATUS.AGENDADO || !a.data_prevista) return;
+      if (a.data_prevista > limiteISO) return;
+      itens.push({
+        lote, cultura, etapa: a.etapa, data: a.data_prevista,
+        emoji: getCategoria(a.categoria).emoji, produto: a.produto,
       });
-    } catch { /* ignore */ }
+    });
   });
 
-  // Sort by date (most urgent first)
-  itens.sort((a, b) => a.data - b.data);
+  itens.sort((a, b) => a.data.localeCompare(b.data));
 
   if (lotes.length === 0) return null;
 
@@ -594,7 +512,7 @@ function EstaSemanaSection({ lotes, statusByLote = {} }) {
         onClick={() => setCollapsed(c => !c)}
         className="flex items-center gap-2 mb-3 w-full text-left"
       >
-        <p className="section-label flex-1">📅 Esta Semana</p>
+        <p className="section-label flex-1">📅 Esta Semana{itens.length ? ` · ${itens.length}` : ''}</p>
         <span className="text-[10px] text-muted-foreground">{collapsed ? 'mostrar' : 'ocultar'}</span>
       </button>
 
@@ -602,36 +520,38 @@ function EstaSemanaSection({ lotes, statusByLote = {} }) {
         <div className="card overflow-hidden">
           {itens.length === 0 ? (
             <p className="px-4 py-4 text-[12px] text-muted-foreground text-center">
-              Nenhuma atividade nos próximos 7 dias
+              Nada agendado para os próximos 7 dias.<br />
+              <span className="text-[11px]">Agende no lote → aba Cronograma.</span>
             </p>
           ) : (
             <div className="divide-y" style={{ divideColor: 'hsl(140 13% 92%)' }}>
               {itens.map((item, idx) => {
-                const diasRestam = Math.ceil((item.data - hoje) / 86_400_000);
-                const isHoje = diasRestam === 0;
-                const isAmanha = diasRestam === 1;
+                const isAtrasado = item.data < hoje;
+                const isHoje = item.data === hoje;
                 const cor = item.cultura.cor;
                 return (
                   <div key={`${item.lote.id}_${item.etapa}_${idx}`}
                     className="flex items-center gap-3 px-4 py-3"
                     style={{ borderBottom: idx < itens.length - 1 ? '1px solid hsl(140 13% 92%)' : 'none' }}
                   >
-                    <span className="text-[18px] flex-shrink-0">{item.cultura.emoji}</span>
+                    <span className="text-[18px] flex-shrink-0">{item.emoji || item.cultura.emoji}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-[12px] font-bold text-foreground truncate">{item.lote.nome}</p>
-                      <p className="text-[11px] text-muted-foreground truncate">{item.etapa}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {item.etapa}{item.produto ? ` · ${item.produto}` : ''}
+                      </p>
                     </div>
                     <span
                       className="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full"
                       style={
-                        isHoje
-                          ? { background: '#fff7ed', color: '#ea580c' }
-                          : isAmanha
-                            ? { background: '#dbeafe', color: '#2563eb' }
+                        isAtrasado
+                          ? { background: '#fee2e2', color: '#dc2626' }
+                          : isHoje
+                            ? { background: '#fff7ed', color: '#ea580c' }
                             : { background: `${cor}15`, color: cor }
                       }
                     >
-                      {isHoje ? 'Hoje' : isAmanha ? 'Amanhã' : item.data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                      {isAtrasado ? `Atrasado · ${fmtDiaMes(item.data)}` : isHoje ? 'Hoje' : fmtDiaMes(item.data)}
                     </span>
                   </div>
                 );
@@ -709,9 +629,10 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
     });
   }, [refreshKey]);
 
-  // ── Cronograma status — Supabase as source of truth ──────────────────────────
+  // ── Lançamentos do cronograma — Supabase é a fonte da verdade ───────────────
+  // atividadesPorLote = o que o produtor registrou/agendou (nada é previsto).
   const loteIds = useMemo(() => lotes.map(l => l.id), [lotes]);
-  const { statusByLote } = useCronogramaStatusBatch(loteIds);
+  const { atividadesPorLote } = useCronogramaStatusBatch(loteIds);
 
   const lotesOrfaos = lotes.filter(l => !l.propriedade_id);
 
@@ -785,8 +706,8 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
           <EmptyLotes onAdd={onManagePropriedades} />
         ) : (
           <>
-            <AlertasUrgencias lotes={lotes} statusByLote={statusByLote} onSelectLote={onSelectLote} />
-            <EstaSemanaSection lotes={lotes} statusByLote={statusByLote} />
+            <AlertasUrgencias lotes={lotes} atividadesPorLote={atividadesPorLote} onSelectLote={onSelectLote} />
+            <EstaSemanaSection lotes={lotes} atividadesPorLote={atividadesPorLote} />
 
             {propriedades.length > 0 && (
               <div className="mb-5">
@@ -804,7 +725,7 @@ export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade
                 <p className="section-label mb-3 px-1 text-muted-foreground">Sem propriedade ({lotesOrfaos.length})</p>
                 <div className="space-y-3">
                   {lotesOrfaos.map((l, i) => (
-                    <LoteCard key={l.id} lote={l} onSelect={onSelectLote} index={i} doneStatus={statusByLote[l.id]} />
+                    <LoteCard key={l.id} lote={l} onSelect={onSelectLote} index={i} atividades={atividadesPorLote[l.id]} />
                   ))}
                 </div>
               </div>

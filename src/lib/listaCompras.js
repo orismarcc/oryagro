@@ -1,17 +1,14 @@
 /**
  * listaCompras.js — motor da Lista de Compras Inteligente.
  *
- * Princípio: NÃO recomenda nada genérico. A necessidade vem exclusivamente do
- * cronograma real de cada lote ativo (produto + dose + dia), projetada pela
- * área/plantas do lote, dentro de um horizonte de dias. Compara com o estoque
- * atual e lista apenas o que realmente falta para as próximas aplicações.
+ * Princípio: NÃO recomenda nada genérico e NÃO prevê nada. A necessidade vem
+ * exclusivamente do que o PRODUTOR AGENDOU no cronograma dos lotes (produto +
+ * quantidade + data prevista), dentro de um horizonte de dias. Compara com o
+ * estoque atual e lista apenas o que realmente falta.
  *
- * Regra de ouro de confiabilidade: se a dose não permite calcular a quantidade
- * total com segurança (ex.: dose por litro de calda, sem volume conhecido), o
- * item entra como "a confirmar" SEM número inventado — nunca com um palpite.
+ * Regra de ouro de confiabilidade: se o agendamento não tem quantidade/unidade,
+ * o item entra como "a confirmar" SEM número inventado — nunca com um palpite.
  */
-import { CULTURAS } from '../data/culturas';
-
 const DAY = 86_400_000;
 
 /** Remove acentos e normaliza para comparação de nomes. */
@@ -90,62 +87,67 @@ export function matchEstoque(produto, estoque) {
 }
 
 /**
- * Calcula a lista de compras.
+ * Calcula a lista de compras a partir dos AGENDAMENTOS do produtor.
  * @param {Object} p
- * @param {Array}  p.lotes    - plantios ativos: { id, nome, cultura_id, data_plantio, area_ha, total_plantas }
- * @param {Array}  p.estoque  - itens: { id, nome, unidade, quantidade }
+ * @param {Array}  p.lotes      - plantios ativos: { id, nome } (só para nomear)
+ * @param {Array}  p.atividades - linhas de cronograma_atividades (todos os lotes):
+ *                                { plantio_id, status, data_prevista, produto, quantidade, unidade }
+ * @param {Array}  p.estoque    - itens: { id, nome, unidade, quantidade }
  * @param {number} p.horizonteDias - janela futura (padrão 30)
- * @param {Date}   p.hoje     - injetável para testes
+ * @param {Date}   p.hoje       - injetável para testes
  * @returns {{ itens: Array, incertos: Array, horizonteDias:number }}
  *   itens:    { produto, unidade, necessario, emEstoque, comprar, lotes:[nomes] }
- *   incertos: { produto, motivo, lotes:[nomes] }  (dose por calda, sem dados p/ calcular)
+ *   incertos: { produto, motivo, lotes:[nomes] }  (agendamento sem quantidade)
  */
-export function computeListaCompras({ lotes = [], estoque = [], horizonteDias = 30, hoje = new Date() } = {}) {
+export function computeListaCompras({
+  lotes = [], atividades = [], estoque = [], horizonteDias = 30, hoje = new Date(),
+} = {}) {
   const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).getTime();
   const fim = inicio + horizonteDias * DAY;
+
+  const nomePorLote = {};
+  for (const l of lotes) nomePorLote[l.id] = l.nome || 'Lote';
+  // Se `lotes` foi informado, considera apenas agendamentos desses lotes
+  // (permite filtrar por propriedade no card do estoque).
+  const filtraLotes = lotes.length > 0;
 
   // acumula necessidades por produto
   const acc = {};      // key -> { produto, unidade, necessario, lotes:Set }
   const incertosMap = {}; // key -> { produto, motivo, lotes:Set }
 
-  for (const lote of lotes) {
-    const cultura = CULTURAS[lote.cultura_id];
-    if (!cultura?.cronograma || !lote.data_plantio) continue;
-    const plantio = new Date(lote.data_plantio + 'T12:00:00').getTime();
-    const area = parseFloat(lote.area_ha) || 0;
-    const plantas = parseInt(lote.total_plantas, 10) || 0;
-    const nomeLote = lote.nome || 'Lote';
+  for (const a of atividades) {
+    if (a?.status !== 'agendado' || !a.data_prevista) continue;
+    if (filtraLotes && !(a.plantio_id in nomePorLote)) continue;
 
-    for (const etapa of cultura.cronograma) {
-      const produto = etapa?.produto;
-      if (!produto || produto === '—' || etapa.tipo === 'colheita' || etapa.tipo === 'plantio') continue;
-      const dataEtapa = plantio + (etapa.dia || 0) * DAY;
-      if (dataEtapa < inicio || dataEtapa > fim) continue;
+    const produto = (a.produto || '').trim();
+    if (!produto || produto === '—') continue;
 
-      const dose = parseDose(etapa.dose);
-      const keyBase = norm(produto);
+    const t = new Date(`${a.data_prevista}T12:00:00`).getTime();
+    if (isNaN(t) || t < inicio || t > fim) continue;
 
-      let qtd = null, unidade = null;
-      if (dose?.base === 'ha' && area > 0) { qtd = dose.valor * area; unidade = dose.unidade; }
-      else if (dose?.base === 'planta' && plantas > 0) { qtd = dose.valor * plantas; unidade = dose.unidade; }
+    const nomeLote = nomePorLote[a.plantio_id] || 'Lote';
+    const keyBase = norm(produto);
+    const qtd = parseFloat(String(a.quantidade ?? '').replace(',', '.'));
+    const unidade = (a.unidade || '').trim();
 
-      if (qtd == null) {
-        // não dá para totalizar com confiança → item "a confirmar"
-        const motivo = dose?.base === 'calda'
-          ? 'dose por litro de calda — depende do volume aplicado'
-          : (dose?.base === 'ha' ? 'lote sem área (ha) cadastrada' :
-             dose?.base === 'planta' ? 'lote sem nº de plantas' : 'dose não quantificável');
-        if (!incertosMap[keyBase]) incertosMap[keyBase] = { produto, motivo, lotes: new Set() };
-        incertosMap[keyBase].lotes.add(nomeLote);
-        continue;
+    if (!Number.isFinite(qtd) || qtd <= 0 || !unidade) {
+      // sem quantidade/unidade → "a confirmar", nunca um número inventado
+      if (!incertosMap[keyBase]) {
+        incertosMap[keyBase] = {
+          produto,
+          motivo: 'agendamento sem quantidade/unidade informada',
+          lotes: new Set(),
+        };
       }
-
-      const nz = normalizeUnidade(qtd, unidade);
-      const key = `${keyBase}|${nz.unidade}`;
-      if (!acc[key]) acc[key] = { produto, unidade: nz.unidade, necessario: 0, lotes: new Set() };
-      acc[key].necessario += nz.qtd;
-      acc[key].lotes.add(nomeLote);
+      incertosMap[keyBase].lotes.add(nomeLote);
+      continue;
     }
+
+    const nz = normalizeUnidade(qtd, unidade);
+    const key = `${keyBase}|${nz.unidade}`;
+    if (!acc[key]) acc[key] = { produto, unidade: nz.unidade, necessario: 0, lotes: new Set() };
+    acc[key].necessario += nz.qtd;
+    acc[key].lotes.add(nomeLote);
   }
 
   // compara com estoque → só entra na lista quem falta

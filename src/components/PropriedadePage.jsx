@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database, Loader2, History, Sprout, MapPin, Ruler, X, TreeDeciduous, Zap } from 'lucide-react';
 import { loadLotesByPropriedade, deleteLoteCompleto, loadTalhoesPorPropriedade, criarTalhao, criarSafraDeTalhao, deleteTalhaoComSeguranca, preCarregarEtapasPadrao } from '../hooks/useSupabaseSync';
-import { useCronogramaStatusBatch, makeStableId } from '../hooks/useCronogramaSync';
+import { useCronogramaStatusBatch } from '../hooks/useCronogramaSync';
+import { resumoAgendados } from '../hooks/useAtividades';
 import { calcularPlantas } from '../hooks/useSimulador';
 import { loadEstoque } from '../hooks/useGestao';
 import { CULTURAS, CULTURAS_LIST } from '../data/culturas';
@@ -22,48 +23,14 @@ import { geojsonToPoints as geojsonToPts } from '../lib/geo';
 
 
 
-/** doneStatus is passed in — never read from localStorage directly */
-function getStatusEtapas(cultura, lote, doneStatus = {}) {
-  if (!cultura?.cronograma) return { atrasadas: 0, hoje: null, amanha: null, proxima: null };
-  try {
-    const diasDecorridos = Math.max(
-      0, Math.floor((Date.now() - new Date(lote.data_plantio + 'T12:00:00')) / 86_400_000)
-    );
-    const metodoObj = lote.metodo_propagacao && cultura.metodosPropagacao
-      ? cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao) ?? null
-      : null;
-    const shift = metodoObj?.diasViveiro ?? 0;
-
-    // Etapas de viveiro: o useCronogramaStatusBatch grava com prefixo 'default_'
-    // (não recebe vivSteps), então checamos AMBOS os prefixos — senão a etapa
-    // aparece pendente mesmo já concluída (igual ao fallback do Dashboard).
-    const getStepStatus = (id, etapa) =>
-      doneStatus[id] || doneStatus[makeStableId('default', etapa)] || null;
-
-    const steps = [
-      // I-01: use slug-based stable IDs (matches CronogramaTimeline post-migration)
-      ...(metodoObj?.etapasViveiro?.map(e => {
-        const _id = makeStableId('viveiro', e.etapa);
-        return { ...e, _id, done: getStepStatus(_id, e.etapa)?.status === 'feito' };
-      }) ?? []),
-      ...cultura.cronograma.map(e => {
-        const _id = makeStableId('default', e.etapa);
-        return { ...e, dia: e.dia + shift, _id, done: getStepStatus(_id, e.etapa)?.status === 'feito' };
-      }),
-    ];
-    // Exclude removed steps and done steps from pending calculations
-    const pending = steps.filter(s =>
-      !s.done && getStepStatus(s._id, s.etapa)?.status !== 'removida'
-    );
-    const atrasadas = pending.filter(s => s.dia < diasDecorridos).length;
-    const hoje   = pending.find(s => s.dia === diasDecorridos) || null;
-    const amanha = pending.find(s => s.dia === diasDecorridos + 1) || null;
-    const proxima = pending.find(s => s.dia > diasDecorridos + 1) || null;
-    return { atrasadas, hoje, amanha, proxima };
-  } catch { return { atrasadas: 0, hoje: null, amanha: null, proxima: null }; }
+/** 'YYYY-MM-DD' → 'DD/MM' sem passar por UTC (evita perder um dia). */
+function fmtDiaMes(iso) {
+  if (!iso) return '—';
+  const [, m, d] = String(iso).split('-');
+  return d && m ? `${d}/${m}` : String(iso);
 }
 
-function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete, doneStatus = {} }) {
+function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete, atividades = [] }) {
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
 
@@ -93,11 +60,13 @@ function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete, doneS
     ? (cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao)?.label ?? null)
     : null;
 
-  // Schedule status badge
+  // Badge de situação — baseado nos AGENDAMENTOS do produtor, não em previsão.
+  const resumo = resumoAgendados(atividades);
   const scheduleStatus = (() => {
     if (diasDecorridos <= 0) return { label: 'Futuro', bg: '#dbeafe', color: '#2563eb' };
-    const { atrasadas } = getStatusEtapas(cultura, lote, doneStatus);
-    if (atrasadas > 0) return { label: `${atrasadas} pendente${atrasadas > 1 ? 's' : ''}`, bg: '#fee2e2', color: '#dc2626' };
+    if (resumo.atrasadas > 0) {
+      return { label: `${resumo.atrasadas} atrasada${resumo.atrasadas > 1 ? 's' : ''}`, bg: '#fee2e2', color: '#dc2626' };
+    }
     return { label: 'Em dia', bg: '#dcfce7', color: '#16a34a' };
   })();
 
@@ -190,9 +159,9 @@ function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete, doneS
           style={{ width: `${progresso}%`, background: prontoParaColheita ? '#16a34a' : cor }} />
       </div>
 
-      {/* Next step / alerts */}
-      {!prontoParaColheita && (() => {
-        const { atrasadas, hoje, amanha, proxima } = getStatusEtapas(cultura, lote, doneStatus);
+      {/* Agendamentos do produtor (nada é previsto pelo sistema) */}
+      {(() => {
+        const { atrasadas, hoje, amanha, proxima } = resumo;
         if (!atrasadas && !hoje && !amanha && !proxima) return null;
         return (
           <div className="mt-2.5 pt-2.5 flex flex-wrap gap-1.5"
@@ -218,7 +187,7 @@ function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete, doneS
             {!hoje && !amanha && proxima && (
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
                 style={{ background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 45%)' }}>
-                <ArrowRight size={9} /> {proxima.etapa} · D{proxima.dia}
+                <ArrowRight size={9} /> {proxima.etapa} · {fmtDiaMes(proxima.data_prevista)}
               </span>
             )}
           </div>
@@ -947,9 +916,9 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
     }
   };
 
-  // Cronograma status from Supabase — source of truth for step alerts
+  // Lançamentos do cronograma (Supabase) — base dos badges de agendamento
   const loteIds = useMemo(() => lotes.map(l => l.id), [lotes]);
-  const { statusByLote } = useCronogramaStatusBatch(loteIds);
+  const { atividadesPorLote } = useCronogramaStatusBatch(loteIds);
 
   const canDeleteLote = can(userRole, FARM_ACTIONS.DELETE_ANY);
 
@@ -1143,7 +1112,7 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
               </span>
               <p className="text-[13px] font-bold text-foreground">Adicionar primeiro lote</p>
               <p className="text-[11px] text-muted-foreground max-w-[17rem] leading-snug">
-                Culturas anuais (alface, quiabo, coentro…) de ciclo curto. Cadastre o lote para gerar o cronograma automático.
+                Culturas anuais (alface, quiabo, coentro…) de ciclo curto. Cadastre o lote e registre as atividades no cronograma dele.
               </p>
               <span className="mt-1 text-[11px] font-bold px-3 py-1.5 rounded-xl" style={{ background: BRAND, color: '#fff' }}>
                 + Novo Lote
@@ -1159,7 +1128,7 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
                   index={i}
                   onDeleteLote={handleDeleteLote}
                   canDelete={canDeleteLote}
-                  doneStatus={statusByLote[lote.id]}
+                  atividades={atividadesPorLote[lote.id]}
                 />
               ))}
             </div>

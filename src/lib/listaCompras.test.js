@@ -49,40 +49,54 @@ describe('parseDose', () => {
   });
 });
 
-describe('computeListaCompras', () => {
-  // Cultura real: 'quiabo' tem etapas com "Ureia 46%" a 40 kg/ha nos dias 15/30/45.
-  const hoje = new Date('2026-07-23T12:00:00');
-  const loteQuiabo = {
-    id: 'l1', nome: 'Quiabo A', cultura_id: 'quiabo',
-    data_plantio: '2026-07-20', area_ha: 2, total_plantas: 0,
-  };
+describe('computeListaCompras (a partir dos AGENDAMENTOS do produtor)', () => {
+  const hoje  = new Date('2026-07-23T12:00:00');
+  const lotes = [{ id: 'l1', nome: 'Quiabo A' }, { id: 'l2', nome: 'Melancia B' }];
 
-  it('projeta necessidade a partir do cronograma dentro do horizonte', () => {
+  /** Agendamento de 80 kg de ureia daqui a 10 dias, no lote l1. */
+  const ag = (over = {}) => ({
+    id: 'a1', plantio_id: 'l1', status: 'agendado', data_prevista: '2026-08-02',
+    produto: 'Ureia 46%', quantidade: 80, unidade: 'kg', ...over,
+  });
+
+  it('soma os agendamentos dentro do horizonte', () => {
     const { itens } = computeListaCompras({
-      lotes: [loteQuiabo], estoque: [], horizonteDias: 40, hoje,
+      lotes, atividades: [ag(), ag({ id: 'a2', data_prevista: '2026-08-17' })],
+      estoque: [], horizonteDias: 40, hoje,
     });
     const ureia = itens.find(i => /ureia/i.test(i.produto));
-    expect(ureia).toBeTruthy();
-    // dias 15,30 caem em [0,40] a partir de 20/07 → 04/08 e 19/08; dia 45 = 03/09 (fora de 40d? 20/07+40=29/08) → só 2 aplicações
-    // 2 x (40 kg/ha x 2 ha) = 160 kg
     expect(ureia.unidade).toBe('kg');
-    expect(ureia.comprar).toBe(160);
+    expect(ureia.comprar).toBe(160);         // 80 + 80
+    expect(ureia.lotes).toEqual(['Quiabo A']);
+  });
+
+  it('ignora agendamentos fora do horizonte e o que já foi realizado', () => {
+    const { itens } = computeListaCompras({
+      lotes,
+      atividades: [
+        ag({ id: 'a2', data_prevista: '2026-12-01' }),                       // muito longe
+        ag({ id: 'a3', data_prevista: '2026-07-01' }),                       // passado
+        ag({ id: 'a4', status: 'feito', data_execucao: '2026-07-22' }),      // já feito
+      ],
+      estoque: [], horizonteDias: 40, hoje,
+    });
+    expect(itens).toEqual([]);
   });
 
   it('desconta o estoque disponível (mesma unidade)', () => {
     const { itens } = computeListaCompras({
-      lotes: [loteQuiabo],
+      lotes, atividades: [ag(), ag({ id: 'a2' })],
       estoque: [{ id: 'e1', nome: 'Ureia', unidade: 'kg', quantidade: 100 }],
       horizonteDias: 40, hoje,
     });
     const ureia = itens.find(i => /ureia/i.test(i.produto));
-    expect(ureia.comprar).toBe(60); // 160 - 100
+    expect(ureia.comprar).toBe(60);          // 160 - 100
     expect(ureia.temNoEstoque).toBe(true);
   });
 
   it('não lista o produto quando o estoque já cobre a necessidade', () => {
     const { itens } = computeListaCompras({
-      lotes: [loteQuiabo],
+      lotes, atividades: [ag()],
       estoque: [{ id: 'e1', nome: 'Ureia', unidade: 'kg', quantidade: 500 }],
       horizonteDias: 40, hoje,
     });
@@ -91,30 +105,48 @@ describe('computeListaCompras', () => {
 
   it('marca conflito de unidade em vez de subtrair errado', () => {
     const { itens } = computeListaCompras({
-      lotes: [loteQuiabo],
+      lotes, atividades: [ag()],
       estoque: [{ id: 'e1', nome: 'Ureia', unidade: 'L', quantidade: 999 }],
       horizonteDias: 40, hoje,
     });
     const ureia = itens.find(i => /ureia/i.test(i.produto));
-    expect(ureia).toBeTruthy();          // não abateu litros de kg
     expect(ureia.unidadeConflito).toBe(true);
-    expect(ureia.comprar).toBe(160);
+    expect(ureia.comprar).toBe(80);
   });
 
-  it('coloca doses por calda em "incertos" sem inventar quantidade', () => {
-    const { incertos } = computeListaCompras({
-      lotes: [loteQuiabo], estoque: [], horizonteDias: 60, hoje,
-    });
-    // quiabo tem foliares por L (Aminoácidos 2mL/L, Nitrato de Cálcio 5g/L)
-    expect(incertos.length).toBeGreaterThan(0);
-    expect(incertos.every(i => !('comprar' in i))).toBe(true);
-  });
-
-  it('ignora lotes sem data de plantio ou cultura desconhecida', () => {
+  it('agendamento sem quantidade vai para "incertos" sem inventar número', () => {
     const { itens, incertos } = computeListaCompras({
-      lotes: [{ id: 'x', cultura_id: 'inexistente', data_plantio: '2026-07-20' },
-              { id: 'y', cultura_id: 'quiabo', data_plantio: null }],
+      lotes, atividades: [ag({ quantidade: null, unidade: '' })],
       estoque: [], horizonteDias: 40, hoje,
+    });
+    expect(itens).toEqual([]);
+    expect(incertos).toHaveLength(1);
+    expect(incertos[0].produto).toBe('Ureia 46%');
+    expect('comprar' in incertos[0]).toBe(false);
+  });
+
+  it('converte g→kg e mL→L para a unidade de compra', () => {
+    const { itens } = computeListaCompras({
+      lotes, atividades: [ag({ produto: 'Boro', quantidade: 2500, unidade: 'g' })],
+      estoque: [], horizonteDias: 40, hoje,
+    });
+    const boro = itens.find(i => /boro/i.test(i.produto));
+    expect(boro.unidade).toBe('kg');
+    expect(boro.comprar).toBe(2.5);
+  });
+
+  it('ignora agendamentos de lotes fora da lista (filtro por propriedade)', () => {
+    const { itens } = computeListaCompras({
+      lotes: [{ id: 'l2', nome: 'Melancia B' }],
+      atividades: [ag()],                    // pertence a l1
+      estoque: [], horizonteDias: 40, hoje,
+    });
+    expect(itens).toEqual([]);
+  });
+
+  it('sem agendamentos não há nada a comprar', () => {
+    const { itens, incertos } = computeListaCompras({
+      lotes, atividades: [], estoque: [], horizonteDias: 40, hoje,
     });
     expect(itens).toEqual([]);
     expect(incertos).toEqual([]);

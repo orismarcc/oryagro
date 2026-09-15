@@ -6,7 +6,8 @@ import { loadTodosLotes, loadAllColheitaEventos } from '../hooks/useSupabaseSync
 import { cacheGet, cacheSet } from '../hooks/useOfflineCache';
 import { supabase } from '../lib/supabase';
 import { updateParcela } from '../hooks/useCompradores';
-import { useCronogramaStatusBatch, makeStableId, makeCustomId } from '../hooks/useCronogramaSync';
+import { useCronogramaStatusBatch } from '../hooks/useCronogramaSync';
+import { STATUS, getCategoria } from '../hooks/useAtividades';
 
 const DIAS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -55,16 +56,6 @@ const TIPO_LABEL = {
   aplicacao: 'Aplicação',
 };
 
-const TIPO_DESC = {
-  plantio:   'Momento de transplantio das mudas para o campo definitivo.',
-  adubo:     'Aplicação de fertilizante para suprir as necessidades nutricionais da cultura.',
-  foliar:    'Aplicação via foliar para correção nutricional ou controle fitossanitário.',
-  colheita:  'Colheita prevista do produto. Verificar ponto de maturação antes de iniciar.',
-  manejo:    'Atividade de manejo e manutenção regular do cultivo.',
-  especial:  'Atividade especial definida no cronograma da cultura.',
-  aplicacao: 'Aplicação de produto fitossanitário ou regulador.',
-};
-
 function cacheGetTimestamp(key) {
   try {
     const raw = localStorage.getItem('offline_cache_' + key);
@@ -73,150 +64,47 @@ function cacheGetTimestamp(key) {
   } catch { return null; }
 }
 
-/** Resolve o shift de viveiro a partir do metodo_propagacao do lote */
-function resolveShift(lote, cultura) {
-  // 1. Tentar pelo método salvo no banco
-  if (lote.metodo_propagacao && cultura?.metodosPropagacao) {
-    const m = cultura.metodosPropagacao.find(x => x.key === lote.metodo_propagacao);
-    if (m) return m.diasViveiro || 0;
-  }
-  // 2. Fallback: localStorage (retrocompatível)
-  const usaMudas = localStorage.getItem(`lote_mudas_${lote.id}`) === '1';
-  return usaMudas ? 15 : 0;
-}
-
 /**
- * Resolve the status (done/date) for a specific step key.
- * Uses the Supabase-loaded statusMap passed in — no localStorage read here.
- */
-function resolveStepStatus(statusMap, stepKey) {
-  return statusMap?.[stepKey] || null;
-}
-
-/**
- * Gera atividades de um lote para todos os dias do cronograma.
+ * Converte os LANÇAMENTOS do produtor (cronograma_atividades) em atividades do
+ * calendário. O sistema não prevê mais nada: o que aparece aqui é o que foi
+ * registrado como realizado ou agendado no lote (LotePage → Cronograma).
+ *
  * @param {object} lote
  * @param {object} cultura
- * @param {object} statusMap    — { [stepId]: { status, data } } from Supabase
- * @param {Array}  customRowsForLote — custom rows from Supabase (may be empty)
+ * @param {Array}  rows — linhas cruas de cronograma_atividades desse lote
  */
-function getAtividadesLote(lote, cultura, statusMap = {}, customRowsForLote = []) {
+function getAtividadesLote(lote, cultura, rows = []) {
   if (!cultura) return [];
-  const plantioDate = new Date(lote.data_plantio + 'T12:00:00');
-  const shift = resolveShift(lote, cultura);
 
-  // Resolve the propagation method object for this lote
-  const metodoObj = lote.metodo_propagacao && cultura.metodosPropagacao
-    ? cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao) ?? null
-    : null;
-
-  const activities = [];
-
-  // 1. Viveiro steps (from propagation method)
-  if (metodoObj?.etapasViveiro) {
-    metodoObj.etapasViveiro.forEach((etapa, i) => {
-      const dataAtividade = addDays(plantioDate, etapa.dia);
-      const stepKey = makeStableId('viveiro', etapa.etapa);
-      const stepStatus = resolveStepStatus(statusMap, stepKey);
-      if (stepStatus?.status === 'removida') return;
-      const dataStr = (stepStatus?.status === 'feito' && stepStatus?.data)
-        ? stepStatus.data
-        : isoDate(dataAtividade);
-      activities.push({
-        id: `${lote.id}_viveiro_${i}`,
+  return (rows || [])
+    .filter(r => r.status !== 'removida')
+    .map(r => {
+      const agendado = r.status === STATUS.AGENDADO;
+      const data = agendado ? r.data_prevista : (r.data_execucao || r.data_prevista);
+      if (!data) return null;
+      const cat = getCategoria(r.categoria);
+      const dose = [r.quantidade, r.unidade].filter(Boolean).join(' ').trim();
+      return {
+        id: r.id,
         loteId: lote.id,
         loteNome: lote.nome,
         culturaId: cultura.id,
         culturaNome: cultura.nome,
-        culturaEmoji: cultura.emoji,
+        culturaEmoji: cat.emoji || cultura.emoji,
         culturaCor: cultura.cor,
-        data: dataStr,
-        dataPlanejada: isoDate(dataAtividade),
-        dia: etapa.dia,
-        etapa: etapa.etapa,
-        produto: etapa.produto,
-        dose: etapa.dose,
-        tipo: etapa.tipo || 'manejo',
-        isCustom: false,
-        isViveiro: true,
-        done: stepStatus?.status === 'feito',
-      });
-    });
-  }
-
-  // 2. Static steps from cultura.cronograma
-  if (cultura.cronograma) {
-    cultura.cronograma.forEach((etapa, i) => {
-      const dataAtividade = addDays(plantioDate, etapa.dia + shift);
-      const stepKey = makeStableId('default', etapa.etapa);
-      const stepStatus = resolveStepStatus(statusMap, stepKey);
-      if (stepStatus?.status === 'removida') return;
-      const dataStr = (stepStatus?.status === 'feito' && stepStatus?.data)
-        ? stepStatus.data
-        : isoDate(dataAtividade);
-      activities.push({
-        id: `${lote.id}_static_${i}`,
-        loteId: lote.id,
-        loteNome: lote.nome,
-        culturaId: cultura.id,
-        culturaNome: cultura.nome,
-        culturaEmoji: cultura.emoji,
-        culturaCor: cultura.cor,
-        data: dataStr,
-        dataPlanejada: isoDate(dataAtividade),
-        dia: etapa.dia,
-        etapa: etapa.etapa,
-        produto: etapa.produto,
-        dose: etapa.dose,
-        tipo: etapa.tipo || 'manejo',
-        isCustom: false,
-        isViveiro: false,
-        done: stepStatus?.status === 'feito',
-      });
-    });
-  }
-
-  // 3. Custom rows — from Supabase (passed in), NOT from localStorage
-  const customRows = customRowsForLote || [];
-  customRows.forEach((row, i) => {
-    // Use hash-based ID (matches CronogramaTimeline and buildStatusFromDbRows)
-    const stepKeyCustom = row._stableId || makeCustomId(row.etapa, row.dia);
-    const stepStatus = resolveStepStatus(statusMap, stepKeyCustom);
-    if (stepStatus?.status === 'removida') return;
-
-    let dataStr;
-    if (row.dataPrevista) {
-      dataStr = row.dataPrevista;
-    } else if (row.dia !== '' && row.dia !== null && row.dia !== undefined) {
-      const diaNum = parseInt(row.dia, 10);
-      if (!isNaN(diaNum)) {
-        dataStr = isoDate(addDays(plantioDate, diaNum + shift));
-      }
-    }
-    if (!dataStr) return;
-    const doneData = (stepStatus?.status === 'feito' && stepStatus?.data) ? stepStatus.data : null;
-    activities.push({
-      id: `${lote.id}_${stepKeyCustom}`,
-      loteId: lote.id,
-      loteNome: lote.nome,
-      culturaId: cultura.id,
-      culturaNome: cultura.nome,
-      culturaEmoji: cultura.emoji,
-      culturaCor: cultura.cor,
-      data: doneData || dataStr,
-      dataPlanejada: dataStr,
-      dia: row.dia,
-      etapa: row.etapa || 'Atividade personalizada',
-      produto: row.produto || '',
-      dose: row.dose || '',
-      tipo: row.tipo || 'manejo',
-      isCustom: true,
-      isViveiro: false,
-      done: stepStatus?.status === 'feito',
-    });
-  });
-
-  return activities;
+        data,
+        dataPlanejada: r.data_prevista || null,
+        etapa: r.etapa || cat.label,
+        produto: r.produto || '',
+        dose,
+        observacao: r.observacao || '',
+        categoria: r.categoria,
+        tipo: r.tipo || cat.tipo || 'manejo',
+        agendado,
+        done: !agendado,
+      };
+    })
+    .filter(Boolean);
 }
 
 /** AtividadeCard — clickable to open popup */
@@ -251,19 +139,13 @@ function AtividadeCard({ ativ, isHoje, onClick }) {
           {ativ.done && (
             <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full"
               style={{ background: '#dcfce7', color: '#16a34a' }}>
-              ✓ concluída
+              ✓ realizado
             </span>
           )}
-          {ativ.isViveiro && !ativ.done && (
+          {ativ.agendado && (
             <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full"
               style={{ background: '#eff6ff', color: '#2563eb' }}>
-              viveiro
-            </span>
-          )}
-          {ativ.isCustom && (
-            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full"
-              style={{ background: 'hsl(263 80% 95%)', color: '#7c3aed' }}>
-              + adicionada
+              agendado
             </span>
           )}
         </div>
@@ -273,10 +155,10 @@ function AtividadeCard({ ativ, isHoje, onClick }) {
         </p>
         {dataDiferente && (
           <p className="text-[10px] text-blue-500 mt-0.5">
-            Planejado: {ativ.dataPlanejada.split('-').reverse().join('/')} → Realizado: {ativ.data.split('-').reverse().join('/')}
+            Agendado: {ativ.dataPlanejada.split('-').reverse().join('/')} → Realizado: {ativ.data.split('-').reverse().join('/')}
           </p>
         )}
-        {ativ.dose && ativ.dose !== '—' && !ativ.done && (
+        {ativ.dose && ativ.dose !== '—' && (
           <p className="text-[10px] text-muted-foreground">{ativ.dose}</p>
         )}
       </div>
@@ -287,7 +169,6 @@ function AtividadeCard({ ativ, isHoje, onClick }) {
 /** Step detail bottom-sheet popup */
 function AtividadePopup({ ativ, onClose }) {
   const cor = TIPO_COLOR[ativ.tipo] || '#6b7280';
-  const desc = TIPO_DESC[ativ.tipo] || 'Atividade prevista no cronograma de cultivo.';
 
   return (
     <>
@@ -334,44 +215,39 @@ function AtividadePopup({ ativ, onClose }) {
         <div className="space-y-2.5 mb-4">
           <InfoRow label="Lote" value={ativ.loteNome} />
           <InfoRow label="Cultura" value={ativ.culturaNome} />
-          <InfoRow label="Data prevista" value={formatDatePtBR(ativ.dataPlanejada)} />
+          {ativ.dataPlanejada && (
+            <InfoRow label="Data agendada" value={formatDatePtBR(ativ.dataPlanejada)} />
+          )}
           {ativ.done && ativ.data && (
             <InfoRow label="Data realizada" value={formatDatePtBR(ativ.data)} />
-          )}
-          {ativ.dia !== undefined && ativ.dia !== null && ativ.dia !== '' && (
-            <InfoRow label="Dia do ciclo" value={`Dia ${ativ.dia}`} />
           )}
           {ativ.produto && ativ.produto !== '—' && (
             <InfoRow label="Produto" value={ativ.produto} />
           )}
           {ativ.dose && ativ.dose !== '—' && (
-            <InfoRow label="Dose" value={ativ.dose} />
+            <InfoRow label="Quantidade" value={ativ.dose} />
           )}
         </div>
 
-        {/* Description block */}
-        <div className="rounded-xl p-3.5 mb-4"
-          style={{ background: `${cor}0d`, border: `1px solid ${cor}25` }}>
-          <p className="text-[12px] text-foreground leading-relaxed">{desc}</p>
-          {ativ.isViveiro && (
-            <p className="text-[11px] mt-2 text-blue-600">📍 Esta etapa faz parte da fase de viveiro.</p>
-          )}
-          {ativ.isCustom && (
-            <p className="text-[11px] mt-2" style={{ color: '#7c3aed' }}>✏️ Atividade personalizada adicionada manualmente.</p>
-          )}
-        </div>
+        {/* Observação do produtor (se houver) */}
+        {ativ.observacao && (
+          <div className="rounded-xl p-3.5 mb-4"
+            style={{ background: `${cor}0d`, border: `1px solid ${cor}25` }}>
+            <p className="text-[12px] text-foreground leading-relaxed">{ativ.observacao}</p>
+          </div>
+        )}
 
         {/* Status badge */}
         {ativ.done ? (
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
             style={{ background: '#dcfce7' }}>
-            <span className="text-[13px] font-bold text-green-700">✓ Atividade concluída</span>
+            <span className="text-[13px] font-bold text-green-700">✓ Registrado como realizado</span>
           </div>
         ) : (
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
             style={{ background: `${cor}10` }}>
             <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: cor }} />
-            <span className="text-[12px] font-semibold" style={{ color: cor }}>Aguardando execução</span>
+            <span className="text-[12px] font-semibold" style={{ color: cor }}>Agendado — ainda não realizado</span>
           </div>
         )}
       </motion.div>
@@ -725,9 +601,10 @@ export default function CalendarioPage() {
     loadAllColheitaEventos().then(evs => setColheitaEventos(evs)).catch(() => {});
   }, []);
 
-  // ── Cronograma status from Supabase (source of truth) ───────────────────────
+  // ── Lançamentos do cronograma (Supabase é a fonte da verdade) ──────────────
+  // O calendário mostra o que o produtor registrou/agendou — nada é previsto.
   const loteIds = useMemo(() => lotes.map(l => l.id), [lotes]);
-  const { statusByLote, customByLote } = useCronogramaStatusBatch(loteIds);
+  const { atividadesPorLote } = useCronogramaStatusBatch(loteIds);
 
   // Load parcelas pendentes do mês/semana visível
   const loadParcelas = useCallback(async () => {
@@ -766,8 +643,8 @@ export default function CalendarioPage() {
   lotes.forEach(lote => {
     const cultura = CULTURAS[lote.cultura_id];
     if (!cultura) return;
-    // Pass Supabase-loaded status maps — never read from localStorage here
-    getAtividadesLote(lote, cultura, statusByLote[lote.id], customByLote[lote.id]).forEach(a => {
+    // Linhas cruas do Supabase — nunca lê do localStorage aqui
+    getAtividadesLote(lote, cultura, atividadesPorLote[lote.id]).forEach(a => {
       if (!atividadesPorDia[a.data]) atividadesPorDia[a.data] = [];
       atividadesPorDia[a.data].push(a);
     });

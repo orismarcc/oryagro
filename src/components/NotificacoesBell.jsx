@@ -4,16 +4,9 @@ import { Bell, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { CULTURAS } from '../data/culturas';
 import { loadCronogramaAtividades } from '../hooks/useSupabaseSync';
-import { makeStableId } from '../hooks/useCronogramaSync';
 
 // ─── constants ────────────────────────────────────────────────────────────────
 const GREEN = 'hsl(156 64% 31%)';
-
-function addDays(date, days) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
-}
 
 function startOfDay(date) {
   const d = new Date(date);
@@ -78,82 +71,47 @@ export default function NotificacoesBell({
   const [cobrancasVencendo, setCobrancasVencendo] = useState([]);
   const [loadingCobr, setLoadingCobr] = useState(false);
 
-  // ── calcular etapas (fonte principal: Supabase; fallback: localStorage) ──────
+  // ── Agendamentos do produtor (nada é previsto pelo sistema) ─────────────────
+  // Só notifica o que foi AGENDADO no cronograma do lote: vencidos e os
+  // próximos 7 dias. Fonte única: Supabase (cronograma_atividades).
   useEffect(() => {
     if (!lotes.length) return;
 
     const hoje = startOfDay(new Date());
     const lotesAtivos = lotes.filter(l => l.status === 'ativo');
 
-    async function calcularEtapas() {
+    let cancelado = false;
+
+    async function calcularAgendados() {
       const resultado = [];
 
       await Promise.all(lotesAtivos.map(async (lote) => {
         const cultura = CULTURAS[lote.cultura_id];
-        if (!cultura?.cronograma) return;
+        if (!cultura) return;
 
-        let concluidas = new Set();
-        let removidas  = new Set();
+        let rows = [];
+        try { rows = await loadCronogramaAtividades(lote.id); } catch (_) { return; }
 
-        // 1. Carrega do Supabase (fonte de verdade)
-        try {
-          const dbRows = await loadCronogramaAtividades(lote.id);
-          dbRows.forEach(row => {
-            const _id = makeStableId('default', row.etapa);
-            if (row.status === 'feito')    concluidas.add(_id);
-            if (row.status === 'removida') removidas.add(_id);
-          });
-        } catch (_) { /* continua com sets vazios, complementado pelo localStorage */ }
-
-        // 2. Sempre mescla localStorage — captura deleções feitas antes do fix de sync
-        //    (status 'removida' que nunca chegou ao Supabase)
-        const statusKey = `cronograma_status_lote_${lote.id}`;
-        try {
-          const statusLocal = JSON.parse(localStorage.getItem(statusKey) || '{}');
-          Object.entries(statusLocal).forEach(([id, val]) => {
-            if (val?.status === 'feito')    concluidas.add(id);
-            if (val?.status === 'removida') removidas.add(id);
-          });
-        } catch (_) {}
-
-        const dataBase = new Date(lote.data_plantio + 'T12:00:00');
-
-        // Aplica a mesma escala de dias que o CronogramaTimeline usa
-        // para que as datas de notificação batam com o cronograma exibido
-        const metodoObj = (lote.metodo_propagacao && cultura.metodosPropagacao)
-          ? (cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao) ?? null)
-          : null;
-        const diasViveiroAtual = metodoObj ? (metodoObj.diasViveiro || 0) : 0;
-        const diasPrimeiraProducaoAtual = metodoObj?.lifecycle?.diasPrimeiraProducao ?? null;
-        const maxBaseDia = cultura.cronograma.length > 0
-          ? Math.max(...cultura.cronograma.map(e => e.dia))
-          : 0;
-        const scaleBaseDia = (originalDia) => {
-          if (!diasPrimeiraProducaoAtual || maxBaseDia === 0) return originalDia + diasViveiroAtual;
-          return Math.round(
-            diasViveiroAtual + (originalDia / maxBaseDia) * (diasPrimeiraProducaoAtual - diasViveiroAtual)
-          );
-        };
-
-        for (const etapa of cultura.cronograma) {
-          const _id = makeStableId('default', etapa.etapa);
-          if (concluidas.has(_id) || removidas.has(_id)) continue;
-
-          const diaEscalado = scaleBaseDia(etapa.dia);
-          const dataEtapa = addDays(dataBase, diaEscalado);
+        rows.forEach(row => {
+          if (row.status !== 'agendado' || !row.data_prevista) return;
+          const dataEtapa = new Date(`${row.data_prevista}T12:00:00`);
           const diasRestantes = diffDays(dataEtapa, hoje);
-
-          if (diasRestantes >= 0 && diasRestantes <= 7) {
-            resultado.push({ lote, etapa: { ...etapa, dia: diaEscalado }, dataEtapa, diasRestantes });
-          }
-        }
+          if (diasRestantes > 7) return;              // muito no futuro
+          resultado.push({
+            lote,
+            etapa: { etapa: row.etapa, produto: row.produto, tipo: row.tipo },
+            dataEtapa,
+            diasRestantes,                             // negativo = atrasado
+          });
+        });
       }));
 
       resultado.sort((a, b) => a.dataEtapa - b.dataEtapa);
-      setEtapasVencendo(resultado);
+      if (!cancelado) setEtapasVencendo(resultado);
     }
 
-    calcularEtapas();
+    calcularAgendados();
+    return () => { cancelado = true; };
   }, [lotes]);
 
   // ── buscar cobranças ─────────────────────────────────────────────────────
@@ -343,12 +301,12 @@ export default function NotificacoesBell({
                 {/* ── Seção 1: Etapas do Cronograma ── */}
                 <div className="px-4 pt-3 pb-1">
                   <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'hsl(150 8% 55%)' }}>
-                    Etapas do Cronograma · próx. 7 dias
+                    Agendados · atrasados e próx. 7 dias
                   </p>
 
                   {etapasVencendo.length === 0 ? (
                     <p className="text-[13px] py-2 pb-3" style={{ color: 'hsl(150 8% 50%)' }}>
-                      Nenhuma etapa vencendo nos próximos 7 dias
+                      Nada agendado para os próximos 7 dias
                     </p>
                   ) : (
                     <div className="flex flex-col gap-1.5 pb-2">
@@ -380,7 +338,7 @@ export default function NotificacoesBell({
                                 className="text-[11px] truncate"
                                 style={{ color: 'hsl(150 8% 45%)' }}
                               >
-                                {etapa.etapa}
+                                {etapa.etapa}{etapa.produto ? ` · ${etapa.produto}` : ''}
                               </p>
                             </div>
                             <DayBadge dias={diasRestantes} />

@@ -59,6 +59,46 @@ export async function loadAtividades(plantioId) {
   return data || [];
 }
 
+/**
+ * Lançamentos de VÁRIOS lotes numa consulta — usado pelo Dashboard, Calendário
+ * e Notificações, que antes derivavam do guia da cultura.
+ */
+export async function loadAtividadesPorLotes(plantioIds = []) {
+  const ids = plantioIds.filter(Boolean);
+  if (!ids.length) return [];
+  const { data, error } = await supabase
+    .from('cronograma_atividades')
+    .select('*')
+    .in('plantio_id', ids)
+    .neq('status', 'removida');
+  if (error) { logDbError('loadAtividadesPorLotes', error); return []; }
+  return data || [];
+}
+
+/**
+ * Resumo dos AGENDADOS de um conjunto de lançamentos (de um lote ou de vários):
+ * quantos estão atrasados e quais são o de hoje, o de amanhã e o próximo.
+ * Substitui a previsão que saía do cronograma-guia.
+ */
+export function resumoAgendados(atividades = [], hojeISO) {
+  const hoje = hojeISO || new Date().toISOString().slice(0, 10);
+  const amanhaDate = new Date(`${hoje}T12:00:00`);
+  amanhaDate.setDate(amanhaDate.getDate() + 1);
+  const amanhaISO = amanhaDate.toISOString().slice(0, 10);
+
+  const agendados = atividades
+    .filter(a => a.status === STATUS.AGENDADO && a.data_prevista)
+    .sort((a, b) => a.data_prevista.localeCompare(b.data_prevista));
+
+  return {
+    atrasadas: agendados.filter(a => a.data_prevista < hoje).length,
+    hoje:      agendados.find(a => a.data_prevista === hoje)      || null,
+    amanha:    agendados.find(a => a.data_prevista === amanhaISO)  || null,
+    proxima:   agendados.find(a => a.data_prevista > amanhaISO)    || null,
+    agendados,
+  };
+}
+
 // ── Escrita ──────────────────────────────────────────────────────────────────
 
 /**

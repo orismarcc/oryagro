@@ -1,15 +1,16 @@
 /**
  * ListaComprasCard.jsx — Lista de Compras Inteligente do estoque.
  *
- * Deriva do cronograma real dos lotes ATIVOS da propriedade o que será
- * aplicado nas próximas semanas, calcula a quantidade pela área/plantas de
- * cada lote e subtrai o estoque atual. Só mostra o que realmente falta.
- * Doses não totalizáveis (por calda) aparecem como "a confirmar", sem chute.
+ * Soma o que o PRODUTOR AGENDOU no cronograma dos lotes ativos da propriedade
+ * (produto + quantidade + data prevista) e subtrai o estoque atual. Só mostra
+ * o que realmente falta. O sistema não prevê aplicações: se nada foi agendado,
+ * não há nada a comprar. Agendamento sem quantidade vira "a confirmar".
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ShoppingCart, Loader2, HelpCircle, PackageCheck } from 'lucide-react';
 import { loadTodosLotes } from '../hooks/useSupabaseSync';
+import { loadAtividadesPorLotes } from '../hooks/useAtividades';
 import { computeListaCompras } from '../lib/listaCompras';
 
 const HORIZONTES = [30, 60, 90];
@@ -20,18 +21,22 @@ function fmtQtd(v) {
 
 export default function ListaComprasCard({ propriedadeId, insumos = [] }) {
   const [lotes, setLotes] = useState(null); // null = carregando
+  const [atividades, setAtividades] = useState([]);
   const [horizonte, setHorizonte] = useState(30);
 
   useEffect(() => {
     let cancel = false;
     loadTodosLotes(300)
-      .then(all => {
+      .then(async all => {
         if (cancel) return;
         const ativos = all.filter(l =>
           (l.status ? l.status === 'ativo' : true) &&
           (propriedadeId ? String(l.propriedade_id) === String(propriedadeId) : true)
         );
         setLotes(ativos);
+        // Agendamentos desses lotes — a única fonte da necessidade de compra.
+        const rows = await loadAtividadesPorLotes(ativos.map(l => l.id));
+        if (!cancel) setAtividades(rows);
       })
       .catch(() => !cancel && setLotes([]));
     return () => { cancel = true; };
@@ -39,8 +44,8 @@ export default function ListaComprasCard({ propriedadeId, insumos = [] }) {
 
   const { itens, incertos } = useMemo(() => {
     if (!lotes) return { itens: [], incertos: [] };
-    return computeListaCompras({ lotes, estoque: insumos, horizonteDias: horizonte });
-  }, [lotes, insumos, horizonte]);
+    return computeListaCompras({ lotes, atividades, estoque: insumos, horizonteDias: horizonte });
+  }, [lotes, atividades, insumos, horizonte]);
 
   const carregando = lotes === null;
   const temLotes = (lotes?.length ?? 0) > 0;
@@ -57,7 +62,7 @@ export default function ListaComprasCard({ propriedadeId, insumos = [] }) {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-bold text-foreground leading-tight">Lista de compras inteligente</p>
-          <p className="text-[10.5px] text-muted-foreground">Do cronograma dos lotes ativos · próximos {horizonte} dias</p>
+          <p className="text-[10.5px] text-muted-foreground">Do que você agendou nos lotes · próximos {horizonte} dias</p>
         </div>
       </div>
 
@@ -80,7 +85,8 @@ export default function ListaComprasCard({ propriedadeId, insumos = [] }) {
         <div className="flex items-center gap-2 py-3 px-1">
           <PackageCheck size={16} style={{ color: 'hsl(156 64% 31%)' }} />
           <p className="text-[11.5px] text-muted-foreground">
-            Estoque suficiente para as aplicações previstas neste período. Nada a comprar.
+            Nada a comprar: o estoque cobre o que está agendado neste período
+            (ou ainda não há agendamentos).
           </p>
         </div>
       ) : (
@@ -130,7 +136,7 @@ export default function ListaComprasCard({ propriedadeId, insumos = [] }) {
           )}
 
           <p className="text-[9px] text-muted-foreground/70 mt-2.5 leading-tight">
-            Estimativa a partir do cronograma da cultura (produto × dose × área/plantas). Confira sempre o rótulo antes de comprar e aplicar.
+            Soma dos agendamentos do cronograma dos lotes, menos o estoque atual. Confira sempre o rótulo antes de comprar e aplicar.
           </p>
         </>
       )}
