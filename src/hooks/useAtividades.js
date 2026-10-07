@@ -16,6 +16,7 @@
  */
 import { supabase, getUserId } from '../lib/supabase';
 import { logDbError } from '../lib/logger';
+import { addMovimento, deleteMovimentoByCronogramaAtividade } from './useGestao';
 
 const BUCKET = 'oryagro-attachments';
 
@@ -28,11 +29,15 @@ export const CATEGORIAS_ATIVIDADE = [
   { value: 'irrigacao',       label: 'Irrigação',              emoji: '🚿', tipo: 'manejo',    usaInsumo: false },
   { value: 'plantio',         label: 'Plantio / muda',         emoji: '🌱', tipo: 'plantio',   usaInsumo: false },
   { value: 'poda',            label: 'Poda / condução',        emoji: '✂️', tipo: 'manejo',    usaInsumo: false },
-  { value: 'solo',            label: 'Solo / capina',          emoji: '🪨', tipo: 'manejo',    usaInsumo: false },
+  { value: 'solo',            label: 'Solo / capina',          emoji: '⛏️', tipo: 'manejo',    usaInsumo: false },
   { value: 'colheita',        label: 'Colheita',               emoji: '🌾', tipo: 'colheita',  usaInsumo: false },
   { value: 'monitoramento',   label: 'Monitoramento / análise', emoji: '🔍', tipo: 'manejo',   usaInsumo: false },
+  { value: 'anotacao',        label: 'Anotação / observação',  emoji: '📝', tipo: 'manejo',    usaInsumo: false },
   { value: 'outros',          label: 'Outros',                 emoji: '📌', tipo: 'manejo',    usaInsumo: false },
 ];
+
+/** Status que contam como LANÇAMENTO do produtor (o resto é legado do plano-guia). */
+const STATUS_VISIVEIS = ['feito', 'agendado'];
 
 export const getCategoria = (value) =>
   CATEGORIAS_ATIVIDADE.find(c => c.value === value) || CATEGORIAS_ATIVIDADE[CATEGORIAS_ATIVIDADE.length - 1];
@@ -52,7 +57,7 @@ export async function loadAtividades(plantioId) {
     .from('cronograma_atividades')
     .select('*')
     .eq('plantio_id', plantioId)
-    .neq('status', 'removida')
+    .in('status', STATUS_VISIVEIS)
     .order('data_execucao', { ascending: false, nullsFirst: false })
     .order('data_prevista', { ascending: false, nullsFirst: false });
   if (error) { logDbError('loadAtividades', error); return []; }
@@ -70,9 +75,15 @@ export async function loadAtividadesPorLotes(plantioIds = []) {
     .from('cronograma_atividades')
     .select('*')
     .in('plantio_id', ids)
-    .neq('status', 'removida');
+    .in('status', STATUS_VISIVEIS);
   if (error) { logDbError('loadAtividadesPorLotes', error); return []; }
   return data || [];
+}
+
+/** Data de hoje no fuso LOCAL (toISOString usaria UTC e viraria o dia às 21h). */
+export function hojeLocalISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /**
@@ -81,7 +92,7 @@ export async function loadAtividadesPorLotes(plantioIds = []) {
  * Substitui a previsão que saía do cronograma-guia.
  */
 export function resumoAgendados(atividades = [], hojeISO) {
-  const hoje = hojeISO || new Date().toISOString().slice(0, 10);
+  const hoje = hojeISO || hojeLocalISO();
   const amanhaDate = new Date(`${hoje}T12:00:00`);
   amanhaDate.setDate(amanhaDate.getDate() + 1);
   const amanhaISO = amanhaDate.toISOString().slice(0, 10);
@@ -165,8 +176,11 @@ export async function updateAtividade(id, updates) {
     if (agendado === true)  { patch.status = STATUS.AGENDADO;  patch.data_prevista = data ?? undefined; patch.data_execucao = null; }
     if (agendado === false) { patch.status = STATUS.REALIZADO; patch.data_execucao = data ?? undefined; patch.data_prevista = null; }
     if (agendado === undefined && data !== undefined) {
-      // só mudou a data: mantém o status atual
-      patch.data_execucao = data;
+      // só mudou a data: mantém o status atual (quem decide o campo é o status)
+      const { data: atual } = await supabase
+        .from('cronograma_atividades').select('status').eq('id', id).single();
+      if (atual?.status === STATUS.AGENDADO) patch.data_prevista = data;
+      else patch.data_execucao = data;
     }
   }
   patch.updated_at = new Date().toISOString();
@@ -270,4 +284,154 @@ export async function deleteFotosDaAtividade(atividadeId) {
   const paths = (data || []).map(f => f.storage_path).filter(Boolean);
   if (paths.length) await supabase.storage.from(BUCKET).remove(paths).catch(() => {});
   return paths.length;
+}
+
+/** Fotos de VÁRIOS lançamentos numa consulta só (lista do lote). */
+export async function loadFotosPorAtividades(atividadeIds = []) {
+  const ids = atividadeIds.filter(Boolean);
+  if (!ids.length) return {};
+  const { data, error } = await supabase
+    .from('atividade_fotos')
+    .select('*')
+    .in('atividade_id', ids)
+    .order('created_at', { ascending: true });
+  if (error) { logDbError('loadFotosPorAtividades', error); return {}; }
+  const fotos = data || [];
+  if (!fotos.length) return {};
+  // URLs assinadas em lote (1 requisição) — o bucket é privado
+  const { data: urls } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrls(fotos.map(f => f.storage_path), 3600);
+  const porPath = Object.fromEntries((urls || []).map(u => [u.path, u.signedUrl]));
+  const out = {};
+  fotos.forEach(f => {
+    (out[f.atividade_id] = out[f.atividade_id] || []).push({ ...f, url: porPath[f.storage_path] || null });
+  });
+  return out;
+}
+
+// ── Regras puras (testadas) ──────────────────────────────────────────────────
+
+const normUn = (u) => String(u || '').trim().toLowerCase();
+
+/**
+ * Converte a quantidade lançada para a unidade do item de estoque.
+ * Ex.: 25 g num item em kg → 0,025. Unidades incompatíveis (g × L) → null,
+ * e aí NÃO se dá baixa (melhor não mexer do que mexer errado).
+ */
+export function qtdNaUnidadeDoEstoque(qtd, unidade, unidadeEstoque) {
+  const q = parseFloat(String(qtd ?? '').replace(',', '.'));
+  if (!Number.isFinite(q) || q <= 0) return null;
+  const de = normUn(unidade) || normUn(unidadeEstoque);
+  const para = normUn(unidadeEstoque);
+  if (!para || de === para) return q;
+  const FATOR = {
+    'g>kg': 1 / 1000, 'kg>g': 1000,
+    'ml>l': 1 / 1000, 'l>ml': 1000,
+    'kg>t': 1 / 1000, 't>kg': 1000,
+  };
+  const f = FATOR[`${de}>${para}`];
+  return f ? Math.round(q * f * 1e6) / 1e6 : null;
+}
+
+/**
+ * Datas de uma repetição: da data inicial até `ate`, a cada `intervaloDias`.
+ * Sem repetição devolve só a data inicial. Limite de 60 ocorrências.
+ */
+export function gerarDatas(inicio, { intervaloDias = 0, ate = null } = {}) {
+  if (!inicio) return [];
+  const passo = parseInt(intervaloDias, 10);
+  if (!passo || passo < 1 || !ate || ate < inicio) return [inicio];
+  const out = [];
+  const d = new Date(`${inicio}T12:00:00`);
+  while (out.length < 60) {
+    const iso = d.toISOString().slice(0, 10);
+    if (iso > ate) break;
+    out.push(iso);
+    d.setDate(d.getDate() + passo);
+  }
+  return out;
+}
+
+// ── Operações completas (lançamento + estoque + fotos) ──────────────────────
+// Usadas pelo "Anotar" (global e do lote), pelo Início e pela Agenda, para
+// que a baixa no estoque siga SEMPRE a mesma regra.
+
+/** Dá baixa no estoque de um lançamento REALIZADO (se tiver insumo e qtd). */
+async function baixarEstoque(row, estoque = []) {
+  if (!row?.insumo_id || row.status !== STATUS.REALIZADO) return { ok: true, baixou: false };
+  const item = estoque.find(i => String(i.id) === String(row.insumo_id));
+  const qtd = qtdNaUnidadeDoEstoque(row.quantidade, row.unidade, item?.unidade ?? row.unidade);
+  if (qtd == null) return { ok: true, baixou: false, incompativel: !!row.quantidade };
+  const mov = await addMovimento({
+    insumoId: row.insumo_id,
+    tipo: 'saida',
+    quantidade: qtd,
+    observacao: `Cronograma: ${row.etapa}`,
+    data: row.data_execucao,
+    plantioId: row.plantio_id,
+    cronogramaAtividadeId: row.id,
+  });
+  return { ok: !!mov, baixou: !!mov };
+}
+
+/**
+ * Cria lançamentos em um ou mais lotes, em uma ou mais datas (repetição).
+ * Datas futuras num "Já fiz" viram agendadas automaticamente.
+ * Retorna { criados, falhas, semBaixa }.
+ */
+export async function salvarLancamentos({
+  lotes = [], form, datas = [], arquivos = [], estoque = [], hojeISO,
+}) {
+  const hoje = hojeISO || hojeLocalISO();
+  let criados = 0, falhas = 0, semBaixa = 0;
+  for (const lote of lotes) {
+    for (const data of datas) {
+      const agendado = form.agendado || data > hoje;
+      const row = await addAtividade({
+        ...form,
+        plantioId: lote.id,
+        culturaId: lote.cultura_id,
+        insumoId: form.insumoId || null,
+        data,
+        agendado,
+      });
+      if (!row) { falhas += 1; continue; }
+      criados += 1;
+      const b = await baixarEstoque(row, estoque);
+      if (b.incompativel) semBaixa += 1;
+      if (arquivos.length) await Promise.all(arquivos.map(f => uploadFoto(row.id, f)));
+    }
+  }
+  return { criados, falhas, semBaixa };
+}
+
+/** Edita um lançamento e refaz a baixa no estoque (estorna e baixa de novo). */
+export async function editarLancamento(id, form, { arquivos = [], estoque = [] } = {}) {
+  await deleteMovimentoByCronogramaAtividade(id);
+  const row = await updateAtividade(id, { ...form, insumoId: form.insumoId || null });
+  if (!row) return null;
+  await baixarEstoque(row, estoque);
+  if (arquivos.length) await Promise.all(arquivos.map(f => uploadFoto(row.id, f)));
+  return row;
+}
+
+/** Marca um agendado como feito (com baixa no estoque). */
+export async function concluirLancamento(atividade, data, estoque = []) {
+  const row = await concluirAtividade(atividade.id, data);
+  if (!row) return null;
+  await baixarEstoque(row, estoque);
+  return row;
+}
+
+/** Volta um realizado para agendado (estorna o estoque). */
+export async function reabrirLancamento(atividade) {
+  await deleteMovimentoByCronogramaAtividade(atividade.id);
+  return reabrirAtividade(atividade.id, dataDoLancamento(atividade));
+}
+
+/** Exclui um lançamento (estorna o estoque e apaga as fotos). */
+export async function excluirLancamento(atividade) {
+  await deleteMovimentoByCronogramaAtividade(atividade.id);
+  return deleteAtividade(atividade.id);
 }

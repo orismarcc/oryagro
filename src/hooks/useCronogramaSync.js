@@ -161,7 +161,12 @@ export function useCronogramaStatusBatch(loteIds) {
         setCustomByLote(prev => ({ ...prev, ...newCustom }));
         // Linhas cruas por lote: são os LANÇAMENTOS do produtor (agendado/realizado).
         // Dashboard, Calendário e Propriedade usam isto em vez do cronograma-guia.
-        setAtividadesPorLote(prev => ({ ...prev, ...grouped }));
+        // Só feito/agendado: 'pendente'/'removida' são resíduos do antigo plano-guia.
+        const lancamentos = {};
+        Object.entries(grouped).forEach(([loteId, rows]) => {
+          lancamentos[loteId] = rows.filter(r => r.status === 'feito' || r.status === 'agendado');
+        });
+        setAtividadesPorLote(prev => ({ ...prev, ...lancamentos }));
       });
   }, [stableKey]); // re-runs only when the set of IDs changes
 

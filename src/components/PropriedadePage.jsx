@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database, Loader2, History, Sprout, MapPin, Ruler, X, TreeDeciduous, Zap } from 'lucide-react';
-import { loadLotesByPropriedade, deleteLoteCompleto, loadTalhoesPorPropriedade, criarTalhao, criarSafraDeTalhao, deleteTalhaoComSeguranca, preCarregarEtapasPadrao } from '../hooks/useSupabaseSync';
+import { loadLotesByPropriedade, deleteLoteCompleto, loadTalhoesPorPropriedade, criarTalhao, criarSafraDeTalhao, deleteTalhaoComSeguranca } from '../hooks/useSupabaseSync';
 import { useCronogramaStatusBatch } from '../hooks/useCronogramaSync';
 import { resumoAgendados } from '../hooks/useAtividades';
 import { calcularPlantas } from '../hooks/useSimulador';
@@ -568,7 +568,7 @@ function NovoCultivoDialog({ onPickPerene, onPickAnual, onClose }) {
 // ── Dialog: Novo Talhão ─────────────────────────────────────────────────────────
 // Usa a mesma UX do formulário "Novo Lote" (anual): seletor visual de método de
 // propagação + calculadora de dimensões que calcula o nº de plantas. Ao criar,
-// já inicia a Safra 1 automaticamente com o cronograma pré-carregado.
+// já inicia a Safra 1 automaticamente (cronograma vazio, para anotar).
 function NovaTalhaoDialog({ propriedadeId, onClose, onCreated, culturaInicial = '' }) {
   const toast = useToast();
   const today = new Date().toISOString().split('T')[0];
@@ -607,8 +607,6 @@ function NovaTalhaoDialog({ propriedadeId, onClose, onCreated, culturaInicial = 
       })
     : { totalPlantas: 0 };
 
-  const metodoObj = cultura?.metodosPropagacao?.find(m => m.key === form.metodoPropagacao) ?? null;
-  const diasViveiro = metodoObj?.diasViveiro ?? 0;
 
   const podeSalvar = !!cultura && !!form.nome.trim() && !!form.dataImplantacao
     && (parseFloat(form.areaHa) > 0) && dim.totalPlantas > 0;
@@ -634,11 +632,9 @@ function NovaTalhaoDialog({ propriedadeId, onClose, onCreated, culturaInicial = 
       if (!talhao) { toast.error('Não foi possível criar o talhão. Tente novamente.'); return; }
 
       // 2. Inicia a Safra 1 automaticamente (herda os dados do talhão)
+      // (o cronograma começa vazio: tudo é anotado pelo produtor)
       const safra = await criarSafraDeTalhao(talhao.id, form.dataImplantacao, talhao);
-      if (safra) {
-        // 3. Pré-carrega o cronograma da safra para não abrir vazio
-        preCarregarEtapasPadrao(safra, cultura, diasViveiro).catch(() => {});
-      } else {
+      if (!safra) {
         toast.error('Talhão criado, mas não foi possível iniciar a Safra 1. Abra o talhão e use "Nova Safra".');
       }
 

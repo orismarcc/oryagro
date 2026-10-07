@@ -20,8 +20,8 @@ const GLASS_STATS = (c) => [
   { Icon: Droplets,     label: 'Água',  value: c.necessidadeHidrica },
 ];
 
-export default function CulturaPage({ cultura, onBack, autoOpenLoteForm = false, propriedadeId = null }) {
-  const [tab, setTab] = useState('lotes');
+export default function CulturaPage({ cultura, onBack, autoOpenLoteForm = false, propriedadeId = null, initialTab = 'lotes' }) {
+  const [tab, setTab] = useState(initialTab);
   const isCampo = cultura.tipo === 'campo';
 
   // ── Shared calculator state (used by LotesPage and ManejoAdubacao) ──

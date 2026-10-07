@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Dashboard from './components/Dashboard';
 import CulturaPicker from './components/CulturaPicker';
@@ -11,7 +11,7 @@ import TalhaoPage from './components/TalhaoPage';
 import MigrationWizard from './components/MigrationWizard';
 import SettingsPage from './components/SettingsPage';
 import NetworkStatusBanner from './components/NetworkStatus';
-import HamburgerMenu from './components/HamburgerMenu';
+import MaisPage from './components/MaisPage';
 
 // ── Páginas pesadas: carregadas sob demanda (code-splitting) ──────────────────
 // Reduz o bundle inicial — recharts/jspdf e estas telas só baixam quando abertas.
@@ -23,26 +23,19 @@ const EstoquePage       = lazy(() => import('./components/EstoquePage'));
 const CalculadoraPage   = lazy(() => import('./components/CalculadoraPage'));
 const FinanceiroPage    = lazy(() => import('./components/FinanceiroPage'));
 const CompradoresPage   = lazy(() => import('./components/CompradoresPage'));
-import NotificacoesBell from './components/NotificacoesBell';
 import InstallPWA from './components/InstallPWA';
 import { CULTURAS } from './data/culturas';
 import { useAuth } from './hooks/useAuth';
 import { loadPropriedades, loadTodosLotes } from './hooks/useSupabaseSync';
 import { FarmProvider, useFarm } from './context/FarmContext';
 import { ToastProvider, useToast } from './context/ToastContext';
-import { can, FARM_ACTIONS } from './lib/permissions';
-import { Home, CalendarDays, Building2, Wallet, Activity, Loader2 } from 'lucide-react';
+import { AnotarProvider, useAnotar } from './context/AnotarContext';
+import { Home, CalendarDays, Package2, LayoutGrid, Plus, ArrowLeft, Loader2 } from 'lucide-react';
 
-const ALL_BOTTOM_NAV = [
-  { value: 'dashboard',    label: 'Início',       Icon: Home },
-  { value: 'propriedades', label: 'Propriedades', Icon: Building2 },
-  { value: 'financeiro',   label: 'Financeiro',   Icon: Wallet },
-  { value: 'analise',      label: 'Análise',      Icon: Activity, requiresAction: FARM_ACTIONS.VIEW_ANALYSIS },
-  { value: 'calendario',   label: 'Calendário',   Icon: CalendarDays },
-];
+const BRAND = 'hsl(156 64% 31%)';
 
 export default function App() {
-  const { session, loading: authLoading, user, displayName, signOut } = useAuth();
+  const { session, loading: authLoading, displayName, signOut } = useAuth();
 
   if (authLoading) {
     return (
@@ -135,10 +128,14 @@ function AppInner({ session, displayName, signOut }) {
   // método mais confiável no WebView do Android vs. window.scrollTo.
   const mainRef = useRef(null);
 
-  // Navigation state
-  // mainView: 'dashboard' | 'cultura-picker' | 'cultura' | 'lote' | 'simulador' | 'comparacao' | 'analise' | 'propriedades' | 'propriedade' | 'estoque' | 'financeiro' | 'compradores' | 'calculadora' | 'configuracoes'
+  // ── Navegação ──────────────────────────────────────────────────────────────
+  // Barra inferior: Início · Agenda · [Anotar] · Estoque · Mais.
+  // mainView: 'dashboard' | 'calendario' | 'estoque' | 'mais' | 'lote' | 'cultura-picker' | 'cultura'
+  //         | 'propriedades' | 'propriedade' | 'talhao' | 'financeiro' | 'compradores' | 'analise'
+  //         | 'simulador' | 'comparacao' | 'calculadora' | 'configuracoes'
   const [mainView, setMainView]             = useState('dashboard');
   const [culturaId, setCulturaId]           = useState(null);
+  const [culturaTab, setCulturaTab]         = useState('lotes');
   const [autoOpenLoteForm, setAutoOpenLoteForm] = useState(false);
   const [selectedLote, setSelectedLote]     = useState(null);
   const [selectedPropriedade, setSelectedPropriedade] = useState(null);
@@ -146,242 +143,156 @@ function AppInner({ session, displayName, signOut }) {
   const [showMigrationWizard, setShowMigrationWizard] = useState(false);
   const [propriedades, setPropriedades] = useState([]);
   const [allLotes, setAllLotes] = useState([]);
-  // Ref to trigger a full reload of propriedades+lotes from child pages after CRUD
   const refreshPropriedadesRef = useRef(null);
-  // Track where lote/picker was opened from so back goes to the right place
-  const [loteOpenedFrom, setLoteOpenedFrom] = useState('dashboard');
-  const [pickerOpenedFrom, setPickerOpenedFrom] = useState('dashboard');
+  // De onde cada tela de detalhe foi aberta — o "voltar" retorna para lá.
+  const [loteOpenedFrom, setLoteOpenedFrom]       = useState('dashboard');
+  const [pickerOpenedFrom, setPickerOpenedFrom]   = useState('dashboard');
+  const [culturaOpenedFrom, setCulturaOpenedFrom] = useState('dashboard');
+  const [estoqueOpenedFrom, setEstoqueOpenedFrom] = useState(null);
 
-  // Reseta scroll ao trocar de tela.
-  // Usa mainRef.current.scrollTop (elemento DOM real) + requestAnimationFrame
-  // para garantir que o reset acontece APÓS a renderização do novo conteúdo,
-  // evitando que a animação do AnimatePresence atrapalhe a posição.
+  // Reseta scroll ao trocar de tela (scrollTop no contêiner real + rAF pós-render).
   useEffect(() => {
     const el = mainRef.current;
     if (!el) return;
     el.scrollTop = 0;
-    // rAF garante reset após o primeiro frame pintado com o novo conteúdo
     const id = requestAnimationFrame(() => { if (el) el.scrollTop = 0; });
     return () => cancelAnimationFrame(id);
   }, [mainView, selectedLote?.id, selectedPropriedade?.id]);
 
-  // Check on mount if migration is needed; also load propriedades for AnalysePage
+  // Propriedades + lotes (usados pelo Anotar, Análise e navegação)
+  const refreshDados = useCallback(() =>
+    Promise.all([loadPropriedades(), loadTodosLotes()]).then(([props, ls]) => {
+      setPropriedades(props);
+      setAllLotes(ls);
+      if (props.length === 0 && ls.length > 0) setShowMigrationWizard(true);
+    }), []);
   useEffect(() => {
     if (!session) return;
-    const refresh = () =>
-      Promise.all([loadPropriedades(), loadTodosLotes()]).then(([props, ls]) => {
-        setPropriedades(props);
-        setAllLotes(ls);
-        if (props.length === 0 && ls.length > 0) setShowMigrationWizard(true);
-      });
-    refresh();
-    // Expose refresh so child pages can trigger a reload after CRUD
-    refreshPropriedadesRef.current = refresh;
-  }, [session]);
+    refreshDados();
+    refreshPropriedadesRef.current = refreshDados;
+  }, [session, refreshDados]);
 
-  // ── Navigation handlers ──
+  // Propriedade "padrão" para o Estoque quando não há uma aberta: se só existe uma, é ela.
+  const propriedadePadrao = selectedPropriedade ?? (propriedades.length === 1 ? propriedades[0] : null);
 
-  // From Dashboard: user clicks "+ Novo Lote"
-  const handleAddLote = () => {
-    setPickerOpenedFrom('dashboard');
-    setMainView('cultura-picker');
-  };
-
-  // From Dashboard: user clicks an existing lot card → dedicated LotePage
-  // I-06: also resolve selectedPropriedade so getUserRole() returns the correct role
-  const handleSelectLote = (lote) => {
-    setSelectedLote(lote);
-    setLoteOpenedFrom('dashboard');
-    if (lote.propriedade_id) {
-      const prop = propriedades.find(p => p.id === lote.propriedade_id) ?? null;
-      setSelectedPropriedade(prop);
-    }
-    setMainView('lote');
-  };
-
-  // Back from LotePage → context-aware (talhao, propriedade or dashboard)
-  const handleBackFromLote = () => {
-    setSelectedLote(null);
-    if (loteOpenedFrom === 'talhao') {
-      setMainView('talhao');
-    } else if (loteOpenedFrom === 'propriedade') {
-      setMainView('propriedade');
-    } else {
-      setMainView('dashboard');
-    }
-  };
-
-  // From CulturaPicker: user selects a culture → go to CulturaPage with form open
-  const handlePickCultura = (id) => {
-    setCulturaId(id);
-    setAutoOpenLoteForm(true);
-    setMainView('cultura');
-  };
-
-  // Back from CulturaPage → context-aware (propriedade or dashboard)
-  const handleBack = () => {
-    setCulturaId(null);
-    setAutoOpenLoteForm(false);
-    if (pickerOpenedFrom === 'propriedade') {
-      setMainView('propriedade');
-    } else {
-      setMainView('dashboard');
-    }
-  };
-
-  // Back from CulturaPicker → context-aware (propriedade or dashboard)
-  const handleBackFromPicker = () => {
-    if (pickerOpenedFrom === 'propriedade') {
-      setMainView('propriedade');
-    } else {
-      setMainView('dashboard');
-    }
-  };
-
-  // Bottom nav
-  const handleNav = (view) => {
+  const irPara = (view) => {
     setMainView(view);
     setCulturaId(null);
     setAutoOpenLoteForm(false);
-    // Tapping Propriedades on the nav always goes to the list, not a stale detail
-    if (view === 'propriedades') setSelectedPropriedade(null);
   };
 
-  const handleSelectPropriedade = (propriedade) => {
-    setSelectedPropriedade(propriedade);
-    setMainView('propriedade');
-  };
-
-  const handleManagePropriedades = () => {
-    setMainView('propriedades');
-  };
-
-  const handleSelectPropriedadeFromList = (propriedade) => {
-    setSelectedPropriedade(propriedade);
-    setMainView('propriedade');
-  };
-
-  const handleBackFromPropriedades = () => {
-    setMainView('dashboard');
-  };
-
-  const handleBackFromPropriedade = () => {
-    setSelectedPropriedade(null);
-    setMainView('propriedades');
-  };
-
-  const handleSelectTalhao = (talhao) => {
-    setSelectedTalhao(talhao);
-    setMainView('talhao');
-  };
-
-  const handleBackFromTalhao = () => {
-    setSelectedTalhao(null);
-    setMainView('propriedade');
-  };
-
-  const handleSelectLoteFromTalhao = (lote) => {
+  // ── Lote ──
+  const abrirLote = (lote, origem = 'dashboard') => {
     setSelectedLote(lote);
+    setLoteOpenedFrom(origem);
     if (lote.propriedade_id) {
       const prop = propriedades.find(p => p.id === lote.propriedade_id) ?? null;
-      setSelectedPropriedade(prop);
+      if (prop) setSelectedPropriedade(prop);
     }
-    setLoteOpenedFrom('talhao');
     setMainView('lote');
   };
-
-  const handleGoEstoque = () => {
-    setMainView('estoque');
+  const handleBackFromLote = () => {
+    setSelectedLote(null);
+    setMainView(['talhao', 'propriedade'].includes(loteOpenedFrom) ? loteOpenedFrom : 'dashboard');
+    refreshDados();
   };
 
-  const handleBackFromEstoque = () => {
-    // Go back to the property that opened estoque, or dashboard
-    if (selectedPropriedade) setMainView('propriedade');
-    else setMainView('dashboard');
+  // ── Novo lote (escolher cultura → formulário) ──
+  const handleAddLote = (origem = 'dashboard') => {
+    setPickerOpenedFrom(origem);
+    setMainView('cultura-picker');
   };
-
-  const handleGoSettings = () => setMainView('configuracoes');
-  const handleBackFromSettings = () => setMainView('dashboard');
-
-  const handleGoCalculadora = () => setMainView('calculadora');
-  const handleBackFromCalculadora = () => setMainView('dashboard');
-
-  const handleGoFinanceiro = () => setMainView('financeiro');
-  const handleBackFromFinanceiro = () => setMainView('dashboard');
-
-  const handleGoCompradores = () => setMainView('compradores');
-  const handleBackFromCompradores = () => setMainView('dashboard');
-
-  const handleAddLoteFromPropriedade = (culturaId) => {
+  const handlePickCultura = (id) => {
+    setCulturaId(id);
+    setCulturaTab('lotes');
+    setAutoOpenLoteForm(true);
+    setCulturaOpenedFrom(pickerOpenedFrom);
+    setMainView('cultura');
+  };
+  const handleBackFromPicker = () => setMainView(pickerOpenedFrom === 'propriedade' ? 'propriedade' : 'dashboard');
+  const handleAddLoteFromPropriedade = (cid) => {
     setPickerOpenedFrom('propriedade');
-    // Cultura já escolhida no seletor "Novo cultivo" → vai direto ao formulário.
-    if (culturaId && CULTURAS[culturaId]) {
-      setCulturaId(culturaId);
+    if (cid && CULTURAS[cid]) {
+      setCulturaId(cid);
+      setCulturaTab('lotes');
       setAutoOpenLoteForm(true);
+      setCulturaOpenedFrom('propriedade');
       setMainView('cultura');
     } else {
       setMainView('cultura-picker');
     }
   };
 
-  const handleSelectLoteFromPropriedade = (lote) => {
-    setSelectedLote(lote);
-    setLoteOpenedFrom('propriedade');
-    setMainView('lote');
+  // ── Guia técnico da cultura (aberto a partir do lote) ──
+  const abrirGuia = (cid) => {
+    setCulturaId(cid);
+    setCulturaTab('cronograma');
+    setAutoOpenLoteForm(false);
+    setCulturaOpenedFrom('lote');
+    setMainView('cultura');
   };
-
-  const cultura = culturaId ? CULTURAS[culturaId] : null;
-  const isInCultura = (mainView === 'cultura' && cultura) || (mainView === 'lote' && selectedLote);
-  const activeCultura = mainView === 'lote' && selectedLote ? CULTURAS[selectedLote.cultura_id] : cultura;
-
-  // Role for the currently selected farm
-  const userRole = getUserRole(selectedPropriedade?.id);
-  // Bottom nav: hide items that require a permission the user doesn't have.
-  // VIEW_ANALYSIS also requires isGlobalAdmin (pure technicians never see it).
-  const BOTTOM_NAV = ALL_BOTTOM_NAV.filter(item => {
-    if (!item.requiresAction) return true;
-    if (item.requiresAction === FARM_ACTIONS.VIEW_ANALYSIS && !isGlobalAdmin) return false;
-    if (!selectedPropriedade) return true;
-    return can(userRole, item.requiresAction);
-  });
-
-  // Views where the hamburguer menu should not appear (internal detail screens)
-  const HIDE_HAMBURGER = ['lote', 'cultura', 'cultura-picker'];
-  const showHamburger = !HIDE_HAMBURGER.includes(mainView);
-
-  // Handler for hamburger navigation
-  // Guard admin-only pages: pure technicians cannot access analise, financeiro, compradores
-  const ADMIN_ONLY_VIEWS = ['analise', 'financeiro', 'compradores'];
-  const handleHamburgerNav = (view) => {
-    if (ADMIN_ONLY_VIEWS.includes(view) && !isGlobalAdmin) return;
-    setMainView(view);
+  const handleBackFromCultura = () => {
+    const destino = culturaOpenedFrom === 'lote' && selectedLote ? 'lote'
+      : culturaOpenedFrom === 'propriedade' ? 'propriedade' : 'dashboard';
     setCulturaId(null);
     setAutoOpenLoteForm(false);
+    setMainView(destino);
+    refreshDados();
   };
 
-  // ── Botão "voltar" físico do Android (Capacitor) ────────────────────────────
-  // Integra o back nativo com a navegação interna em vez de fechar o app de
-  // imediato. Em telas de detalhe volta um nível; no dashboard, sai do app.
-  // Mantido num ref atualizado a cada render para refletir o mainView corrente.
+  // ── Propriedades / talhões (via Mais) ──
+  const handleSelectPropriedade = (p) => { setSelectedPropriedade(p); setMainView('propriedade'); };
+  const handleBackFromPropriedade = () => { setSelectedPropriedade(null); setMainView('propriedades'); };
+  const handleSelectTalhao = (t) => { setSelectedTalhao(t); setMainView('talhao'); };
+  const handleBackFromTalhao = () => { setSelectedTalhao(null); setMainView('propriedade'); };
+
+  // ── Estoque: aba da barra, ou aberto de dentro de uma propriedade ──
+  const abrirEstoque = (origem = null) => { setEstoqueOpenedFrom(origem); setMainView('estoque'); };
+
+  const cultura = culturaId ? CULTURAS[culturaId] : null;
+
+  // Papel do usuário na propriedade em foco
+  const userRole = getUserRole(selectedPropriedade?.id);
+
+  // Telas restritas a administradores
+  const ADMIN_ONLY_VIEWS = ['analise', 'financeiro', 'compradores'];
+  const navegarMais = (view) => {
+    if (ADMIN_ONLY_VIEWS.includes(view) && !isGlobalAdmin) return;
+    if (view === 'propriedades') setSelectedPropriedade(null);
+    irPara(view);
+  };
+  const voltarMais = () => irPara('mais');
+
+  // Qual aba da barra fica acesa
+  const VIEWS_MAIS = ['mais', 'propriedades', 'propriedade', 'talhao', 'financeiro', 'compradores',
+    'analise', 'simulador', 'comparacao', 'calculadora', 'configuracoes'];
+  const abaAtiva =
+    mainView === 'calendario' ? 'calendario'
+    : mainView === 'estoque' ? 'estoque'
+    : VIEWS_MAIS.includes(mainView) ? 'mais'
+    : (mainView === 'lote' && ['propriedade', 'talhao'].includes(loteOpenedFrom)) ? 'mais'
+    : 'dashboard';
+  const corAtiva = mainView === 'lote' && selectedLote && CULTURAS[selectedLote.cultura_id]
+    ? CULTURAS[selectedLote.cultura_id].cor : BRAND;
+
+  // ── Botão "voltar" físico do Android (Capacitor) ───────────────────────────
   const androidBackRef = useRef(() => false);
   androidBackRef.current = () => {
     switch (mainView) {
-      case 'cultura-picker': handleBackFromPicker();      return true;
-      case 'cultura':        handleBack();                return true;
-      case 'lote':           handleBackFromLote();        return true;
-      case 'configuracoes':  handleBackFromSettings();    return true;
-      case 'calculadora':    handleBackFromCalculadora(); return true;
-      case 'financeiro':     handleBackFromFinanceiro();  return true;
-      case 'compradores':    handleBackFromCompradores(); return true;
-      case 'estoque':        handleBackFromEstoque();     return true;
-      case 'propriedades':   handleBackFromPropriedades();return true;
-      case 'propriedade':    handleBackFromPropriedade(); return true;
-      case 'talhao':         handleBackFromTalhao();      return true;
-      case 'simulador':
-      case 'analise':
-      case 'comparacao':
-      case 'calendario':     setMainView('dashboard');    return true;
-      default:               return false; // dashboard — sem destino interno
+      case 'cultura-picker': handleBackFromPicker();       return true;
+      case 'cultura':        handleBackFromCultura();      return true;
+      case 'lote':           handleBackFromLote();         return true;
+      case 'propriedade':    handleBackFromPropriedade();  return true;
+      case 'talhao':         handleBackFromTalhao();       return true;
+      case 'estoque':
+        if (estoqueOpenedFrom === 'propriedade') setMainView('propriedade'); else irPara('dashboard');
+        return true;
+      case 'propriedades': case 'financeiro': case 'compradores': case 'analise':
+      case 'simulador': case 'comparacao': case 'calculadora': case 'configuracoes':
+        voltarMais(); return true;
+      case 'calendario': case 'mais':
+        irPara('dashboard'); return true;
+      default: return false; // Início — sai do app
     }
   };
 
@@ -403,221 +314,242 @@ function AppInner({ session, displayName, signOut }) {
   }, []);
 
   return (
-    <div className="bg-background" style={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <NetworkStatusBanner />
-      <InstallPWA />
+    <AnotarProvider lotes={allLotes} onAbrir={refreshDados}>
+      <div className="bg-background" style={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <NetworkStatusBanner />
+        <InstallPWA />
 
-      {/* ── Hamburger menu (fixed overlay, all main views) ── */}
-      {showHamburger && (
-        <HamburgerMenu
-          currentView={mainView}
-          onNavigate={handleHamburgerNav}
-          hasPropriedade={!!selectedPropriedade}
-          isGlobalAdmin={isGlobalAdmin}
-        />
-      )}
-
-      {/* ── Notification bell (fixed, all main views) ── */}
-      {showHamburger && (
-        <NotificacoesBell
-          lotes={allLotes.filter(l => l.status === 'ativo')}
-          propriedades={propriedades}
-          onNavigateToLote={(loteId, propriedadeId) => {
-            const lote = allLotes.find(l => l.id === loteId);
-            if (lote) {
-              setSelectedLote(lote);
-              setLoteOpenedFrom('dashboard');
-              if (propriedadeId) {
-                const prop = propriedades.find(p => p.id === propriedadeId) ?? null;
-                setSelectedPropriedade(prop);
-              }
-              setMainView('lote');
-            }
-          }}
-          onNavigateToCompradores={handleGoCompradores}
-        />
-      )}
-      <main
-        ref={mainRef}
-        className="pb-36"
-        style={{
-          flex: '1 1 0%',
-          minHeight: 0,              /* necessário para overflow funcionar em flex */
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          WebkitOverflowScrolling: 'touch',
-          overscrollBehavior: 'none', /* impede scroll além do fim da lista */
-        }}
-      >
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={
-              mainView === 'cultura'        ? `cultura-${culturaId}` :
-              mainView === 'lote'           ? `lote-${selectedLote?.id}` :
-              mainView === 'cultura-picker' ? 'cultura-picker' :
-              mainView === 'propriedade'    ? `propriedade-${selectedPropriedade?.id}` :
-              mainView === 'talhao'         ? `talhao-${selectedTalhao?.id}` :
-              mainView
-            }
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-          >
-            <Suspense fallback={
-              <div className="flex items-center justify-center py-24">
-                <Loader2 size={28} className="animate-spin" style={{ color: 'hsl(156 64% 31%)' }} />
-              </div>
-            }>
-            {mainView === 'dashboard' && (
-              <Dashboard
-                onAddLote={handleAddLote}
-                onSelectLote={handleSelectLote}
-                onSelectPropriedade={handleSelectPropriedade}
-                onManagePropriedades={handleManagePropriedades}
-                onSignOut={signOut}
-                onGoSettings={handleGoSettings}
-                userName={displayName}
-              />
-            )}
-            {mainView === 'cultura-picker' && (
-              <CulturaPicker
-                onSelectCultura={handlePickCultura}
-                onBack={handleBackFromPicker}
-              />
-            )}
-            {mainView === 'cultura' && cultura && (
-              <CulturaPage
-                cultura={cultura}
-                onBack={handleBack}
-                autoOpenLoteForm={autoOpenLoteForm}
-                propriedadeId={selectedPropriedade?.id ?? null}
-              />
-            )}
-            {mainView === 'lote' && selectedLote && CULTURAS[selectedLote.cultura_id] && (
-              <LotePage
-                lote={selectedLote}
-                cultura={CULTURAS[selectedLote.cultura_id]}
-                onBack={handleBackFromLote}
-                userRole={userRole}
-                propriedade={selectedPropriedade}
-                onRepetido={handleSelectLote}
-              />
-            )}
-            {mainView === 'simulador'  && <SimuladorPage onComparar={() => setMainView('comparacao')} />}
-            {mainView === 'analise'    && <AnalysePage onSignOut={signOut} userName={displayName} propriedades={propriedades} userRole={userRole} />}
-            {mainView === 'comparacao' && <ComparacaoCulturas />}
-            {mainView === 'calendario' && <CalendarioPage />}
-            {mainView === 'configuracoes' && (
-              <SettingsPage onBack={handleBackFromSettings} />
-            )}
-            {mainView === 'calculadora' && (
-              <CalculadoraPage onBack={handleBackFromCalculadora} />
-            )}
-            {mainView === 'financeiro' && (
-              <FinanceiroPage onBack={handleBackFromFinanceiro} propriedades={propriedades} />
-            )}
-            {mainView === 'compradores' && (
-              <CompradoresPage onBack={handleBackFromCompradores} />
-            )}
-            {mainView === 'estoque' && (
-              <EstoquePage propriedadeId={selectedPropriedade?.id ?? null} onBack={handleBackFromEstoque} />
-            )}
-            {mainView === 'propriedades' && (
-              <PropriedadesPage
-                onBack={handleBackFromPropriedades}
-                onSelectPropriedade={handleSelectPropriedadeFromList}
-                onRefreshNeeded={() => refreshPropriedadesRef.current?.()}
-              />
-            )}
-            {mainView === 'propriedade' && selectedPropriedade && (
-              <PropriedadePage
-                propriedade={selectedPropriedade}
-                userRole={userRole}
-                onBack={handleBackFromPropriedade}
-                onSelectLote={handleSelectLoteFromPropriedade}
-                onGoEstoque={handleGoEstoque}
-                onAddLote={handleAddLoteFromPropriedade}
-                onSelectTalhao={handleSelectTalhao}
-              />
-            )}
-            {mainView === 'talhao' && selectedTalhao && (
-              <TalhaoPage
-                talhao={selectedTalhao}
-                onBack={handleBackFromTalhao}
-                onSelectLote={handleSelectLoteFromTalhao}
-              />
-            )}
-            </Suspense>
-          </motion.div>
-        </AnimatePresence>
-      </main>
-
-      {/* ── Bottom nav ── */}
-      <nav
-        className="fixed bottom-0 left-0 right-0 z-50"
-        style={{
-          paddingBottom: 'max(env(safe-area-inset-bottom), 8px)',
-          willChange: 'transform',
-          transform: 'translateZ(0)',
-          WebkitTransform: 'translateZ(0)',
-        }}
-      >
-        <div
-          className="mx-3 mb-1 rounded-2xl overflow-hidden border"
+        <main
+          ref={mainRef}
+          className="pb-36"
           style={{
-            background: 'rgba(255,255,255,0.92)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            borderColor: 'hsl(140 13% 88%)',
-            boxShadow: '0 10px 24px -4px rgb(0 0 0 / 0.11), 0 4px 8px -4px rgb(0 0 0 / 0.07)',
+            flex: '1 1 0%',
+            minHeight: 0,              /* necessário para overflow funcionar em flex */
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            WebkitOverflowScrolling: 'touch',
+            overscrollBehavior: 'none',
           }}
         >
-          <div className="flex items-center h-[60px] px-1">
-            {BOTTOM_NAV.map(({ value, label, Icon }) => {
-              const dashboardActive = value === 'dashboard' &&
-                (mainView === 'dashboard' || mainView === 'cultura' || mainView === 'cultura-picker' || mainView === 'lote');
-              const propriedadesActive = value === 'propriedades' &&
-                (mainView === 'propriedades' || mainView === 'propriedade' || mainView === 'estoque');
-              const isActive = mainView === value || dashboardActive || propriedadesActive;
-              const activeCor = isInCultura && value === 'dashboard' && activeCultura ? activeCultura.cor : 'hsl(156 64% 31%)';
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={
+                mainView === 'cultura'        ? `cultura-${culturaId}-${culturaTab}` :
+                mainView === 'lote'           ? `lote-${selectedLote?.id}` :
+                mainView === 'propriedade'    ? `propriedade-${selectedPropriedade?.id}` :
+                mainView === 'talhao'         ? `talhao-${selectedTalhao?.id}` :
+                mainView
+              }
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.16 }}
+            >
+              <Suspense fallback={
+                <div className="flex items-center justify-center py-24">
+                  <Loader2 size={28} className="animate-spin" style={{ color: BRAND }} />
+                </div>
+              }>
+              {mainView === 'dashboard' && (
+                <Dashboard
+                  onAddLote={() => handleAddLote('dashboard')}
+                  onSelectLote={(l) => abrirLote(l, 'dashboard')}
+                  onGoEstoque={() => abrirEstoque(null)}
+                  onGoAgenda={() => irPara('calendario')}
+                  onGoCompradores={isGlobalAdmin ? () => irPara('compradores') : null}
+                  userName={displayName}
+                />
+              )}
+              {mainView === 'calendario' && <CalendarioPage />}
+              {mainView === 'estoque' && (
+                <EstoquePage
+                  propriedadeId={propriedadePadrao?.id ?? null}
+                  onBack={estoqueOpenedFrom === 'propriedade' ? () => setMainView('propriedade') : undefined}
+                />
+              )}
+              {mainView === 'mais' && (
+                <MaisPage onNavigate={navegarMais} onSignOut={signOut} isGlobalAdmin={isGlobalAdmin} userName={displayName} />
+              )}
+              {mainView === 'cultura-picker' && (
+                <CulturaPicker onSelectCultura={handlePickCultura} onBack={handleBackFromPicker} />
+              )}
+              {mainView === 'cultura' && cultura && (
+                <CulturaPage
+                  cultura={cultura}
+                  onBack={handleBackFromCultura}
+                  autoOpenLoteForm={autoOpenLoteForm}
+                  propriedadeId={propriedadePadrao?.id ?? null}
+                  initialTab={culturaTab}
+                />
+              )}
+              {mainView === 'lote' && selectedLote && CULTURAS[selectedLote.cultura_id] && (
+                <LotePage
+                  lote={selectedLote}
+                  cultura={CULTURAS[selectedLote.cultura_id]}
+                  onBack={handleBackFromLote}
+                  userRole={userRole}
+                  propriedade={selectedPropriedade}
+                  onRepetido={(l) => abrirLote(l, loteOpenedFrom)}
+                  onAbrirGuia={abrirGuia}
+                />
+              )}
+              {mainView === 'simulador'  && <ComVoltar onBack={voltarMais}><SimuladorPage onComparar={() => irPara('comparacao')} /></ComVoltar>}
+              {mainView === 'comparacao' && <ComVoltar onBack={voltarMais}><ComparacaoCulturas /></ComVoltar>}
+              {mainView === 'analise'    && isGlobalAdmin && (
+                <ComVoltar onBack={voltarMais}>
+                  <AnalysePage onSignOut={signOut} userName={displayName} propriedades={propriedades} userRole={userRole} />
+                </ComVoltar>
+              )}
+              {mainView === 'configuracoes' && <SettingsPage onBack={voltarMais} />}
+              {mainView === 'calculadora'   && <CalculadoraPage onBack={voltarMais} />}
+              {mainView === 'financeiro'    && isGlobalAdmin && <FinanceiroPage onBack={voltarMais} propriedades={propriedades} />}
+              {mainView === 'compradores'   && isGlobalAdmin && <CompradoresPage onBack={voltarMais} />}
+              {mainView === 'propriedades' && (
+                <PropriedadesPage
+                  onBack={voltarMais}
+                  onSelectPropriedade={handleSelectPropriedade}
+                  onRefreshNeeded={() => refreshPropriedadesRef.current?.()}
+                />
+              )}
+              {mainView === 'propriedade' && selectedPropriedade && (
+                <PropriedadePage
+                  propriedade={selectedPropriedade}
+                  userRole={userRole}
+                  onBack={handleBackFromPropriedade}
+                  onSelectLote={(l) => abrirLote(l, 'propriedade')}
+                  onGoEstoque={() => abrirEstoque('propriedade')}
+                  onAddLote={handleAddLoteFromPropriedade}
+                  onSelectTalhao={handleSelectTalhao}
+                />
+              )}
+              {mainView === 'talhao' && selectedTalhao && (
+                <TalhaoPage
+                  talhao={selectedTalhao}
+                  onBack={handleBackFromTalhao}
+                  onSelectLote={(l) => abrirLote(l, 'talhao')}
+                />
+              )}
+              </Suspense>
+            </motion.div>
+          </AnimatePresence>
+        </main>
 
+        {/* ── Barra inferior: 4 destinos + Anotar no centro ── */}
+        <BarraInferior aba={abaAtiva} cor={corAtiva} onNav={(v) => {
+          if (v === 'estoque') { abrirEstoque(null); setCulturaId(null); return; }
+          if (v === 'mais' && VIEWS_MAIS.includes(mainView) && mainView !== 'mais') { irPara('mais'); return; }
+          irPara(v);
+        }} />
+
+        {showMigrationWizard && (
+          <MigrationWizard
+            onComplete={(prop) => {
+              setShowMigrationWizard(false);
+              setSelectedPropriedade(prop);
+            }}
+          />
+        )}
+      </div>
+    </AnotarProvider>
+  );
+}
+
+// ── Barra inferior ───────────────────────────────────────────────────────────
+const NAV = [
+  { value: 'dashboard',  label: 'Início',  Icon: Home },
+  { value: 'calendario', label: 'Agenda',  Icon: CalendarDays },
+  { value: 'anotar' },
+  { value: 'estoque',    label: 'Estoque', Icon: Package2 },
+  { value: 'mais',       label: 'Mais',    Icon: LayoutGrid },
+];
+
+function BarraInferior({ aba, cor, onNav }) {
+  const { anotar } = useAnotar();
+  return (
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50"
+      style={{
+        paddingBottom: 'max(env(safe-area-inset-bottom), 8px)',
+        willChange: 'transform',
+        transform: 'translateZ(0)',
+        WebkitTransform: 'translateZ(0)',
+      }}
+    >
+      <div
+        className="mx-3 mb-1 rounded-2xl border max-w-xl sm:mx-auto"
+        style={{
+          background: 'rgba(255,255,255,0.94)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderColor: 'hsl(140 13% 88%)',
+          boxShadow: '0 10px 24px -4px rgb(0 0 0 / 0.11), 0 4px 8px -4px rgb(0 0 0 / 0.07)',
+        }}
+      >
+        <div className="flex items-center h-[62px] px-1">
+          {NAV.map(({ value, label, Icon }) => {
+            if (value === 'anotar') {
               return (
-                <button
-                  key={value}
-                  onClick={() => handleNav(value)}
-                  className="relative flex flex-col items-center justify-center flex-1 h-full gap-0.5 rounded-xl mx-0.5 transition-all duration-200 active:scale-95"
-                  style={{ color: isActive ? activeCor : 'hsl(150 8% 40%)' }}
-                >
-                  {isActive && (
-                    <motion.span
-                      layoutId="nav-pill"
-                      className="absolute inset-x-1 inset-y-1.5 rounded-xl"
-                      style={{ background: `${activeCor}18` }}
-                      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                    />
-                  )}
-                  <span className="relative z-10 flex flex-col items-center gap-0.5">
-                    <Icon size={18} strokeWidth={isActive ? 2.5 : 1.75} className="transition-all duration-200" />
-                    <span className="text-[10px] leading-none" style={{ fontWeight: isActive ? 700 : 500 }}>
-                      {label}
-                    </span>
-                  </span>
-                </button>
+                <div key="anotar" className="flex-1 flex justify-center">
+                  <motion.button
+                    whileTap={{ scale: 0.92 }}
+                    onClick={() => anotar()}
+                    aria-label="Anotar"
+                    className="-mt-7 w-[58px] h-[58px] rounded-2xl flex flex-col items-center justify-center text-white"
+                    style={{ background: BRAND, boxShadow: `0 10px 22px -6px ${BRAND}`, border: '3px solid #fff' }}
+                  >
+                    <Plus size={24} strokeWidth={2.6} />
+                    <span className="text-[9px] font-extrabold -mt-0.5">Anotar</span>
+                  </motion.button>
+                </div>
               );
-            })}
-          </div>
+            }
+            const isActive = aba === value;
+            const c = isActive && value === 'dashboard' ? cor : BRAND;
+            return (
+              <button
+                key={value}
+                onClick={() => onNav(value)}
+                className="relative flex flex-col items-center justify-center flex-1 h-full gap-0.5 rounded-xl mx-0.5 transition-all duration-200 active:scale-95"
+                style={{ color: isActive ? c : 'hsl(150 8% 40%)' }}
+              >
+                {isActive && (
+                  <motion.span
+                    layoutId="nav-pill"
+                    className="absolute inset-x-1 inset-y-1.5 rounded-xl"
+                    style={{ background: `${c}18` }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                  />
+                )}
+                <span className="relative z-10 flex flex-col items-center gap-0.5">
+                  <Icon size={19} strokeWidth={isActive ? 2.5 : 1.8} />
+                  <span className="text-[10px] leading-none" style={{ fontWeight: isActive ? 700 : 500 }}>{label}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
-      </nav>
+      </div>
+    </nav>
+  );
+}
 
-      {showMigrationWizard && (
-        <MigrationWizard
-          onComplete={(prop) => {
-            setShowMigrationWizard(false);
-            setSelectedPropriedade(prop);
-          }}
-        />
-      )}
+/** Botão "Voltar" para telas que não têm um próprio (abertas pelo Mais). */
+function ComVoltar({ onBack, children }) {
+  return (
+    <div className="relative">
+      <button
+        onClick={onBack}
+        aria-label="Voltar"
+        className="fixed z-40 flex items-center gap-1 px-3 h-9 rounded-xl text-[12px] font-bold"
+        style={{
+          top: 'calc(var(--safe-top) + 8px)', right: 12,
+          background: 'rgba(255,255,255,0.92)', color: BRAND,
+          border: '1px solid hsl(140 13% 88%)', boxShadow: '0 4px 14px -2px rgb(0 0 0 / 0.12)',
+        }}
+      >
+        <ArrowLeft size={14} /> Mais
+      </button>
+      {children}
     </div>
   );
 }

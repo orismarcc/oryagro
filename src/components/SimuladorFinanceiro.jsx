@@ -7,7 +7,7 @@ import InsumoField from './InsumoField';
 import ResultadoPanel from './ResultadoPanel';
 import { useSimulador, calcularPlantas } from '../hooks/useSimulador';
 import { useCurvasProducao } from '../hooks/useCurvasProducao';
-import { useSimuladorSync, loadSimuladorConfig, registrarPlantio, preCarregarEtapasPadrao, loadPropriedades } from '../hooks/useSupabaseSync';
+import { useSimuladorSync, loadSimuladorConfig, registrarPlantio, loadPropriedades } from '../hooks/useSupabaseSync';
 import { getPrecosPadrao, getOpCosts } from '../data/precos';
 import { RotateCcw, Database, CheckCircle2, Pencil, Check, Package, Truck, Zap, ShieldCheck, MapPin } from 'lucide-react';
 import TalhaoMapEditor from './TalhaoMapEditor';
@@ -610,7 +610,6 @@ export default function SimuladorFinanceiro({ cultura }) {
                 area_gps_ha: geoDemarcado?.area_gps_ha ?? null,
               });
               if (saved) {
-                preCarregarEtapasPadrao(saved, cultura, 0).catch(() => {});
                 setPlantioSaved({ id: saved.id, nome: saved.nome });
                 setPlantioDialog(false);
               }

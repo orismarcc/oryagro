@@ -6,8 +6,10 @@ import { loadTodosLotes, loadAllColheitaEventos } from '../hooks/useSupabaseSync
 import { cacheGet, cacheSet } from '../hooks/useOfflineCache';
 import { supabase } from '../lib/supabase';
 import { updateParcela } from '../hooks/useCompradores';
-import { useCronogramaStatusBatch } from '../hooks/useCronogramaSync';
-import { STATUS, getCategoria } from '../hooks/useAtividades';
+import { STATUS, getCategoria, loadAtividadesPorLotes, concluirLancamento, hojeLocalISO } from '../hooks/useAtividades';
+import { loadEstoque } from '../hooks/useGestao';
+import { useAnotar } from '../context/AnotarContext';
+import { useToast } from '../context/ToastContext';
 
 const DIAS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -27,10 +29,6 @@ function startOfWeek(d) {
 
 function startOfMonth(d) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-
-function endOfMonth(d) {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
 }
 
 function formatDatePtBR(iso) {
@@ -102,6 +100,7 @@ function getAtividadesLote(lote, cultura, rows = []) {
         tipo: r.tipo || cat.tipo || 'manejo',
         agendado,
         done: !agendado,
+        raw: r,
       };
     })
     .filter(Boolean);
@@ -167,7 +166,7 @@ function AtividadeCard({ ativ, isHoje, onClick }) {
 }
 
 /** Step detail bottom-sheet popup */
-function AtividadePopup({ ativ, onClose }) {
+function AtividadePopup({ ativ, onClose, onConcluir, onEditar, concluindo }) {
   const cor = TIPO_COLOR[ativ.tipo] || '#6b7280';
 
   return (
@@ -248,6 +247,26 @@ function AtividadePopup({ ativ, onClose }) {
             style={{ background: `${cor}10` }}>
             <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: cor }} />
             <span className="text-[12px] font-semibold" style={{ color: cor }}>Agendado — ainda não realizado</span>
+          </div>
+        )}
+
+        {/* Ações — direto daqui, sem abrir o lote */}
+        {ativ.raw && (
+          <div className="flex gap-2 mt-4" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+            {ativ.agendado && onConcluir && (
+              <button onClick={() => onConcluir(ativ)} disabled={concluindo}
+                className="flex-1 py-3 rounded-xl text-[13px] font-bold text-white disabled:opacity-50"
+                style={{ background: 'hsl(156 64% 31%)' }}>
+                {concluindo ? 'Salvando…' : '✓ Marcar como feito'}
+              </button>
+            )}
+            {onEditar && (
+              <button onClick={() => onEditar(ativ)}
+                className="flex-1 py-3 rounded-xl text-[13px] font-bold"
+                style={{ background: 'hsl(140 14% 93%)', color: 'hsl(150 8% 30%)' }}>
+                Editar
+              </button>
+            )}
           </div>
         )}
       </motion.div>
@@ -394,8 +413,7 @@ function SumarioMensal({ monthStart, atividadesPorDia, today, colheitaEventos, l
 }
 
 /** Month grid view */
-function MonthView({ monthStart, atividadesPorDia, today, selectedDay, setSelectedDay, onAtivClick, colheitaEventos, lotes }) {
-  const year = monthStart.getFullYear();
+function MonthView({ monthStart, atividadesPorDia, today, selectedDay, setSelectedDay, onAtivClick, colheitaEventos, lotes, onAgendarDia }) {
   const month = monthStart.getMonth();
 
   // Build all cell dates: leading days from prev month + current month + trailing days to fill 6 rows
@@ -536,8 +554,15 @@ function MonthView({ monthStart, atividadesPorDia, today, selectedDay, setSelect
                 )}
               </div>
             </div>
+            {onAgendarDia && (
+              <button onClick={() => onAgendarDia(selectedDay)}
+                className="w-full mb-2 py-2.5 rounded-xl text-[12px] font-bold border border-dashed"
+                style={{ borderColor: 'hsl(156 64% 31% / 0.5)', color: 'hsl(156 64% 31%)', background: 'hsl(156 64% 31% / 0.05)' }}>
+                {selectedDay > today ? '+ Agendar neste dia' : '+ Anotar neste dia'}
+              </button>
+            )}
             {selectedAtivs.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground px-2 py-1">Sem atividades previstas</p>
+              <p className="text-[11px] text-muted-foreground px-2 py-1">Nada registrado neste dia</p>
             ) : (
               selectedAtivs.map(a => (
                 <AtividadeCard key={a.id} ativ={a} isHoje={selectedDay === today} onClick={() => onAtivClick(a)} />
@@ -560,6 +585,11 @@ function MonthView({ monthStart, atividadesPorDia, today, selectedDay, setSelect
 }
 
 export default function CalendarioPage() {
+  const { anotar, versao, avisarMudanca } = useAnotar();
+  const toast = useToast();
+  const [atividadesPorLote, setAtividadesPorLote] = useState({});
+  const [estoque, setEstoque] = useState([]);
+  const [concluindo, setConcluindo] = useState(false);
   const [calView, setCalView] = useState('month');
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [monthStart, setMonthStart] = useState(() => startOfMonth(new Date()));
@@ -604,7 +634,33 @@ export default function CalendarioPage() {
   // ── Lançamentos do cronograma (Supabase é a fonte da verdade) ──────────────
   // O calendário mostra o que o produtor registrou/agendou — nada é previsto.
   const loteIds = useMemo(() => lotes.map(l => l.id), [lotes]);
-  const { atividadesPorLote } = useCronogramaStatusBatch(loteIds);
+  const loteKey = loteIds.join(',');
+  useEffect(() => {
+    let cancel = false;
+    loadAtividadesPorLotes(loteKey ? loteKey.split(',') : []).then(rows => {
+      if (cancel) return;
+      const g = {};
+      rows.forEach(r => { (g[r.plantio_id] = g[r.plantio_id] || []).push(r); });
+      setAtividadesPorLote(g);
+    });
+    loadEstoque(null).then(r => { if (!cancel) setEstoque(r || []); }).catch(() => {});
+    return () => { cancel = true; };
+  }, [loteKey, versao]);
+
+  const concluirAtiv = async (ativ) => {
+    setConcluindo(true);
+    try {
+      const r = await concluirLancamento(ativ.raw, hojeLocalISO(), estoque);
+      if (!r) { toast.error('Não foi possível marcar como feito.'); return; }
+      toast.success('Feito! ✓');
+      setPopupAtiv(null);
+      avisarMudanca();
+    } finally {
+      setConcluindo(false);
+    }
+  };
+  const editarAtiv = (ativ) => { setPopupAtiv(null); anotar({ editar: ativ.raw }); };
+  const agendarDia = (iso) => anotar({ data: iso, agendado: iso > hojeLocalISO() });
 
   // Load parcelas pendentes do mês/semana visível
   const loadParcelas = useCallback(async () => {
@@ -699,7 +755,7 @@ export default function CalendarioPage() {
     <div className="min-h-screen bg-background">
       {/* Hero */}
       <div className="gradient-hero px-5 pb-5" style={{ paddingTop: 'var(--hero-pad-top)' }}>
-        <p className="text-white/55 text-xs font-semibold uppercase tracking-widest mb-1">Propriedade</p>
+        <p className="text-white/55 text-xs font-semibold uppercase tracking-widest mb-1">Agenda</p>
         <h1 className="font-display text-white text-2xl font-extrabold leading-tight">Calendário</h1>
         <p className="text-white/50 text-[11px] mt-1">{heroLabel}</p>
         {isDadosCache && (
@@ -796,6 +852,7 @@ export default function CalendarioPage() {
             selectedDay={selectedDay}
             setSelectedDay={setSelectedDay}
             onAtivClick={a => a.isParcela ? setPopupParcela(a.parcelaObj) : setPopupAtiv(a)}
+            onAgendarDia={agendarDia}
             colheitaEventos={colheitaEventos}
             lotes={lotes}
           />
@@ -843,7 +900,8 @@ export default function CalendarioPage() {
       {/* Step detail popup */}
       <AnimatePresence>
         {popupAtiv && (
-          <AtividadePopup ativ={popupAtiv} onClose={() => setPopupAtiv(null)} />
+          <AtividadePopup ativ={popupAtiv} onClose={() => setPopupAtiv(null)}
+            onConcluir={concluirAtiv} onEditar={editarAtiv} concluindo={concluindo} />
         )}
       </AnimatePresence>
 

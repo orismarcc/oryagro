@@ -1,13 +1,12 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState } from 'react';
 import { useToast } from '../context/ToastContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, CalendarDays, Sprout, TrendingUp,
   Cloud, CheckCircle2, AlertTriangle,
-  BookOpen, Loader2,
-  Receipt, DollarSign, SprayCan,
+  ClipboardList, Wallet, Info, BookOpen, ChevronRight,
 } from 'lucide-react';
-import TabCronograma from './lote/TabCronograma';
+import TabRegistros from './lote/TabRegistros';
 import CurvaProducaoChart from './CurvaProducaoChart';
 import { useCurvasProducao } from '../hooks/useCurvasProducao';
 import { useWeather } from '../hooks/useWeather';
@@ -20,19 +19,10 @@ import {
   loadMovimentosByLote,
 } from '../hooks/useGestao';
 import { loadDespesasByLote } from '../hooks/useDespesas';
-import {
-  registrarPlantio,
-  preCarregarEtapasPadrao,
-  syncCronogramaStatus,
-  loadCronogramaAtividades,
-} from '../hooks/useSupabaseSync';
+import { registrarPlantio } from '../hooks/useSupabaseSync';
 import { can, FARM_ACTIONS } from '../lib/permissions';
-import { makeStableId, makeCustomId } from '../hooks/useCronogramaSync';
-import { formatDatePtBR, fmtNumber, today, safeLS } from './lote/shared';
-import TabInsumos from './lote/TabInsumos';
-import TabDiario from './lote/TabDiario';
+import { formatDatePtBR, fmtNumber, today } from './lote/shared';
 import TabProducao from './lote/TabProducao';
-import TabAplicacoes from './lote/TabAplicacoes';
 import IrrigacaoPanel from './IrrigacaoPanel';
 import TalhaoMapPreview from './TalhaoMapPreview';
 import CroquiGenerator from './CroquiGenerator';
@@ -40,11 +30,10 @@ import { geojsonToPoints } from '../lib/geo';
 import IrrigacaoKitForm from './IrrigacaoKitForm';
 import TabDespesas from './lote/TabDespesas';
 import TabReceitas from './lote/TabReceitas';
-import * as safeStorage from '../lib/safeStorage';
 
 // ─── WeatherWidget ──────────────────────────────────────────────────────────
 
-function WeatherWidget({ cor, cidade, estado }) {
+function WeatherWidget({ cidade, estado }) {
   const { data, loading, location, alert } = useWeather({ cidade, estado });
 
   if (loading) {
@@ -111,340 +100,54 @@ function WeatherWidget({ cor, cidade, estado }) {
   );
 }
 
-// ─── Tab: Colheita ───────────────────────────────────────────────────────────
-// Reads colheita-type steps from the cronograma (static + custom rows added by user)
-// and shows a summary: upcoming harvests, done harvests, next date.
+// ─── Finanças: despesas e receitas do lote, lado a lado ─────────────────────
 
-const COLHEITA_COR = '#7c3aed';
-
-function TabColheita({ cultura, lote }) {
-  const cor = cultura.cor;
-
-  // ── helpers (inline to avoid import dependency) ──
-  function addDaysLocal(d, n) {
-    const r = new Date(d); r.setDate(r.getDate() + n); return r;
-  }
-  function isoLocal(d) {
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  }
-  // Resolve viveiro shift
-  const shift = (() => {
-    if (lote.metodo_propagacao && cultura?.metodosPropagacao) {
-      const m = cultura.metodosPropagacao.find(x => x.key === lote.metodo_propagacao);
-      if (m?.diasViveiro) return m.diasViveiro;
-    }
-    return 0;
-  })();
-
-  const plantioDate = new Date(lote.data_plantio + 'T12:00:00');
-  const todayStr    = today();
-
-  // Load from Supabase on mount — then merge with localStorage fallback
-  const [doneStatus, setDoneStatus]   = useState(() => safeLS(`cronograma_status_lote_${lote.id}`, {}));
-  const [customRows, setCustomRows]   = useState(() => safeLS(`cronograma_custom_lote_${lote.id}`, []));
-
-  useEffect(() => {
-    import('../hooks/useSupabaseSync').then(({ loadCronogramaAtividades }) => {
-      loadCronogramaAtividades(lote.id).then(dbRows => {
-        if (!dbRows.length) return;
-        const statusMap  = {};
-        const custom     = [];
-        const customDb   = dbRows.filter(r => r.is_custom);
-        dbRows.filter(r => !r.is_custom).forEach(row => {
-          const isViveiro = (cultura.metodosPropagacao || [])
-            .flatMap(m => m.etapasViveiro || [])
-            .some(e => e.etapa === row.etapa);
-          statusMap[makeStableId(isViveiro ? 'viveiro' : 'default', row.etapa)] =
-            { status: row.status, data: row.data_execucao };
-        });
-        customDb.forEach((row) => {
-          // Use hash-based ID (must match CronogramaTimeline / buildStatusFromDbRows)
-          const cid = makeCustomId(row.etapa, row.dia_previsto);
-          statusMap[cid] = { status: row.status, data: row.data_execucao };
-          custom.push({ dia: row.dia_previsto, etapa: row.etapa, produto: row.produto || '',
-            dose: row.dose || '', forma: row.forma_aplicacao || '', tipo: row.tipo || 'manejo',
-            _stableId: cid });
-        });
-        setDoneStatus(statusMap);
-        if (custom.length) setCustomRows(custom);
-        // Update cache
-        safeStorage.set(`cronograma_status_lote_${lote.id}`, JSON.stringify(statusMap));
-        if (custom.length) safeStorage.set(`cronograma_custom_lote_${lote.id}`, JSON.stringify(custom));
-      });
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lote.id]);
-
-  // Build list of colheita events
-  const colheitas = [];
-
-  // 1. Static cronograma steps with tipo === 'colheita'
-  (cultura.cronograma || []).forEach((etapa, i) => {
-    if (etapa.tipo !== 'colheita') return;
-    const dia          = etapa.dia + shift;
-    const dataPlanned  = isoLocal(addDaysLocal(plantioDate, dia));
-    const st           = doneStatus[makeStableId('default', etapa.etapa)]; // fixed: was default_${i}
-    const dataReal     = (st?.status === 'feito' && st?.data) ? st.data : null;
-    colheitas.push({
-      id: `static_${i}`,
-      etapa:       etapa.etapa,
-      dia,
-      dataPlanned,
-      dataReal,
-      done:        st?.status === 'feito',
-      isCustom:    false,
-      produto:     etapa.produto || '',
-      notas:       st?.obs || '',
-    });
-  });
-
-  // 2. Custom rows with tipo === 'colheita'
-  customRows.forEach((row, i) => {
-    if (row.tipo !== 'colheita') return;
-    let dataPlanned;
-    if (row.dataPrevista) {
-      dataPlanned = row.dataPrevista;
-    } else if (row.dia !== '' && row.dia !== null && row.dia !== undefined) {
-      const diaNum = parseInt(row.dia, 10);
-      if (!isNaN(diaNum)) dataPlanned = isoLocal(addDaysLocal(plantioDate, diaNum + shift));
-    }
-    if (!dataPlanned) return;
-    const cid = row._stableId || makeCustomId(row.etapa, row.dia);
-    const st = doneStatus[cid];
-    colheitas.push({
-      id:         cid,
-      etapa:      row.etapa || 'Colheita',
-      dia:        row.dia,
-      dataPlanned,
-      dataReal:   (st?.status === 'feito' && st?.data) ? st.data : null,
-      done:       st?.status === 'feito',
-      isCustom:   true,
-      produto:    row.produto || '',
-      notas:      row.obs || st?.obs || '',
-    });
-  });
-
-  colheitas.sort((a, b) => a.dataPlanned.localeCompare(b.dataPlanned));
-
-  const doneCount    = colheitas.filter(c => c.done).length;
-  const pendingCount = colheitas.filter(c => !c.done).length;
-  const nextColheita = colheitas.find(c => !c.done && c.dataPlanned >= todayStr);
-
-  // Days until next harvest
-  const diasAteProxima = nextColheita
-    ? Math.ceil((new Date(nextColheita.dataPlanned + 'T12:00:00') - new Date(todayStr + 'T12:00:00')) / 86_400_000)
-    : null;
-
-  if (colheitas.length === 0) {
-    return (
-      <div className="page-body pt-5 pb-8">
-        <div className="text-center py-16">
-          <TrendingUp size={36} className="mx-auto mb-3 opacity-20" style={{ color: COLHEITA_COR }} />
-          <p className="text-[14px] font-bold text-foreground mb-1">Nenhuma colheita no cronograma</p>
-          <p className="text-[12px] text-muted-foreground leading-relaxed">
-            Adicione uma atividade do tipo <strong>Colheita</strong> na aba{' '}
-            <span className="font-semibold" style={{ color: cor }}>Cronograma</span> para ver o resumo aqui.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
+function TabFinancas({ lote, cultura, cor, canDelete }) {
+  const [sub, setSub] = useState('despesas');
   return (
-    <div className="page-body pt-5 pb-8">
-
-      {/* ── Summary banner ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="card p-4 mb-5"
-        style={{ borderColor: `${COLHEITA_COR}30` }}
-      >
-        <p className="section-label mb-3">Resumo das Colheitas</p>
-        <div className="grid grid-cols-3 gap-3 mb-3">
-          <div>
-            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">Total previstas</p>
-            <p className="text-[20px] font-black leading-none" style={{ color: COLHEITA_COR }}>{colheitas.length}</p>
-          </div>
-          <div>
-            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">Realizadas</p>
-            <p className="text-[20px] font-black leading-none" style={{ color: '#16a34a' }}>{doneCount}</p>
-          </div>
-          <div>
-            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">Pendentes</p>
-            <p className="text-[20px] font-black leading-none" style={{ color: pendingCount > 0 ? '#d97706' : 'hsl(150 8% 55%)' }}>{pendingCount}</p>
-          </div>
+    <div>
+      <div className="px-4 pt-4">
+        <div className="flex gap-1 p-1 rounded-xl" style={{ background: 'hsl(140 14% 93%)' }}>
+          {[['despesas', '💸 Despesas'], ['receitas', '💰 Receitas']].map(([v, lbl]) => (
+            <button key={v} onClick={() => setSub(v)}
+              className="flex-1 py-2 rounded-lg text-[12.5px] font-bold transition-all"
+              style={sub === v ? { background: '#fff', color: cor, boxShadow: '0 1px 3px rgb(0 0 0 / 0.08)' } : { color: 'hsl(150 8% 40%)' }}>
+              {lbl}
+            </button>
+          ))}
         </div>
-
-        {/* Progress bar */}
-        <div className="h-2 rounded-full overflow-hidden mb-2" style={{ background: 'hsl(140 14% 93%)' }}>
-          <div
-            className="h-full rounded-full transition-all duration-700"
-            style={{ width: `${colheitas.length > 0 ? (doneCount / colheitas.length) * 100 : 0}%`, background: '#16a34a' }}
-          />
-        </div>
-
-        {/* Next harvest countdown */}
-        {nextColheita && (
-          <div
-            className="flex items-center justify-between rounded-xl px-3 py-2.5 mt-1"
-            style={{ background: `${COLHEITA_COR}0d`, border: `1px solid ${COLHEITA_COR}25` }}
-          >
-            <div>
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Próxima colheita</p>
-              <p className="text-[13px] font-bold text-foreground mt-0.5">{nextColheita.etapa}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-[11px] font-semibold" style={{ color: COLHEITA_COR }}>
-                {formatDatePtBR(nextColheita.dataPlanned)}
-              </p>
-              {diasAteProxima !== null && (
-                <p className="text-[10px] text-muted-foreground">
-                  {diasAteProxima === 0 ? 'Hoje!' : diasAteProxima < 0 ? `${Math.abs(diasAteProxima)}d atrás` : `em ${diasAteProxima}d`}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-      </motion.div>
-
-      {/* ── Colheita list ── */}
-      <p className="section-label mb-3">Calendário de Colheitas</p>
-      <div className="flex flex-col gap-2.5">
-        {colheitas.map((c, i) => {
-          const isPast    = c.dataPlanned < todayStr;
-          const isToday   = c.dataPlanned === todayStr;
-          const statusBg  = c.done ? '#dcfce7'
-                          : isToday ? '#fff7ed'
-                          : isPast ? '#fee2e2'
-                          : `${COLHEITA_COR}0d`;
-          const statusBorder = c.done ? '#86efac'
-                             : isToday ? '#fed7aa'
-                             : isPast ? '#fca5a5'
-                             : `${COLHEITA_COR}30`;
-          const statusColor = c.done ? '#16a34a'
-                            : isToday ? '#ea580c'
-                            : isPast ? '#dc2626'
-                            : COLHEITA_COR;
-
-          return (
-            <motion.div
-              key={c.id}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04, duration: 0.2 }}
-              className="card p-4"
-              style={{ borderLeft: `3px solid ${statusColor}`, opacity: c.done ? 0.8 : 1 }}
-            >
-              <div className="flex items-start gap-3">
-                {/* Icon */}
-                <div
-                  className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
-                  style={{ background: statusBg }}
-                >
-                  {c.done ? '✓' : '🌾'}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  {/* Name + badges */}
-                  <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                    <p className={`text-[13px] font-bold leading-tight ${c.done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                      {c.etapa}
-                    </p>
-                    {c.done && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                        style={{ background: '#dcfce7', color: '#16a34a' }}>
-                        ✓ realizada
-                      </span>
-                    )}
-                    {!c.done && isToday && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                        style={{ background: '#fff7ed', color: '#ea580c' }}>
-                        hoje
-                      </span>
-                    )}
-                    {!c.done && isPast && !isToday && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                        style={{ background: '#fee2e2', color: '#dc2626' }}>
-                        atrasada
-                      </span>
-                    )}
-                    {c.isCustom && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                        style={{ background: '#f3e8ff', color: '#7c3aed' }}>
-                        personalizada
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Dates */}
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-[11px] font-semibold" style={{ color: statusColor }}>
-                      📅 Prevista: {formatDatePtBR(c.dataPlanned)}
-                      {c.dia !== undefined && c.dia !== null && c.dia !== '' && (
-                        <span className="text-muted-foreground font-normal"> (Dia {c.dia})</span>
-                      )}
-                    </span>
-                    {c.done && c.dataReal && c.dataReal !== c.dataPlanned && (
-                      <span className="text-[11px] text-blue-600 font-medium">
-                        Realizada: {formatDatePtBR(c.dataReal)}
-                      </span>
-                    )}
-                    {c.done && c.dataReal && c.dataReal === c.dataPlanned && (
-                      <span className="text-[11px]" style={{ color: '#16a34a' }}>
-                        Realizada no prazo
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Produto */}
-                  {c.produto && (
-                    <p className="text-[11px] text-muted-foreground mt-0.5">{c.produto}</p>
-                  )}
-
-                  {/* Notas */}
-                  {c.notas && (
-                    <p className="text-[11px] text-muted-foreground italic mt-0.5">"{c.notas}"</p>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          );
-        })}
       </div>
+      {sub === 'despesas'
+        ? <TabDespesas lote={lote} cor={cor} canDelete={canDelete} />
+        : <TabReceitas cultura={cultura} lote={lote} canDelete={canDelete} />}
+    </div>
+  );
+}
 
-      {/* Hint */}
-      <div
-        className="mt-5 flex items-start gap-2.5 px-4 py-3 rounded-2xl"
-        style={{ background: 'hsl(140 14% 96%)', border: '1px solid hsl(140 13% 90%)' }}
-      >
-        <span className="text-base flex-shrink-0">💡</span>
-        <p className="text-[12px] text-muted-foreground leading-relaxed">
-          Para adicionar ou registrar colheitas, vá até a aba{' '}
-          <strong className="text-foreground">Cronograma</strong> e adicione ou marque como concluída uma atividade do tipo{' '}
-          <strong style={{ color: COLHEITA_COR }}>Colheita</strong>.
-        </p>
-      </div>
+function Dado({ lbl, v }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{lbl}</p>
+      <p className="font-semibold text-foreground truncate">{v}</p>
     </div>
   );
 }
 
 // ─── Main LotePage ──────────────────────────────────────────────────────────
 
+// 4 abas: o que se faz (Registros), o que se colhe, o dinheiro e os dados do lote.
+// (Antes eram 7: Cronograma, Colheita, Produção, Caderno, Receitas, Despesas, Diário.)
 const TABS = [
-  { value: 'cronograma', label: 'Cronograma', Icon: CalendarDays },
-  { value: 'colheita',   label: 'Colheita',   Icon: TrendingUp },
-  { value: 'producao',   label: 'Produção',   Icon: Sprout },
-  { value: 'aplicacoes', label: 'Caderno',    Icon: SprayCan },
-  { value: 'receitas',   label: 'Receitas',   Icon: DollarSign },
-  { value: 'despesas',   label: 'Despesas',   Icon: Receipt },
-  { value: 'diario',     label: 'Diário',     Icon: BookOpen },
+  { value: 'registros', label: 'Registros', Icon: ClipboardList },
+  { value: 'colheita',  label: 'Colheita',  Icon: TrendingUp },
+  { value: 'financas',  label: 'Finanças',  Icon: Wallet },
+  { value: 'lote',      label: 'Lote',      Icon: Info },
 ];
 
-export default function LotePage({ lote, cultura, onBack, userRole = null, propriedade = null, onRepetido = null }) {
+export default function LotePage({ lote, cultura, onBack, userRole = null, propriedade = null, onRepetido = null, onAbrirGuia = null }) {
   const canDelete = can(userRole, FARM_ACTIONS.DELETE_ANY);
   const toast = useToast();
-  const [tab, setTab] = useState('cronograma');
+  const [tab, setTab] = useState('registros');
   const [concluindo, setConcluindo] = useState(false);
   const [showKitForm, setShowKitForm] = useState(false);
   const [showCroqui, setShowCroqui] = useState(false);
@@ -461,7 +164,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
   const cor = cultura.cor;
 
   const lc = resolveLifecycle(lote, cultura);
-  const { diasDecorridos, progresso: cycleProgressPct, diasPrimeiraProducao: cicloDias, prontoParaColheita } = lc;
+  const { diasDecorridos, progresso: cycleProgressPct, diasPrimeiraProducao: cicloDias } = lc;
   const cycleProgress = cycleProgressPct / 100;
 
   // Curva de produção
@@ -535,7 +238,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
   // customizadas do cronograma. Útil para culturas anuais de ciclo curto (alface,
   // coentro) que são replantadas a cada 30–40 dias.
   const handleRepetir = async () => {
-    if (!window.confirm(`Criar um novo plantio de ${cultura.nome} copiando área, espaçamento e etapas deste lote?`)) return;
+    if (!window.confirm(`Criar um novo plantio de ${cultura.nome} copiando área e espaçamento deste lote?`)) return;
     setRepetindo(true);
     try {
       // 1. Cria o novo plantio com data de hoje, copiando os atributos físicos.
@@ -556,31 +259,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
       });
       if (!novo) { toast.error('Não foi possível criar o novo plantio.'); return; }
 
-      // 2. Pré-carrega as etapas-base padrão da cultura (status pendente).
-      const diasViveiro = lote.metodo_propagacao && cultura.metodosPropagacao
-        ? (cultura.metodosPropagacao.find(m => m.key === lote.metodo_propagacao)?.diasViveiro ?? 0)
-        : 0;
-      await preCarregarEtapasPadrao(novo, cultura, diasViveiro).catch(() => {});
-
-      // 3. Copia as etapas CUSTOMIZADAS do lote atual (is_custom) como pendentes.
-      try {
-        const rows = await loadCronogramaAtividades(lote.id);
-        const custom = rows.filter(r => r.is_custom);
-        for (const r of custom) {
-          await syncCronogramaStatus(novo.id, cultura.id, {
-            dia:      r.dia_previsto,
-            etapa:    r.etapa,
-            produto:  r.produto || '',
-            dose:     r.dose || '',
-            forma:    r.forma_aplicacao || '',
-            tipo:     r.tipo || 'manejo',
-            status:   'pendente',
-            data:     null,
-            isCustom: true,
-          });
-        }
-      } catch { /* etapas custom são complemento — não bloqueiam o fluxo */ }
-
+      // O cronograma do lote novo começa vazio: tudo é anotado pelo produtor.
       toast.success('Novo plantio criado!');
       if (onRepetido) onRepetido(novo);
       else onBack?.();
@@ -753,7 +432,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
           </motion.div>
 
           {/* Weather widget */}
-          <WeatherWidget cor={cor} cidade={propriedade?.cidade} estado={propriedade?.estado} />
+          <WeatherWidget cidade={propriedade?.cidade} estado={propriedade?.estado} />
         </div>
       </div>
 
@@ -767,8 +446,8 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
         }}
       >
         <div
-          className="flex gap-0.5 p-0.5 rounded-xl overflow-x-auto"
-          style={{ background: 'hsl(140 14% 93%)', scrollbarWidth: 'none' }}
+          className="flex gap-0.5 p-0.5 rounded-xl"
+          style={{ background: 'hsl(140 14% 93%)' }}
         >
           {TABS.map(({ value, label, Icon }) => {
             const isActive = tab === value;
@@ -776,7 +455,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
               <button
                 key={value}
                 onClick={() => setTab(value)}
-                className="relative flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] text-[12px] font-semibold outline-none transition-colors duration-150"
+                className="relative flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-[10px] text-[12px] font-semibold outline-none transition-colors duration-150"
                 style={{ color: isActive ? '#fff' : 'hsl(150 8% 40%)' }}
               >
                 {isActive && (
@@ -807,8 +486,53 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           style={{ willChange: 'opacity, transform' }}
         >
-          {tab === 'cronograma' && (
-            <div className="flex flex-col gap-4">
+          {tab === 'registros' && (
+            <TabRegistros lote={lote} cultura={cultura} propriedade={propriedade} cor={cor} canDelete={canDelete} />
+          )}
+          {tab === 'colheita' && (
+            <TabProducao
+              lote={lote}
+              cultura={cultura}
+              producaoEstimadaPeriodo={producaoEstimadaPeriodo}
+              producaoPlena={producaoPlena}
+              anoRelativo={anoRelativo}
+              fatorMaturacao={fatorMaturacao}
+            />
+          )}
+          {tab === 'financas' && (
+            <TabFinancas lote={lote} cultura={cultura} cor={cor} canDelete={canDelete} />
+          )}
+          {tab === 'lote' && (
+            <div className="px-4 pt-4 flex flex-col gap-4" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 110px)' }}>
+              {/* Dados do lote */}
+              <div className="card p-4">
+                <p className="section-label mb-3">Dados do lote</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12.5px]">
+                  <Dado lbl="Cultura" v={`${cultura.emoji} ${cultura.nome}`} />
+                  <Dado lbl="Plantio" v={formatDatePtBR(lote.data_plantio)} />
+                  <Dado lbl="Área" v={lote.area_ha ? `${fmtNumber(Number(lote.area_ha))} ha` : (lote.comprimento_m && lote.largura_m ? `${lote.comprimento_m}×${lote.largura_m} m` : '—')} />
+                  <Dado lbl="Plantas" v={lote.total_plantas ? fmtNumber(lote.total_plantas) : '—'} />
+                  <Dado lbl="Espaçamento" v={lote.espacamento_linhas && lote.espacamento_plantas ? `${lote.espacamento_linhas} × ${lote.espacamento_plantas} m` : '—'} />
+                  <Dado lbl="Propagação" v={(cultura.metodosPropagacao || []).find(m => m.key === lote.metodo_propagacao)?.label || '—'} />
+                  {propriedade?.nome && <Dado lbl="Propriedade" v={propriedade.nome} />}
+                </div>
+              </div>
+
+              {/* Guia técnico da cultura (consulta) */}
+              {onAbrirGuia && (
+                <button onClick={() => onAbrirGuia(cultura.id)}
+                  className="card p-4 flex items-center gap-3 text-left active:scale-[0.99] transition-transform">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${cor}15` }}>
+                    <BookOpen size={18} style={{ color: cor }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13.5px] font-bold text-foreground">Guia técnico de {cultura.nome}</p>
+                    <p className="text-[11.5px] text-muted-foreground">Doses, épocas e manejo recomendados — só para consulta</p>
+                  </div>
+                  <ChevronRight size={16} className="text-muted-foreground" />
+                </button>
+              )}
+
               {/* Recorte da área demarcada do lote (se houver) */}
               {geojsonToPoints(lote.geojson).length >= 3 && (
                 <TalhaoMapPreview geojson={lote.geojson} areaHa={lote.area_gps_ha} cor={cor}
@@ -822,7 +546,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
                 talhao={{ ...lote, ...kitIrrigacao }}
                 onConfigurarKit={() => setShowKitForm(true)}
               />
-              {/* Curva de produção — mostra a maturação da cultura ao longo dos anos */}
+              {/* Curva de produção — maturação da cultura ao longo dos anos */}
               <CurvaProducaoChart
                 culturaId={cultura.id}
                 culturaNome={cultura.nome}
@@ -832,40 +556,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
                 producaoPlena={producaoPlena}
                 totalPlantas={lote.total_plantas}
               />
-              {/* Cronograma do LOTE = lançamentos do produtor (agendado/realizado).
-                  O plano-guia da cultura fica na página da cultura, aba "Guia". */}
-              <TabCronograma
-                lote={lote}
-                cultura={cultura}
-                cor={cor}
-                canDelete={canDelete}
-              />
             </div>
-          )}
-          {tab === 'colheita' && (
-            <TabColheita cultura={cultura} lote={lote} />
-          )}
-          {tab === 'receitas' && (
-            <TabReceitas cultura={cultura} lote={lote} canDelete={canDelete} />
-          )}
-          {tab === 'despesas' && (
-            <TabDespesas lote={lote} cor={cor} canDelete={canDelete} />
-          )}
-          {tab === 'producao' && (
-            <TabProducao
-              lote={lote}
-              cultura={cultura}
-              producaoEstimadaPeriodo={producaoEstimadaPeriodo}
-              producaoPlena={producaoPlena}
-              anoRelativo={anoRelativo}
-              fatorMaturacao={fatorMaturacao}
-            />
-          )}
-          {tab === 'aplicacoes' && (
-            <TabAplicacoes lote={lote} cultura={cultura} propriedade={propriedade} canDelete={canDelete} />
-          )}
-          {tab === 'diario' && (
-            <TabDiario lote={lote} canDelete={canDelete} />
           )}
         </motion.div>
       </AnimatePresence>

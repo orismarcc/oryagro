@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, CalendarDays, Sprout, CheckCircle2, ChevronDown, ChevronUp, Leaf, MapPin } from 'lucide-react';
 import { calcularPlantas } from '../hooks/useSimulador';
-import { registrarPlantio, deleteLote, updateLoteMudas, preCarregarEtapasPadrao } from '../hooks/useSupabaseSync';
+import { registrarPlantio, deleteLote, updateLoteMudas } from '../hooks/useSupabaseSync';
 import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
 import { geojsonToPoints } from '../lib/geo';
 import PropagacaoSelector from './PropagacaoSelector';
@@ -343,8 +343,6 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
     const novo = await registrarPlantio(payload);
     if (novo) {
       safeStorage.set(`lote_mudas_${novo.id}`, diasViveiro > 0 ? '1' : '0');
-      // Pre-load default schedule steps so the cronograma is not empty on first open
-      preCarregarEtapasPadrao(novo, cultura, diasViveiro).catch(() => {});
       onLoteAdded(novo);
       setNome('');
       setDataPlantio(today());
