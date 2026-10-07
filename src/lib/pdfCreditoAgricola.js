@@ -60,8 +60,6 @@ export function gerarPdfCreditoAgricola({
   produtor = {},
   ciclos = [],
   lotes = [],
-  vendas = [],
-  despesas = [],
   propriedades = [],
 }) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });

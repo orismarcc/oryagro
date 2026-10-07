@@ -106,12 +106,8 @@ import { fmtBRL, getCultura, safeResolveLifecycle, getRampFactor } from './utils
     const yr = parseInt(ev.data.substring(0, 4), 10);
     const lote = lotes.find(l => String(l.id) === String(ev.plantio_id));
     const cultura = lote ? getCultura(lote.cultura_id) : null;
-    let receita = 0;
-    try {
-      const d = typeof ev.descricao === 'string' ? JSON.parse(ev.descricao) : (ev.descricao || {});
-      const priceKg = cultura ? (prices[cultura.id] ?? cultura?.venda?.precoUnitario ?? 0) : 0;
-      if (d?.qtd) receita = parseFloat(d.qtd) * priceKg;
-    } catch { /* ignore */ }
+    const priceKg = cultura ? (prices[cultura.id] ?? cultura?.venda?.precoUnitario ?? 0) : 0;
+    const receita = (ev.quantidade_kg || 0) * priceKg;
     actualByYear[yr] = (actualByYear[yr] || 0) + receita;
   });
 

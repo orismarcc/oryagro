@@ -16,7 +16,6 @@ export default function InsumoField({
 
   useEffect(() => {
     if (areaAtual != null && areaBase != null && areaBase > 0) {
-      const fator = areaAtual / areaBase;
       let novoValor;
       if (isCampo && porHa != null) {
         novoValor = parseFloat((porHa * areaAtual).toFixed(3));

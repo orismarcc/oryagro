@@ -25,7 +25,7 @@ function safeLS(key, fallback) {
 function saveLS(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
+  } catch { /* armazenamento cheio/bloqueado: segue sem salvar localmente */ }
 }
 
 function calcScale(cultura, params) {
@@ -107,7 +107,7 @@ function CalculadoraCore({ cultura, loteId, initialParams }) {
       setSavingMaoObra(true);
       try {
         await updateLoteMaoObra(loteId, num);
-      } catch {}
+      } catch { /* falha já registrada (logDbError); o valor fica salvo localmente */ }
       finally { setSavingMaoObra(false); }
     }, 500);
   };

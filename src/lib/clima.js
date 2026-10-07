@@ -14,7 +14,7 @@
 
 // Coeficiente de cultura (Kc) representativo de meia-estação. Valores conservadores,
 // baseados na faixa FAO-56. Ajustáveis; default 1,0 quando a cultura não está listada.
-export const KC_POR_CULTURA = {
+const KC_POR_CULTURA = {
   alface: 1.0, coentro: 1.0, rucula: 1.0,
   tomate: 1.15, quiabo: 1.05, feijao: 1.05, milho: 1.2, soja: 1.15,
   mandioca: 0.9, abacaxi: 0.5,

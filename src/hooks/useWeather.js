@@ -6,7 +6,7 @@ const CACHE_KEY    = 'oryagro_weather_v2';   // v2: chave separada por cidade
 const CACHE_TTL    = 60 * 60 * 1000;         // 1 hora
 const DAYS_PT      = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-export function weatherEmoji(code) {
+function weatherEmoji(code) {
   if (code === 0)   return '☀️';
   if (code <= 2)    return '🌤️';
   if (code <= 3)    return '☁️';
@@ -17,7 +17,7 @@ export function weatherEmoji(code) {
   return '⛈️';
 }
 
-export function weatherLabel(code) {
+function weatherLabel(code) {
   if (code === 0)  return 'Ensolarado';
   if (code <= 2)   return 'P. nublado';
   if (code <= 3)   return 'Nublado';
@@ -28,7 +28,7 @@ export function weatherLabel(code) {
   return 'Tempestade';
 }
 
-export function weatherAlert(forecast) {
+function weatherAlert(forecast) {
   if (!forecast) return null;
   const next2    = forecast.slice(0, 2);
   const heavyRain = next2.find(d => parseFloat(d.rain) > 10);
@@ -38,75 +38,6 @@ export function weatherAlert(forecast) {
       msg:   `Chuva forte prevista (${heavyRain.rain} mm) — evitar pulverizações`,
       level: 'warning',
     };
-  return null;
-}
-
-/**
- * Sugere adiar uma etapa do cronograma com base na chuva prevista para a data
- * da etapa (e o dia seguinte, pois a chuva persiste). Cruza o TIPO da etapa com
- * a precipitação prevista (forecast da Open-Meteo, 5 dias). Retorna null se não
- * houver risco, ou { nivel, mensagem } se valer a pena adiar.
- *
- * Regras agronômicas (conservadoras):
- *  - Pulverização foliar / aplicação / adubação foliar: chuva > 2 mm lava o
- *    produto → adiar.
- *  - Adubação de solo: chuva forte > 15 mm lixivia o adubo → adiar.
- *  - Colheita: chuva > 3 mm prejudica qualidade pós-colheita → adiar.
- *  - Plantio / transplante: chuva forte > 15 mm encharca o solo → adiar.
- *
- * @param {{ tipo?: string, etapa?: string, dataPrevista?: string, forecast?: Array }} args
- * @returns {null | { nivel: 'info'|'warning'|'critico', mensagem: string, chuva_mm: number }}
- */
-export function sugerirAdiamento({ tipo, etapa = '', dataPrevista, forecast } = {}) {
-  if (!forecast?.length || !dataPrevista) return null;
-
-  // Previsão para o dia da etapa e o dia seguinte (efeito da chuva persiste).
-  const dia0 = forecast.find(f => f.date === dataPrevista);
-  const proximo = new Date(dataPrevista + 'T12:00:00');
-  proximo.setDate(proximo.getDate() + 1);
-  const dia1Str = `${proximo.getFullYear()}-${String(proximo.getMonth() + 1).padStart(2, '0')}-${String(proximo.getDate()).padStart(2, '0')}`;
-  const dia1 = forecast.find(f => f.date === dia1Str);
-  if (!dia0 && !dia1) return null; // etapa fora da janela de previsão (>5 dias)
-
-  const rain0   = parseFloat(dia0?.rain) || 0;
-  const rain1   = parseFloat(dia1?.rain) || 0;
-  const rainMax = Math.max(rain0, rain1);
-
-  const t = (tipo || '').toLowerCase();
-  const e = etapa.toLowerCase();
-  const isPulverizacao = ['foliar', 'aplicacao'].includes(t) || /foliar|pulveriz|defens/i.test(e);
-  const isAduboSolo    = t === 'adubo' || /adub|cobertura|ureia/i.test(e);
-  const isColheita     = t === 'colheita' || /colheit/i.test(e);
-  const isPlantio      = t === 'plantio' || /plantio|transplant/i.test(e);
-
-  if (isPulverizacao && rainMax > 2) {
-    return {
-      nivel: rainMax > 10 ? 'critico' : 'warning',
-      mensagem: `Chuva prevista (${rainMax.toFixed(1)} mm) pode lavar o produto — considere adiar a pulverização.`,
-      chuva_mm: rainMax,
-    };
-  }
-  if (isAduboSolo && rain0 > 15) {
-    return {
-      nivel: 'warning',
-      mensagem: `Chuva forte (${rain0.toFixed(1)} mm) pode lixiviar o adubo — considere adiar.`,
-      chuva_mm: rain0,
-    };
-  }
-  if (isColheita && rain0 > 3) {
-    return {
-      nivel: 'warning',
-      mensagem: `Chuva prevista (${rain0.toFixed(1)} mm) — risco para a qualidade pós-colheita.`,
-      chuva_mm: rain0,
-    };
-  }
-  if (isPlantio && rainMax > 15) {
-    return {
-      nivel: 'warning',
-      mensagem: `Chuva forte (${rainMax.toFixed(1)} mm) — solo pode ficar encharcado para o plantio.`,
-      chuva_mm: rainMax,
-    };
-  }
   return null;
 }
 
@@ -122,7 +53,6 @@ function timeoutSignal(ms) {
 
 // ── Geocodifica "Cidade, UF" → { lat, lon } usando Open-Meteo Geocoding ──────
 async function geocodeCity(cidade, estado) {
-  const query = estado ? `${cidade}, ${estado}` : cidade;
   const url   = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cidade)}&count=5&language=pt&format=json`;
   const res   = await fetch(url, { signal: timeoutSignal(5000) });
   if (!res.ok) throw new Error('geocode failed');
@@ -143,7 +73,7 @@ async function geocodeCity(cidade, estado) {
 }
 
 // ── Busca previsão na Open-Meteo ─────────────────────────────────────────────
-async function fetchForecast(lat, lon, locName) {
+async function fetchForecast(lat, lon) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
     `&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum` +
     `&timezone=America%2FSao_Paulo&forecast_days=5`;
@@ -186,7 +116,7 @@ export function useWeather({ cidade, estado } = {}) {
         const map = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
         map[key] = { data: forecast, location: locName, ts: Date.now() };
         localStorage.setItem(CACHE_KEY, JSON.stringify(map));
-      } catch {}
+      } catch { /* cache opcional: segue sem ele */ }
     };
 
     const readCache = (key) => {
@@ -194,7 +124,7 @@ export function useWeather({ cidade, estado } = {}) {
         const map = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
         const entry = map[key];
         if (entry && Date.now() - entry.ts < CACHE_TTL) return entry;
-      } catch {}
+      } catch { /* cache opcional: segue sem ele */ }
       return null;
     };
 
@@ -212,7 +142,7 @@ export function useWeather({ cidade, estado } = {}) {
       if (cached) { applyResult(cached.data, cached.location); return; }
 
       try {
-        const forecast = await fetchForecast(lat, lon, locName);
+        const forecast = await fetchForecast(lat, lon);
         saveCache(cacheKey, forecast, locName);
         applyResult(forecast, locName);
       } catch {

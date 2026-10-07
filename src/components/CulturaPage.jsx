@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Layers, FlaskConical, CalendarDays, Droplets, Clock } from 'lucide-react';
 import LotesPage from './LotesPage';
 import ManejoAdubacao from './ManejoAdubacao';
-import CronogramaTimeline from './CronogramaTimeline';
+import GuiaCultura from './GuiaCultura';
 import { loadLotes } from '../hooks/useSupabaseSync';
 
 const TABS = [
@@ -20,7 +20,7 @@ const GLASS_STATS = (c) => [
   { Icon: Droplets,     label: 'Água',  value: c.necessidadeHidrica },
 ];
 
-export default function CulturaPage({ cultura, onBack, autoOpenLoteForm = false, propriedadeId = null, initialTab = 'lotes' }) {
+export default function CulturaPage({ cultura, onBack, autoOpenLoteForm = false, propriedadeId = null, initialTab = 'lotes', onLoteCriado = null }) {
   const [tab, setTab] = useState(initialTab);
   const isCampo = cultura.tipo === 'campo';
 
@@ -48,7 +48,11 @@ export default function CulturaPage({ cultura, onBack, autoOpenLoteForm = false,
     });
   }, [cultura.id]);
 
-  const handleLoteAdded = (novoLote) => setLotes(prev => [novoLote, ...prev]);
+  // Lote criado → abre direto nele (menos um passo para começar a anotar).
+  const handleLoteAdded = (novoLote) => {
+    setLotes(prev => [novoLote, ...prev]);
+    onLoteCriado?.(novoLote);
+  };
   const handleLoteDeleted = (id) => setLotes(prev => prev.filter(l => l.id !== id));
 
   return (
@@ -171,7 +175,7 @@ export default function CulturaPage({ cultura, onBack, autoOpenLoteForm = false,
             />
           )}
           {tab === 'manejo'     && <ManejoAdubacao  cultura={cultura} calc={calc} />}
-          {tab === 'cronograma' && <CronogramaTimeline cultura={cultura} lotes={lotes} propriedadeId={propriedadeId} />}
+          {tab === 'cronograma' && <GuiaCultura cultura={cultura} lotes={lotes} />}
         </motion.div>
       </AnimatePresence>
     </div>

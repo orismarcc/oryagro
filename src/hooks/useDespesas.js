@@ -1,5 +1,8 @@
 import { supabase, getUserId } from '../lib/supabase';
 import { logDbError } from '../lib/logger';
+import { insertOfflineSafe } from '../lib/outbox';
+import { upsertInsumo, addMovimento } from './useGestao';
+import { qtdNaUnidadeDoEstoque } from './useAtividades';
 
 // ── Category definitions ─────────────────────────────────────────────────────
 
@@ -211,35 +214,88 @@ export async function loadTodasDespesas(propriedadeId = null) {
   return data || [];
 }
 
+const normNome = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+
 /**
- * Add a new despesa record.
+ * Registra uma COMPRA/DESPESA — usada pelo Anotar e pela aba Finanças do lote.
+ *
+ * 1. grava a despesa;
+ * 2. se `entradaEstoque`, dá entrada no estoque: usa o item escolhido
+ *    (`insumoId`) ou um item já existente com o mesmo nome e unidade — só cria
+ *    um novo se não houver (antes cada compra criava um item novo, genérico);
+ * 3. o preço unitário da entrada = valor ÷ quantidade (alimenta o preço médio).
+ * Tudo é offline-safe; saldo, preço médio e mínimo são atualizados no banco.
+ *
+ * @returns {{ ok: boolean, offline?: boolean, motivo?: string }}
  */
-export async function addDespesa({ plantioId, propriedadeId, categoria, subcategoria, produto, descricao, prestador, quantidade, unidade, valor, data, observacao }) {
+export async function registrarCompra({
+  plantioId = null, propriedadeId = null, data, categoria, subcategoria, produto,
+  descricao, prestador, quantidade, unidade, valor, observacao,
+  entradaEstoque = false, insumoId = null, nomeInsumo = null, estoque = [],
+}) {
   const userId = await getUserId();
-  if (!userId) return null;
+  if (!userId) return { ok: false, motivo: 'sessao' };
 
-  const { data: row, error } = await supabase
-    .from('despesas')
-    .insert({
-      user_id:        userId,
-      plantio_id:     plantioId     || null,
-      propriedade_id: propriedadeId || null,
-      categoria,
-      subcategoria:   subcategoria  || null,
-      produto:        produto       || null,
-      descricao:      descricao     || null,
-      prestador:      prestador     || null,
-      quantidade:     quantidade != null && quantidade !== '' ? parseFloat(quantidade) : null,
-      unidade:        unidade       || null,
-      valor:          parseFloat(valor) || 0,
+  const qtd = parseFloat(String(quantidade ?? '').replace(',', '.'));
+  const temQtd = Number.isFinite(qtd) && qtd > 0;
+  const valorNum = parseFloat(String(valor ?? '').replace(',', '.')) || 0;
+
+  // Resolve o item do estoque ANTES de gravar, para recusar unidade incompatível.
+  let item = null;
+  let qtdEstoque = null;
+  if (entradaEstoque && temQtd) {
+    const nome = (nomeInsumo || produto || subcategoria || categoria || '').trim();
+    item = insumoId
+      ? estoque.find(i => String(i.id) === String(insumoId)) || null
+      : estoque.find(i => normNome(i.nome) === normNome(nome) && normNome(i.unidade) === normNome(unidade)
+          && (!propriedadeId || !i.propriedade_id || i.propriedade_id === propriedadeId)) || null;
+    if (item) {
+      qtdEstoque = qtdNaUnidadeDoEstoque(qtd, unidade, item.unidade);
+      if (qtdEstoque == null) return { ok: false, motivo: 'unidade', unidadeEstoque: item.unidade };
+    } else {
+      if (!propriedadeId) return { ok: false, motivo: 'propriedade' };
+      item = { novo: true, nome };
+      qtdEstoque = qtd;
+    }
+  }
+
+  const { row: despesa, queued, error } = await insertOfflineSafe('despesas', {
+    user_id:        userId,
+    plantio_id:     plantioId     || null,
+    propriedade_id: propriedadeId || null,
+    categoria,
+    subcategoria:   subcategoria  || null,
+    produto:        produto       || null,
+    descricao:      descricao     || null,
+    prestador:      prestador     || null,
+    quantidade:     temQtd ? qtd : null,
+    unidade:        temQtd ? (unidade || null) : null,
+    valor:          valorNum,
+    data,
+    observacao:     observacao    || null,
+  });
+  if (error || !despesa) { logDbError('registrarCompra', error); return { ok: false, motivo: 'despesa' }; }
+
+  if (item?.novo) {
+    item = await upsertInsumo({
+      nome: item.nome, unidade: unidade || 'un', propriedadeId,
+      preco_unitario: valorNum > 0 ? valorNum / qtd : 0,
+    });
+    if (!item) return { ok: true, offline: queued, motivo: 'insumo' };  // despesa salva; estoque não
+  }
+  if (item && qtdEstoque) {
+    await addMovimento({
+      insumoId:   item.id,
+      tipo:       'entrada',
+      quantidade: qtdEstoque,
+      observacao: `Compra: ${produto || descricao || subcategoria || categoria}`,
       data,
-      observacao:     observacao    || null,
-    })
-    .select()
-    .single();
-
-  if (error) { logDbError('addDespesa', error); return null; }
-  return row;
+      plantioId,
+      despesaId:  despesa.id,
+      precoUnitarioMovimento: valorNum > 0 ? valorNum / qtdEstoque : null,
+    });
+  }
+  return { ok: true, offline: queued };
 }
 
 /**
@@ -278,87 +334,5 @@ export async function deleteDespesa(id) {
     .eq('id', id);
 
   if (error) { logDbError('deleteDespesa', error); return false; }
-  return true;
-}
-
-// ── Receitas CRUD ────────────────────────────────────────────────────────────
-
-/**
- * Load all receitas for a specific lote (plantio_id).
- */
-export async function loadReceitasByLote(plantioId) {
-  const userId = await getUserId();
-  if (!userId || !plantioId) return [];
-
-  const { data, error } = await supabase
-    .from('receitas')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('plantio_id', plantioId)
-    .order('data', { ascending: false });
-
-  if (error) { logDbError('loadReceitasByLote', error); return []; }
-  return data || [];
-}
-
-/**
- * Load all receitas for the current user.
- */
-export async function loadTodasReceitas(propriedadeId = null) {
-  const userId = await getUserId();
-  if (!userId) return [];
-
-  let q = supabase
-    .from('receitas')
-    .select('*')
-    .eq('user_id', userId)
-    .order('data', { ascending: false });
-
-  if (propriedadeId) q = q.eq('propriedade_id', propriedadeId);
-
-  const { data, error } = await q;
-  if (error) { logDbError('loadTodasReceitas', error); return []; }
-  return data || [];
-}
-
-/**
- * Add a new receita record.
- */
-export async function addReceita({ plantioId, propriedadeId, categoria, descricao, comprador, quantidade, unidade, valor, data, observacao }) {
-  const userId = await getUserId();
-  if (!userId) return null;
-
-  const { data: row, error } = await supabase
-    .from('receitas')
-    .insert({
-      user_id:        userId,
-      plantio_id:     plantioId     || null,
-      propriedade_id: propriedadeId || null,
-      categoria,
-      descricao:      descricao     || null,
-      comprador:      comprador     || null,
-      quantidade:     quantidade != null && quantidade !== '' ? parseFloat(quantidade) : null,
-      unidade:        unidade       || null,
-      valor:          parseFloat(valor) || 0,
-      data,
-      observacao:     observacao    || null,
-    })
-    .select()
-    .single();
-
-  if (error) { logDbError('addReceita', error); return null; }
-  return row;
-}
-
-/**
- * Delete a receita record by id.
- */
-export async function deleteReceita(id) {
-  const { error } = await supabase
-    .from('receitas')
-    .delete()
-    .eq('id', id);
-
-  if (error) { logDbError('deleteReceita', error); return false; }
   return true;
 }

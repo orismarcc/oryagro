@@ -3,7 +3,7 @@
  * Extraídas de AnalysePage.jsx sem alterar a lógica (apenas movidas).
  */
 import { CULTURAS } from '../../data/culturas';
-import { resolveLifecycle, parseCicloDias } from '../../lib/lifecycle';
+import { resolveLifecycle } from '../../lib/lifecycle';
 import { logDbError } from '../../lib/logger';
 import { getProductionFactorSync } from '../../hooks/useCurvasProducao';
 
@@ -53,15 +53,3 @@ export function safeResolveLifecycle(lote, cultura) {
   }
 }
 
-/** True se o lote está pronto para colheita (com fallback por parseCicloDias). */
-export function isProntoParaColheita(lote, cultura) {
-  if (!cultura) return false;
-  const lc = safeResolveLifecycle(lote, cultura);
-  if (lc !== null) return lc.prontoParaColheita === true;
-  const cicloDias = parseCicloDias(cultura.ciclo);
-  const diasDecorridos = Math.max(
-    0,
-    Math.floor((Date.now() - new Date(lote.data_plantio + 'T12:00:00')) / 86_400_000)
-  );
-  return diasDecorridos >= cicloDias;
-}

@@ -99,11 +99,3 @@ export function logWarn(context, message) {
   }
 }
 
-/**
- * Loga informação (apenas em dev).
- */
-export function logInfo(context, message) {
-  if (IS_DEV) {
-    console.info(`[INFO] ${context}: ${message}`);
-  }
-}

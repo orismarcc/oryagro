@@ -6,11 +6,14 @@
  * essencial para uso em campo sem sinal (ex.: marcar etapas do cronograma).
  *
  * ⚠️ SEGURANÇA: só enfileiramos operações IDEMPOTENTES.
- *   - upsert (onConflict): reenviar produz o mesmo resultado.
  *   - insert COM id gerado no cliente (enqueueInsert): o id é a chave primária,
  *     então um reenvio duplicado viola a unique constraint (código 23505) — que
  *     tratamos como sucesso ("já inserido"). Isso torna inserts seguros para a
  *     fila offline sem gerar duplicatas nem alterar saldo de estoque 2×.
+ *   - update/delete POR id: aplicar de novo dá o mesmo resultado.
+ * A fila é reenviada NA ORDEM em que foi gravada (insert antes do update dele).
+ * O saldo do estoque é mantido por gatilhos no banco, então reenviar um
+ * registro nunca baixa o estoque duas vezes.
  * NUNCA enfileire inserts SEM id de cliente (gerariam linhas duplicadas).
  */
 import { supabase } from './supabase';
@@ -57,23 +60,25 @@ function emitChange(size) {
   try { window.dispatchEvent(new CustomEvent('oryagro:outbox-change', { detail: { size } })); } catch { /* noop */ }
 }
 
+/**
+ * Linhas ainda NA FILA para uma tabela (inserts pendentes, com as edições
+ * pendentes já aplicadas; as excluídas saem). Permite mostrar ao produtor o
+ * que ele anotou sem sinal antes de subir.
+ */
+export function pendentes(table) {
+  const queue = read().filter(o => o.table === table);
+  const excluidos = new Set(queue.filter(o => o.kind === 'delete').map(o => o.rowId));
+  return queue
+    .filter(o => o.kind === 'insert' && !excluidos.has(o.payload?.id))
+    .map(o => {
+      const edicoes = queue.filter(u => u.kind === 'update' && u.rowId === o.payload.id);
+      return Object.assign({}, o.payload, ...edicoes.map(u => u.payload), { _pendente: true });
+    });
+}
+
 /** Quantidade de operações pendentes na fila. */
 export function pendingCount() {
   return read().length;
-}
-
-/**
- * Enfileira uma operação idempotente para reenvio.
- * @param {{ table: string, payload: object, options?: object }} op
- */
-export function enqueueUpsert({ table, payload, options, sig }) {
-  const queue = read();
-  // Dedup: se já existe um upsert pendente para a mesma tabela+chave, substitui.
-  // `sig` explícito permite dedup por id (ex.: geometria de um talhão).
-  const signature = sig || JSON.stringify({ table, k: payload?.plantio_id, e: payload?.etapa, d: payload?.dia_previsto, c: payload?.is_custom });
-  const filtered = queue.filter(o => o._sig !== signature);
-  filtered.push({ id: `${Date.now()}_${Math.random().toString(36).slice(2)}`, kind: 'upsert', table, payload, options: options || {}, _sig: signature, ts: Date.now() });
-  write(filtered);
 }
 
 /**
@@ -82,7 +87,7 @@ export function enqueueUpsert({ table, payload, options, sig }) {
  * o reenvio seguro: a 2ª tentativa colide na PK (23505) e é tratada como sucesso.
  * @param {{ table: string, payload: object }} op
  */
-export function enqueueInsert({ table, payload }) {
+function enqueueInsert({ table, payload }) {
   if (!payload?.id) return; // sem id de cliente não é seguro enfileirar
   const queue = read();
   // Dedup pelo id do registro (mesma linha não entra duas vezes)
@@ -117,10 +122,9 @@ export async function insertOfflineSafe(table, payload) {
 }
 
 /**
- * UPDATE resiliente a offline (para edições no campo — ex.: geometria de talhão
- * capturada caminhando o perímetro sem sinal). Tenta atualizar online; se estiver
- * OFFLINE, enfileira um upsert idempotente (por id) e devolve a linha otimista,
- * de modo que o dado NUNCA se perde — sincroniza sozinho quando a internet voltar.
+ * UPDATE resiliente a offline (edições no campo — ex.: marcar "Feito", geometria
+ * de talhão). Tenta online; sem rede, enfileira o MESMO update por id e devolve
+ * a linha otimista — o dado nunca se perde e sincroniza quando a internet voltar.
  *
  * @param {string} table
  * @param {string} id     - chave primária da linha
@@ -132,15 +136,54 @@ export async function updateOfflineSafe(table, id, patch) {
   if (!error) return { row: data, queued: false, error: null };
 
   if (isErroDeRede(error)) {
-    enqueueUpsert({ table, payload: { id, ...patch }, options: { onConflict: 'id' }, sig: `upsert:${table}:${id}` });
+    enqueue({ kind: 'update', table, id, payload: patch });
     return { row: { id, ...patch }, queued: true, error: null };
   }
   return { row: null, queued: false, error };
 }
 
+/**
+ * DELETE resiliente a offline (por id). Sem rede, enfileira; reaplicar um delete
+ * de linha que já não existe é inofensivo.
+ * @returns {Promise<{ ok: boolean, queued: boolean, error: object|null }>}
+ */
+export async function deleteOfflineSafe(table, id) {
+  const { error } = await supabase.from(table).delete().eq('id', id);
+  if (!error) return { ok: true, queued: false, error: null };
+  if (isErroDeRede(error)) {
+    enqueue({ kind: 'delete', table, id });
+    return { ok: true, queued: true, error: null };
+  }
+  return { ok: false, queued: false, error };
+}
+
+/** Enfileira update/delete por id. Updates seguidos da mesma linha se fundem. */
+function enqueue({ kind, table, id, payload }) {
+  const queue = read();
+  const sig = `${kind}:${table}:${id}`;
+  const anterior = kind === 'update' ? queue.find(o => o._sig === sig) : null;
+  const filtered = queue.filter(o => o._sig !== sig);
+  filtered.push({
+    id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    kind, table, rowId: id,
+    payload: anterior ? { ...anterior.payload, ...payload } : payload,
+    _sig: sig, ts: Date.now(),
+  });
+  write(filtered);
+}
+
 async function replay(op) {
+  // 'upsert': formato de versões antigas — mantido para esvaziar filas antigas.
   if (op.kind === 'upsert') {
     const { error } = await supabase.from(op.table).upsert(op.payload, op.options);
+    return !error;
+  }
+  if (op.kind === 'update') {
+    const { error } = await supabase.from(op.table).update(op.payload).eq('id', op.rowId);
+    return !error;
+  }
+  if (op.kind === 'delete') {
+    const { error } = await supabase.from(op.table).delete().eq('id', op.rowId);
     return !error;
   }
   if (op.kind === 'insert') {
@@ -156,7 +199,7 @@ async function replay(op) {
 let _flushing = false;
 
 /** Tenta reenviar tudo que está na fila. Mantém o que falhar. */
-export async function flush() {
+async function flush() {
   if (_flushing) return;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
   const queue = read();
@@ -166,6 +209,11 @@ export async function flush() {
   try {
     const remaining = [];
     for (const op of queue) {
+      // Update/delete de uma linha cujo INSERT ainda não subiu espera a próxima
+      // rodada — senão o update "passaria" sem linha e se perderia.
+      const dependeDeInsertPendente = (op.kind === 'update' || op.kind === 'delete')
+        && remaining.some(r => r.kind === 'insert' && r.table === op.table && r.payload?.id === op.rowId);
+      if (dependeDeInsertPendente) { remaining.push(op); continue; }
       try {
         const ok = await replay(op);
         if (!ok) remaining.push(op);

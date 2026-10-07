@@ -3,13 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, CalendarDays, Sprout, CheckCircle2, ChevronDown, ChevronUp, Leaf, MapPin } from 'lucide-react';
 import { calcularPlantas } from '../hooks/useSimulador';
 import { registrarPlantio, deleteLote, updateLoteMudas } from '../hooks/useSupabaseSync';
-import { resolveLifecycle, fmtDateBR, fmtDiasRestantes, getFaseColor } from '../lib/lifecycle';
+import { resolveLifecycle, fmtDateBR, fmtDiasRestantes } from '../lib/lifecycle';
 import { geojsonToPoints } from '../lib/geo';
 import PropagacaoSelector from './PropagacaoSelector';
 import AnaliseSoloForm from './AnaliseSoloForm';
 import TalhaoMapEditor from './TalhaoMapEditor';
 import TalhaoMapPreview from './TalhaoMapPreview';
-import * as safeStorage from '../lib/safeStorage';
 
 /** Converte o painel de análise (strings do form) em números para o banco. */
 function sanitizeAnalise(analise) {
@@ -68,9 +67,8 @@ function Metric({ label, value, cor }) {
 function LoteCard({ lote, cultura, cor, isCampo, onDelete, deleting }) {
   const lc = resolveLifecycle(lote, cultura);
   const { diasDecorridos, progresso, prontoParaColheita, diasParaColheita,
-          faseAtual, faseIndex, dataPrimeiraProducao } = lc;
+          faseAtual, dataPrimeiraProducao } = lc;
   const progressColor = prontoParaColheita ? '#16a34a' : cor;
-  const faseColor = faseAtual ? getFaseColor(faseIndex) : null;
 
   const dimensao = isCampo
     ? `${lote.area_ha ?? '—'} ha`
@@ -342,7 +340,6 @@ export default function LotesPage({ cultura, calc, onCalcChange, lotes, loadingL
 
     const novo = await registrarPlantio(payload);
     if (novo) {
-      safeStorage.set(`lote_mudas_${novo.id}`, diasViveiro > 0 ? '1' : '0');
       onLoteAdded(novo);
       setNome('');
       setDataPlantio(today());

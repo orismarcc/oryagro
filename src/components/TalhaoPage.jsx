@@ -26,13 +26,6 @@ function fmtDate(iso) {
   const [y, m, d] = iso.substring(0, 10).split('-');
   return `${d}/${m}/${y}`;
 }
-function fmtBRL(v) {
-  return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-function fmtKg(v) {
-  const n = Number(v || 0);
-  return n >= 1000 ? `${(n/1000).toFixed(1)}t` : `${n.toLocaleString('pt-BR')} kg`;
-}
 
 function idadeAnos(dataImplantacao) {
   if (!dataImplantacao) return null;
@@ -47,7 +40,7 @@ function SafraCard({ safra, cultura, onSelectSafra, index }) {
   const isAtiva = safra.status === 'ativo';
 
   let lc = null;
-  try { lc = isAtiva ? resolveLifecycle(safra, cultura) : null; } catch { }
+  try { lc = isAtiva ? resolveLifecycle(safra, cultura) : null; } catch { /* data inválida: sem ciclo */ }
 
   const diasDecorridos = lc?.diasDecorridos ?? null;
   const progresso = lc?.progresso ?? null;
@@ -129,7 +122,7 @@ function NovaSafraDialog({ talhao, cultura, onClose, onCreated }) {
       } else {
         toast.error('Erro ao criar safra. Tente novamente.');
       }
-    } catch (e) {
+    } catch {
       toast.error('Erro ao criar safra.');
     } finally {
       setSaving(false);
@@ -250,9 +243,7 @@ export default function TalhaoPage({ talhao, onBack, onSelectLote }) {
   const safrasAtivas     = safras.filter(s => s.status === 'ativo');
   const safrasConcluidas = safras.filter(s => s.status !== 'ativo');
 
-  // Métricas históricas
-  const totalKg      = safrasConcluidas.reduce((s, c) => s + parseFloat(c._kg ?? 0), 0);
-  const idade        = idadeAnos(talhao.data_implantacao);
+  const idade = idadeAnos(talhao.data_implantacao);
 
   const handleSafraCreated = (novaSafra) => {
     setSafras(prev => [...prev, novaSafra]);

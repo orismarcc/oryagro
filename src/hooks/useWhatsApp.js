@@ -19,7 +19,7 @@ import { logDbError } from '../lib/logger';
 
 // ── CRUD config ───────────────────────────────────────────────────────────────
 
-export async function loadWhatsAppConfig() {
+async function loadWhatsAppConfig() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data, error } = await supabase
@@ -31,7 +31,7 @@ export async function loadWhatsAppConfig() {
   return data;
 }
 
-export async function saveWhatsAppConfig(config) {
+async function saveWhatsAppConfig(config) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data, error } = await supabase
@@ -164,65 +164,6 @@ export async function sendWhatsApp({ config, mensagem, tipo, plantioId }) {
   } catch { /* log failure should not break the main flow */ }
 
   return result;
-}
-
-// ── Gerador de mensagens ──────────────────────────────────────────────────────
-
-export function gerarMensagemCronograma({ loteName, etapa, data, diasRestantes }) {
-  const d = new Date(data + 'T12:00:00');
-  const dataFormatada = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
-  const urgencia = diasRestantes === 0 ? ' *HOJE!*' : diasRestantes === 1 ? ' amanhã' : ` em ${diasRestantes} dias`;
-  return [
-    `🌱 *OryAgro — Lembrete de Atividade*`,
-    ``,
-    `📋 *Lote:* ${loteName}`,
-    `📌 *Etapa:* ${etapa}`,
-    `📅 *Data prevista:* ${dataFormatada}${urgencia}`,
-    ``,
-    `Acesse o OryAgro para registrar a atividade.`,
-    `https://oryagro.vercel.app`,
-  ].join('\n');
-}
-
-export function gerarMensagemColheita({ loteName, diasPronta }) {
-  return [
-    `🌾 *OryAgro — Colheita Pronta!*`,
-    ``,
-    `✅ O lote *${loteName}* está pronto para colheita há ${diasPronta} dia(s).`,
-    ``,
-    `Registre a colheita no app para manter seu histórico atualizado.`,
-    `https://oryagro.vercel.app`,
-  ].join('\n');
-}
-
-export function gerarMensagemCobranca({ compradorNome, valor, dataVencimento, diasRestantes }) {
-  const venc = new Date(dataVencimento + 'T12:00:00').toLocaleDateString('pt-BR');
-  const urgencia = diasRestantes <= 0
-    ? `*VENCIDA há ${Math.abs(diasRestantes)} dia(s)!*`
-    : `vence em *${diasRestantes} dia(s)* (${venc})`;
-  return [
-    `💰 *OryAgro — Cobrança${diasRestantes <= 0 ? ' Vencida' : ' Próxima'}*`,
-    ``,
-    `👤 *Comprador:* ${compradorNome}`,
-    `💵 *Valor:* R$ ${Number(valor).toFixed(2).replace('.', ',')}`,
-    `📅 Parcela ${urgencia}`,
-    ``,
-    `Acesse o OryAgro para gerenciar cobranças.`,
-    `https://oryagro.vercel.app`,
-  ].join('\n');
-}
-
-export function gerarMensagemEstoque({ insumoNome, quantidade, unidade, diasRestantes }) {
-  return [
-    `⚠️ *OryAgro — Alerta de Estoque*`,
-    ``,
-    `📦 *Insumo:* ${insumoNome}`,
-    `📊 *Quantidade atual:* ${quantidade} ${unidade}`,
-    `⏳ *Estimativa:* acaba em ~${diasRestantes} dias`,
-    ``,
-    `Planeje a recompra para não interromper as atividades.`,
-    `https://oryagro.vercel.app`,
-  ].join('\n');
 }
 
 // ── Hook React ────────────────────────────────────────────────────────────────

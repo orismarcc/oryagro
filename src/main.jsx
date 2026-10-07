@@ -3,10 +3,13 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { initOutbox } from './lib/outbox';
+import { limparChavesLegadas } from './lib/safeStorage';
 import './index.css';
 
 // Liga a fila de escritas offline (retry automático ao reconectar).
 initOutbox();
+// Remove caches de versões antigas que não são mais usados.
+limparChavesLegadas();
 
 // ── Capacitor (APK Android) ───────────────────────────────────────────────────
 // Em ambiente nativo: marca <html class="native"> (ativa o padding de safe-area

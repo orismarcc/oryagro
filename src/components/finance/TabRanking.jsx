@@ -86,7 +86,6 @@ function TabRanking({ rawData, loading }) {
   if (sorted.length === 0)
     return <EmptyState message="Nenhuma cultura com vendas registradas." />;
 
-  const maxReceita = Math.max(1, ...sorted.map((c) => c.receita));
 
   return (
     <div className="page-body pt-4 pb-8 flex flex-col gap-5">
@@ -113,7 +112,6 @@ function TabRanking({ rawData, loading }) {
         {sorted.map((c, idx) => {
           const cultura = getCultura(c.cultura_id);
           const isPositive = c.lucro >= 0;
-          const barPct = (c.receita / maxReceita) * 100;
 
           return (
             <motion.div

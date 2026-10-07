@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { supabase, getUserId } from '../lib/supabase';
 import { logDbError } from '../lib/logger';
 import { cacheSet, cacheGet } from './useOfflineCache';
-import { enqueueUpsert, insertOfflineSafe, updateOfflineSafe, isErroDeRede } from '../lib/outbox';
+import { updateOfflineSafe } from '../lib/outbox';
 
 /**
  * Debounced upsert of simulator config values to Supabase.
@@ -125,138 +125,6 @@ export async function updateLoteMudas(id, mudas_feitas) {
     .single();
   if (error) { logDbError('updateLoteMudas', error); return null; }
   return data;
-}
-
-// ── Plantio Eventos (date-based event timeline) ──────────────────────────────
-
-/**
- * Load all timeline events for a plantio, ordered chronologically.
- */
-export async function loadEventos(plantioId) {
-  const userId = await getUserId();
-  if (!userId) return [];
-  const { data, error } = await supabase
-    .from('plantio_eventos')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('plantio_id', plantioId)
-    .order('data', { ascending: true });
-  if (error) logDbError('loadEventos', error);
-  return data || [];
-}
-
-/**
- * Add a new timeline event for a plantio. Returns the created row or null.
- */
-export async function addEvento(payload) {
-  const userId = await getUserId();
-  if (!userId) return null;
-  // Offline-safe: colheita é registrada no campo, muitas vezes sem sinal.
-  const { row, error } = await insertOfflineSafe('plantio_eventos', { ...payload, user_id: userId });
-  if (error) { logDbError('addEvento', error); return null; }
-  return row;
-}
-
-/**
- * Delete a timeline event by id. Returns true on success.
- */
-export async function deleteEvento(id) {
-  const { error } = await supabase.from('plantio_eventos').delete().eq('id', id);
-  return !error;
-}
-
-/**
- * Load all harvest events (tipo = 'colheita') for the current user across all plantios.
- * Used by AnalysePage to compare actual vs projected production.
- */
-export async function loadAllColheitaEventos() {
-  const userId = await getUserId();
-  if (!userId) return [];
-  const { data, error } = await supabase
-    .from('plantio_eventos')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('tipo', 'colheita')
-    .order('data', { ascending: true });
-  if (error) logDbError('loadAllColheitaEventos', error);
-  return data || [];
-}
-
-/**
- * Update the area_plantada_ha field of a lote (partial planting tracking).
- * Returns the updated row or null.
- */
-export async function updateLotePlantado(id, area_plantada_ha) {
-  const { data, error } = await supabase
-    .from('plantios')
-    .update({ area_plantada_ha })
-    .eq('id', id)
-    .select()
-    .single();
-  if (error) { logDbError('updateLotePlantado', error); return null; }
-  return data;
-}
-
-/**
- * Load all cronograma_atividades rows for a given plantio.
- * Used on mount to rehydrate status from Supabase (source of truth).
- */
-export async function loadCronogramaAtividades(plantioId) {
-  if (!plantioId) return [];
-  const { data, error } = await supabase
-    .from('cronograma_atividades')
-    .select('*')
-    .eq('plantio_id', plantioId)
-    .order('dia_previsto', { ascending: true });
-  if (error) { logDbError('loadCronogramaAtividades', error); return []; }
-  return data || [];
-}
-
-/**
- * Upsert a cronograma activity status.
- * Used when the user marks a step as done.
- */
-export async function syncCronogramaStatus(plantioId, culturaId, atividade) {
-  // A4-13: retorna o id da atividade upserted para permitir vinculação com
-  // estoque_movimentos (necessário para reverter saídas ao desfazer etapas).
-  const payload = {
-    plantio_id:      plantioId,
-    cultura_id:      culturaId,
-    dia_previsto:    atividade.dia,
-    etapa:           atividade.etapa,
-    produto:         atividade.produto        || '',
-    dose:            atividade.dose           || '',
-    forma_aplicacao: atividade.forma          || '',
-    tipo:            atividade.tipo           || 'manejo',
-    status:          atividade.status,
-    data_execucao:   atividade.data           || null,
-    observacao:      atividade.obs            || null,
-    is_custom:       atividade.isCustom       || false,
-    updated_at:      new Date().toISOString(),
-  };
-  // onConflict DEVE bater com a UNIQUE real do banco
-  // (cronograma_atividades_plantio_etapa_dia_custom_unique).
-  const options = { onConflict: 'plantio_id,etapa,dia_previsto,is_custom' };
-
-  const { data, error } = await supabase
-    .from('cronograma_atividades')
-    .upsert(payload, options)
-    .select('id')
-    .single();
-
-  if (error) {
-    // Sem rede (offline OU sinal fraco — em campo o navegador costuma se dizer
-    // online e a requisição morrer): enfileira para reenviar ao reconectar. O
-    // upsert é idempotente (chave única), então o replay é seguro. Sem id de
-    // retorno — o chamador já atualizou o estado local de forma otimista.
-    if (isErroDeRede(error)) {
-      enqueueUpsert({ table: 'cronograma_atividades', payload, options });
-      return null;
-    }
-    logDbError('syncCronogramaStatus', error);
-    return null;
-  }
-  return data?.id ?? null;
 }
 
 // ── Propriedades ──────────────────────────────────────────────────────────────
@@ -623,22 +491,6 @@ export async function updatePropriedadeLocal(id, { latitude, longitude }) {
 }
 
 /**
- * Retorna todos os talhões do usuário atual (todas as propriedades), apenas ativos.
- */
-export async function loadTodosTalhoes() {
-  const userId = await getUserId();
-  if (!userId) return [];
-  const { data, error } = await supabase
-    .from('talhoes')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('status', 'ativo')
-    .order('nome');
-  if (error) { logDbError('loadTodosTalhoes', error); return []; }
-  return data || [];
-}
-
-/**
  * Retorna todos os plantios vinculados a um talhão, ordenados por safra_numero crescente.
  */
 export async function loadSafrasDeTalhao(talhaoId) {
@@ -717,24 +569,10 @@ export async function criarSafraDeTalhao(talhaoId, dataSafra, talhaoData) {
 }
 
 /**
- * Atualiza campos de um talhão. Retorna o row atualizado ou null.
- */
-export async function atualizarTalhao(id, updates) {
-  const { data, error } = await supabase
-    .from('talhoes')
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .select()
-    .single();
-  if (error) { logDbError('atualizarTalhao', error); return null; }
-  return data;
-}
-
-/**
  * Soft-delete de um talhão: marca status como 'inativo'.
  * Retorna true em caso de sucesso.
  */
-export async function deletarTalhao(id) {
+async function deletarTalhao(id) {
   const { error } = await supabase
     .from('talhoes')
     .update({ status: 'inativo', updated_at: new Date().toISOString() })

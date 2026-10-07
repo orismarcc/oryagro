@@ -8,7 +8,6 @@
  */
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { classeLabel, tipoLabel } from '../data/defensivos';
 
 const GREEN = [22, 101, 52];
 const GRAY = [90, 90, 90];
@@ -92,7 +91,7 @@ export function gerarCadernoCampoPDF({ lote, cultura, propriedade, aplicacoes = 
         fmtDateBR(a.data),
         dash(a.produto),
         dash(a.ingrediente_ativo),
-        a.classe ? classeLabel(a.classe) : '—',
+        dash(a.classe),
         dash(a.alvo),
         dash(a.dose),
         a.carencia_dias != null ? `${a.carencia_dias} d` : '—',
@@ -112,8 +111,8 @@ export function gerarCadernoCampoPDF({ lote, cultura, propriedade, aplicacoes = 
 
     ordenadas.forEach((a, i) => {
       const rows = [
-        ['Data', fmtDateBR(a.data), 'Tipo', a.tipo ? tipoLabel(a.tipo) : '—'],
-        ['Produto comercial', dash(a.produto), 'Classe', a.classe ? classeLabel(a.classe) : '—'],
+        ['Data', fmtDateBR(a.data), 'Tipo', dash(a.tipo)],
+        ['Produto comercial', dash(a.produto), 'Classe', dash(a.classe)],
         ['Ingrediente ativo', dash(a.ingrediente_ativo), 'Registro MAPA', dash(a.registro_mapa)],
         ['Alvo (praga/doença)', dash(a.alvo), 'Dose', dash(a.dose)],
         ['Área tratada', a.area_ha != null ? `${a.area_ha} ha` : '—', 'Volume de calda', dash(a.volume_calda)],

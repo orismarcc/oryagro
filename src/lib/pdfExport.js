@@ -16,7 +16,7 @@ function today() {
   return new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-export async function exportarRelatorioPDF(lotes, eventosColheita, todasVendas, propriedades) {
+export async function exportarRelatorioPDF(lotes, eventosColheita, todasVendas) {
   // CULTURAS imported statically at top
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -159,11 +159,8 @@ export async function exportarRelatorioPDF(lotes, eventosColheita, todasVendas, 
     checkPageBreak(30);
     sectionTitle('Colheitas Registradas');
     const colheitaRows = eventosColheita.map(ev => {
-      let qtd = '—';
-      try {
-        const d = typeof ev.descricao === 'string' ? JSON.parse(ev.descricao) : ev.descricao;
-        if (d?.qtd) qtd = `${d.qtd} ${d.unidade || 'un'}`;
-      } catch {}
+      const qtd = ev.quantidade != null
+        ? `${Number(ev.quantidade).toLocaleString('pt-BR')} ${ev.unidade || 'kg'}` : '—';
       const lote = lotes.find(l => String(l.id) === String(ev.plantio_id));
       const cultura = lote ? CULTURAS[lote.cultura_id] : null;
       return [fmtDateBR(ev.data), lote?.nome || '—', cultura?.nome || '—', qtd];

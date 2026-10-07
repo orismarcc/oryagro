@@ -23,7 +23,7 @@ export { QUALIDADE_CONFIG };
 
 // ── Funções CRUD ──────────────────────────────────────────────────────────────
 
-export async function addProducaoRegistro({ plantioId, data, quantidade, unidade = 'kg', qualidade = 'A', observacao = '' }) {
+async function addProducaoRegistro({ plantioId, data, quantidade, unidade = 'kg', qualidade = 'A', observacao = '' }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Não autenticado');
 
@@ -42,24 +42,44 @@ export async function addProducaoRegistro({ plantioId, data, quantidade, unidade
   return row;
 }
 
-export async function updateProducaoRegistro(id, updates) {
-  const { data: row, error } = await supabase
-    .from('producao_registros')
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .select()
-    .single();
-  if (error) { logDbError('updateProducaoRegistro', error); throw error; }
-  return row;
-}
-
-export async function deleteProducaoRegistro(id) {
-  const { error } = await supabase.from('producao_registros').delete().eq('id', id);
+/**
+ * Remove um registro de produção. Se ele nasceu de uma COLHEITA anotada
+ * (atividade_id), exclui o registro de origem — a produção cai junto (cascata)
+ * e não "volta" na próxima edição da atividade.
+ */
+async function deleteProducaoRegistro(registro) {
+  const { error } = registro.atividade_id
+    ? await supabase.from('cronograma_atividades').delete().eq('id', registro.atividade_id)
+    : await supabase.from('producao_registros').delete().eq('id', registro.id);
   if (error) { logDbError('deleteProducaoRegistro', error); throw error; }
   return true;
 }
 
-export async function loadProducaoRegistros(plantioId, limitDays = 90) {
+/** Converte uma quantidade colhida para kg (kg, g, t). Caixas/unidades → null. */
+export function paraKg(quantidade, unidade) {
+  const q = parseFloat(quantidade);
+  if (!Number.isFinite(q)) return null;
+  const u = String(unidade || 'kg').trim().toLowerCase();
+  if (u === 'kg') return q;
+  if (u === 'g') return q / 1000;
+  if (u === 't' || u === 'ton') return q * 1000;
+  return null;
+}
+
+/**
+ * Todas as colheitas do usuário (todos os lotes), para Agenda, Análise e PDF.
+ * Cada item: { plantio_id, data, quantidade, unidade, quantidade_kg }.
+ */
+export async function loadColheitas() {
+  const { data, error } = await supabase
+    .from('producao_registros')
+    .select('plantio_id, data, quantidade, unidade')
+    .order('data', { ascending: true });
+  if (error) { logDbError('loadColheitas', error); return []; }
+  return (data || []).map(r => ({ ...r, quantidade_kg: paraKg(r.quantidade, r.unidade) }));
+}
+
+async function loadProducaoRegistros(plantioId, limitDays = 90) {
   const since = new Date();
   since.setDate(since.getDate() - limitDays);
   const { data, error } = await supabase
@@ -107,9 +127,10 @@ export function useProducaoRegistros(plantioId) {
 
   const removeRegistro = async (id) => {
     const r = registros.find(x => x.id === id);
-    await deleteProducaoRegistro(id);
+    if (!r) return;
+    await deleteProducaoRegistro(r);
     setRegistros(prev => prev.filter(x => x.id !== id));
-    if (r) setTotalKg(prev => prev - parseFloat(r.quantidade || 0));
+    setTotalKg(prev => prev - parseFloat(r.quantidade || 0));
   };
 
   // Dados para gráfico: últimos 30 dias agrupados por data

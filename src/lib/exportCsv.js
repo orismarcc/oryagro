@@ -22,7 +22,7 @@ function escapeCell(value) {
  * @param {Array<Array<string|number>>} rows
  * @returns {string}
  */
-export function toCsv(headers, rows) {
+function toCsv(headers, rows) {
   const headerLine = headers.map(escapeCell).join(';');
   const bodyLines = rows.map((row) => row.map(escapeCell).join(';'));
   return BOM + [headerLine, ...bodyLines].join('\r\n');
@@ -35,7 +35,7 @@ export function toCsv(headers, rows) {
  * @param {string} content
  * @param {string} [mime]
  */
-export function downloadText(filename, content, mime = 'text/csv;charset=utf-8') {
+function downloadText(filename, content, mime = 'text/csv;charset=utf-8') {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

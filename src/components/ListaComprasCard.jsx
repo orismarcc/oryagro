@@ -36,7 +36,7 @@ export default function ListaComprasCard({ propriedadeId, insumos = [] }) {
         setLotes(ativos);
         // Agendamentos desses lotes — a única fonte da necessidade de compra.
         const rows = await loadAtividadesPorLotes(ativos.map(l => l.id));
-        if (!cancel) setAtividades(rows);
+        if (!cancel && rows) setAtividades(rows);
       })
       .catch(() => !cancel && setLotes([]));
     return () => { cancel = true; };

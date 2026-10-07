@@ -64,7 +64,8 @@ export default function Dashboard({ onAddLote, onSelectLote, onGoEstoque, onGoAg
       setLotes(ativos);
       setProps(ps || []);
       setEstoque(est || []);
-      setAtividades(await loadAtividadesPorLotes(ativos.map(l => l.id)));
+      const rows = await loadAtividadesPorLotes(ativos.map(l => l.id));
+      if (rows) setAtividades(rows);  // falha de leitura: mantém o que já está na tela
     } catch (err) {
       console.error('[Inicio] carregar:', err);
     } finally {
@@ -125,7 +126,7 @@ export default function Dashboard({ onAddLote, onSelectLote, onGoEstoque, onGoAg
   const concluir = async (a) => {
     setConcluindo(a.id);
     try {
-      const r = await concluirLancamento(a, hoje, estoque);
+      const r = await concluirLancamento(a, hoje);
       if (!r) { toast.error('Não foi possível marcar como feito.'); return; }
       toast.success('Feito! ✓');
       avisarMudanca();

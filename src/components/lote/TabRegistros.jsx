@@ -3,7 +3,7 @@
  *
  * Substitui as antigas abas Cronograma, Caderno e Diário: é uma lista só,
  * filtrável por tipo, com:
- *  - agendados no topo e "✓ Feito" em um toque (baixa no estoque junto);
+ *  - agendados no topo e "✓ Feito" em um toque (o banco dá a baixa no estoque);
  *  - histórico agrupado por mês, compacto, com fotos;
  *  - Caderno de campo em PDF gerado a partir dos próprios registros.
  * Criar/editar acontece no "Anotar" (folha única do app).
@@ -19,7 +19,6 @@ import {
   getCategoria, STATUS, dataDoLancamento, hojeLocalISO, loadAtividades, loadFotosPorAtividades,
   concluirLancamento, reabrirLancamento, excluirLancamento, deleteFoto,
 } from '../../hooks/useAtividades';
-import { loadEstoque } from '../../hooks/useGestao';
 import { supabase } from '../../lib/supabase';
 import { formatDatePtBR, fmtNumber } from './shared';
 
@@ -39,7 +38,6 @@ export default function TabRegistros({ lote, cultura, propriedade = null, cor, c
   const { anotar, versao, avisarMudanca } = useAnotar();
   const [itens, setItens]       = useState([]);
   const [fotosPor, setFotosPor] = useState({});
-  const [estoque, setEstoque]   = useState([]);
   const [loading, setLoading]   = useState(true);
   const [filtro, setFiltro]     = useState('todos');
   const [menuId, setMenuId]     = useState(null);
@@ -49,15 +47,13 @@ export default function TabRegistros({ lote, cultura, propriedade = null, cor, c
 
   const carregar = useCallback(async () => {
     const rows = await loadAtividades(lote.id);
-    setItens(rows);
     setLoading(false);
-    setFotosPor(await loadFotosPorAtividades(rows.map(r => r.id)));
+    if (!rows) return;  // sem conexão: mantém o que já está na tela
+    setItens(rows);
+    setFotosPor(await loadFotosPorAtividades(rows.filter(r => !r._pendente).map(r => r.id)));
   }, [lote.id]);
 
   useEffect(() => { carregar(); }, [carregar, versao]);
-  useEffect(() => {
-    loadEstoque(null).then(r => setEstoque(r || [])).catch(() => {});
-  }, [versao]);
 
   const filtroObj = FILTROS.find(f => f.v === filtro);
   const visiveis = filtroObj?.cats ? itens.filter(a => filtroObj.cats.includes(a.categoria || 'outros')) : itens;
@@ -99,7 +95,7 @@ export default function TabRegistros({ lote, cultura, propriedade = null, cor, c
     }
   };
 
-  const concluir = (a) => acao(a, () => concluirLancamento(a, hoje, estoque), 'Feito! ✓');
+  const concluir = (a) => acao(a, () => concluirLancamento(a, hoje), 'Feito! ✓');
   const reabrir  = (a) => acao(a, () => reabrirLancamento(a), 'Voltou para agendado.');
   const excluir  = (a) => {
     if (!window.confirm(`Excluir "${a.etapa}"? O estoque usado volta para o saldo.`)) return;
@@ -265,6 +261,11 @@ function Linha({ a, cor, hoje, ultima, fotos = [], ocupado, canDelete, menuAbert
             {a.insumo_id && !agendado && (
               <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'hsl(140 14% 94%)', color: 'hsl(150 8% 40%)' }}>
                 estoque
+              </span>
+            )}
+            {a._pendente && (
+              <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#fef3c7', color: '#92400e' }}>
+                ⏳ aguardando sinal
               </span>
             )}
           </div>

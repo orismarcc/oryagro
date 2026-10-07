@@ -5,7 +5,7 @@
  * (hectares, perímetro, vértices) — o mesmo resumo mostrado no editor, agora
  * visível direto no card do talhão sem precisar abrir "Editar".
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Grid3x3 } from 'lucide-react';
@@ -16,7 +16,6 @@ export default function TalhaoMapPreview({ geojson, areaHa, height = 150, cor = 
   const pontos = geojsonToPoints(geojson);
   const divRef = useRef(null);
   const mapRef = useRef(null);
-  const [ready, setReady] = useState(false);
 
   const area = areaHa != null ? Number(areaHa) : polygonAreaHa(pontos);
   const perimetro = polygonPerimeter(pontos);
@@ -46,12 +45,11 @@ export default function TalhaoMapPreview({ geojson, areaHa, height = 150, cor = 
     ro?.observe(el);
 
     mapRef.current = map;
-    setReady(true);
 
     return () => {
       clearTimeout(t); ro?.disconnect();
       try { map.remove(); } catch { /* ok */ }
-      mapRef.current = null; setReady(false);
+      mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geojson]);

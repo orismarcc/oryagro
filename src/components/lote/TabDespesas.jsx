@@ -4,14 +4,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Plus, Trash2, Receipt, PackagePlus, Pencil, X, Check } from 'lucide-react';
 import {
   CATEGORIAS_DESPESA,
-  addDespesa,
+  registrarCompra,
   updateDespesa,
   loadDespesasByLote,
   deleteDespesa,
   getUnidade,
 } from '../../hooks/useDespesas';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
-import { upsertInsumo, addMovimento, deleteMovimentosByDespesa } from '../../hooks/useGestao';
+import { loadEstoque } from '../../hooks/useGestao';
 import { today, formatDatePtBR, fmtBRL, fmtNumber } from './shared';
 
 function TabDespesas({ lote, cor, canDelete }) {
@@ -43,11 +43,9 @@ function TabDespesas({ lote, cor, canDelete }) {
   const [estoqueForm, setEstoqueForm] = useState({
     enabled: false,
     nomeInsumo: '',
-    qtdMinima: '0',
   });
 
   const subcats = CATEGORIAS_DESPESA.find(c => c.label === form.categoria)?.subcategorias || [];
-  const autoUnidade = getUnidade(form.categoria, form.subcategoria);
 
   // Auto-update unidade when categoria or subcategoria changes
   useEffect(() => {
@@ -90,64 +88,36 @@ function TabDespesas({ lote, cor, canDelete }) {
     if (!form.data || !form.valor || parseFloat(form.valor) <= 0) return;
     setSaving(true);
     try {
-      const despesaRow = await addDespesa({
+      // Mesma regra do Anotar → Compra: despesa + entrada no estoque (reaproveita
+      // o item com o mesmo nome/unidade; o saldo e o mínimo são do banco).
+      const estoque = estoqueForm.enabled ? await loadEstoque(lote.propriedade_id || null) : [];
+      const r = await registrarCompra({
         plantioId:     lote.id,
         propriedadeId: lote.propriedade_id || null,
         categoria:     form.categoria,
-        subcategoria:  form.subcategoria || null,
-        produto:       form.produto      || null,
-        quantidade:    form.quantidade   || null,
-        unidade:       form.quantidade ? form.unidade : null,
-        descricao:     form.descricao    || null,
-        prestador:     form.prestador    || null,
-        valor:         parseFloat(form.valor),
+        subcategoria:  form.subcategoria,
+        produto:       form.produto,
+        quantidade:    form.quantidade,
+        unidade:       form.unidade,
+        descricao:     form.descricao,
+        prestador:     form.prestador,
+        valor:         form.valor,
         data:          form.data,
-        observacao:    form.observacao   || null,
+        observacao:    form.observacao,
+        entradaEstoque: estoqueForm.enabled && !!estoqueForm.nomeInsumo.trim(),
+        nomeInsumo:    estoqueForm.nomeInsumo,
+        estoque,
       });
-
-      // A4-03: Estoque integration — movimento fica vinculado à despesa via despesa_id
-      if (estoqueForm.enabled && estoqueForm.nomeInsumo.trim() && lote.propriedade_id && despesaRow?.id) {
-        const qtd = parseFloat(form.quantidade) || 0;
-        // Preço unitário AUTOMÁTICO: valor total pago ÷ quantidade comprada.
-        const precoUnit = (qtd > 0 && parseFloat(form.valor) > 0)
-          ? parseFloat(form.valor) / qtd
-          : 0;
-        const insumo = await upsertInsumo({
-          nome:              estoqueForm.nomeInsumo.trim(),
-          unidade:           form.unidade || 'un',
-          quantidade:        0,                                        // managed via movimentos
-          quantidade_minima: parseFloat(estoqueForm.qtdMinima) || 0,
-          preco_unitario:    precoUnit,
-          propriedadeId:     lote.propriedade_id,
-        });
-        if (insumo?.id && qtd > 0) {
-          await addMovimento({
-            insumoId:    insumo.id,
-            tipo:        'entrada',
-            quantidade:  qtd,
-            observacao:  `Despesa: ${form.descricao || form.subcategoria || form.categoria}`,
-            data:        form.data,
-            plantioId:   lote.id,
-            despesaId:   despesaRow.id,
-            precoUnitarioMovimento: precoUnit,   // alimenta o preço médio ponderado
-          });
-        }
+      if (!r.ok) {
+        toast.error(r.motivo === 'unidade'
+          ? `A unidade não converte para a do estoque (${r.unidadeEstoque}).`
+          : 'Erro ao salvar despesa. Tente novamente.');
+        return;
       }
-      // ───────────────────────────────────────────────────────────────────────
-
+      if (r.offline) toast.info('Sem sinal: a despesa foi salva no aparelho e sobe quando a conexão voltar.');
       await fetchRegistros();
-      setForm({
-        data: today(),
-        categoria: CATEGORIAS_DESPESA[0].label,
-        subcategoria: '',
-        quantidade: '',
-        unidade: getUnidade(CATEGORIAS_DESPESA[0].label, ''),
-        descricao: '',
-        prestador: '',
-        valor: '',
-        observacao: '',
-      });
-      setEstoqueForm({ enabled: false, nomeInsumo: '', qtdMinima: '0' });
+      resetForm();
+      setEstoqueForm({ enabled: false, nomeInsumo: '' });
     } catch {
       toast.error('Erro ao salvar despesa. Verifique sua conexão.');
     } finally {
@@ -159,7 +129,7 @@ function TabDespesas({ lote, cor, canDelete }) {
   const startEdit = (r) => {
     setConfirmDeleteId(null);
     setEditId(r.id);
-    setEstoqueForm({ enabled: false, nomeInsumo: '', qtdMinima: '0' });
+    setEstoqueForm({ enabled: false, nomeInsumo: '' });
     setForm({
       data:         r.data || today(),
       categoria:    r.categoria || CATEGORIAS_DESPESA[0].label,
@@ -223,9 +193,7 @@ function TabDespesas({ lote, cor, canDelete }) {
 
   const handleDelete = async (id) => {
     try {
-      // A4-03: Reverte primeiro o estoque (a FK é ON DELETE SET NULL, então
-      // depois da despesa sumir não saberíamos mais a vinculação)
-      await deleteMovimentosByDespesa(id);
+      // A entrada no estoque vinculada é estornada pelo banco (gatilho).
       await deleteDespesa(id);
       setRegistros(prev => prev.filter(r => r.id !== id));
     } catch {
@@ -463,22 +431,9 @@ function TabDespesas({ lote, cor, canDelete }) {
                       <p className="text-[10px] text-muted-foreground mt-0.5">Se já existir no estoque com esse nome, a entrada será adicionada ao mesmo item.</p>
                     </div>
 
-                    <div>
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Qtd. mínima</label>
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          placeholder="0"
-                          value={estoqueForm.qtdMinima}
-                          onChange={e => setEstoqueForm(f => ({ ...f, qtdMinima: e.target.value }))}
-                          className="flex-1 rounded-xl border px-3 py-2.5 text-[13px] focus:outline-none focus:ring-2"
-                          style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)', '--tw-ring-color': cor }}
-                        />
-                        <span className="text-[11px] font-bold text-muted-foreground flex-shrink-0">{form.unidade || 'un'}</span>
-                      </div>
-                    </div>
+                    <p className="text-[10.5px] text-muted-foreground">
+                      Estoque mínimo: 25% do que entrar (ajustável na tela Estoque).
+                    </p>
 
                     {/* Preço unitário AUTOMÁTICO = valor pago ÷ quantidade */}
                     {(() => {

@@ -16,8 +16,6 @@ import {
 } from 'recharts';
 import {
   useProducaoRegistros,
-  addProducaoRegistro,
-  deleteProducaoRegistro,
   QUALIDADE_CONFIG,
 } from '../../hooks/useProducaoRegistros';
 import { today, fmtNumber } from './shared';
@@ -30,7 +28,7 @@ function fmtDateShort(iso) {
 }
 
 // ── Tooltip customizado do gráfico ────────────────────────────────────────────
-function ChartTooltip({ active, payload, label }) {
+function ChartTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
@@ -137,13 +135,10 @@ export default function TabProducao({
   };
 
   // Métricas dos últimos 30 dias
-  const ultimos30 = chartData.filter(d => d.kg > 0);
-  const totalUltimos30 = ultimos30.reduce((s, d) => s + d.kg, 0);
   const melhorDia = chartData.reduce((mx, d) => d.kg > mx.kg ? d : mx, { kg: 0 });
 
   // Distribuição de qualidade
   const totalA = registros.reduce((s, r) => r.qualidade === 'A' ? s + parseFloat(r.quantidade) : s, 0);
-  const totalB = registros.reduce((s, r) => r.qualidade === 'B' ? s + parseFloat(r.quantidade) : s, 0);
   const pctA   = totalKg > 0 ? Math.round((totalA / totalKg) * 100) : 0;
 
   if (loading) {

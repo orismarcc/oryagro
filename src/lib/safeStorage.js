@@ -40,7 +40,7 @@ export function set(chave, valor) {
 }
 
 /** Lê uma chave. Nunca lança — devolve o fallback em qualquer erro. */
-export function get(chave, fallback = null) {
+function get(chave, fallback = null) {
   if (!disponivel) return fallback;
   try {
     const v = localStorage.getItem(chave);
@@ -60,27 +60,31 @@ export function setJSON(chave, valor) {
   try { return set(chave, JSON.stringify(valor)); } catch { return false; }
 }
 
-/** Remove uma chave. Nunca lança. */
-export function remove(chave) {
-  if (!disponivel) return false;
-  try { localStorage.removeItem(chave); return true; } catch { return false; }
+/** Remove as chaves que casam com algum dos padrões. Nunca lança. */
+function removerChaves(padroes) {
+  const alvo = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && padroes.some(re => re.test(k))) alvo.push(k);
+  }
+  alvo.forEach(k => { try { localStorage.removeItem(k); } catch { /* ignora */ } });
+  return alvo.length;
 }
 
 /**
- * Libera espaço descartando caches recriáveis (prefixos de cache de leitura),
- * preservando o que não pode ser perdido: fila offline e status do cronograma.
+ * Libera espaço descartando caches recriáveis (leituras guardadas para uso
+ * offline). A fila offline (oryagro_outbox) nunca é descartada.
  */
 function podarCaches() {
-  const PRESERVAR = [/^oryagro_outbox/, /^cronograma_status/, /^cronograma_custom/, /^lote_mudas_/];
-  const descartaveis = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (!k) continue;
-    if (PRESERVAR.some(re => re.test(k))) continue;
-    if (/^(cache_|clima_|weather_|sim_)/.test(k)) descartaveis.push(k);
-  }
-  descartaveis.forEach(k => { try { localStorage.removeItem(k); } catch { /* ignora */ } });
-  logWarn('safeStorage', `cota cheia — ${descartaveis.length} caches descartados`);
+  const n = removerChaves([/^(offline_cache_|cache_|clima_|weather_|sim_)/]);
+  logWarn('safeStorage', `cota cheia — ${n} caches descartados`);
 }
 
-export default { set, get, getJSON, setJSON, remove };
+/**
+ * Apaga chaves de versões antigas do app que não são mais lidas (status e
+ * etapas do antigo cronograma-guia, flag de mudas). Chamado na inicialização.
+ */
+export function limparChavesLegadas() {
+  if (!disponivel) return;
+  try { removerChaves([/^cronograma_status_lote_/, /^cronograma_custom_lote_/, /^lote_mudas_/]); } catch { /* ignora */ }
+}

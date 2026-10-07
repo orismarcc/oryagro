@@ -73,7 +73,6 @@ export default function SimuladorFinanceiro({ cultura }) {
   const [valores, setValores] = useState(() => loadFromStorage(storageKey, getDefaults()));
   const [metaLucro, setMetaLucro] = useState('');
   const [editInsumos, setEditInsumos] = useState(false);
-  const [editPrecos, setEditPrecos] = useState(false);
   const [plantioDialog, setPlantioDialog] = useState(false);
   const [plantioNome, setPlantioNome] = useState('');
   const [plantioData, setPlantioData] = useState(new Date().toISOString().split('T')[0]);
@@ -97,7 +96,7 @@ export default function SimuladorFinanceiro({ cultura }) {
 
   useEffect(() => {
     loadSimuladorConfig(cultura.id).then(remote => {
-      if (remote && Object.keys(remote).length > 0) setValores(prev => ({ ...getDefaults(), ...remote }));
+      if (remote && Object.keys(remote).length > 0) setValores({ ...getDefaults(), ...remote });
     });
   }, [cultura.id]);
 
@@ -137,7 +136,7 @@ export default function SimuladorFinanceiro({ cultura }) {
     const raw = e.target.value;
     setValores(prev => ({ ...prev, [campo]: raw === '' ? '' : parseFloat(raw) || 0 }));
   };
-  const resetAll = () => { prevAreaRef.current = null; setValores(getDefaults()); setEditInsumos(false); setEditPrecos(false); };
+  const resetAll = () => { prevAreaRef.current = null; setValores(getDefaults()); setEditInsumos(false); };
 
   // Compute scale factor for alert params
   const baseArea = isCampo

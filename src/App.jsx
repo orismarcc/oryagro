@@ -82,11 +82,7 @@ function AppInner({ session, displayName, signOut }) {
   // e notifica o usuário para recarregar. Não faz reload automático para não interromper o usuário.
   useEffect(() => {
     // Prefixos de chaves que indicam dados do app alterados em outra aba
-    const DATA_PREFIXES = [
-      'cronograma_status', 'cronograma_custom',
-      'lote_mudas', 'lote_precos',
-      'propriedades_', 'estoque_',
-    ];
+    const DATA_PREFIXES = ['propriedades_', 'lote_precos_'];
     let lastNotified = 0;
 
     const onStorage = (e) => {
@@ -380,6 +376,12 @@ function AppInner({ session, displayName, signOut }) {
                   autoOpenLoteForm={autoOpenLoteForm}
                   propriedadeId={propriedadePadrao?.id ?? null}
                   initialTab={culturaTab}
+                  onLoteCriado={(novo) => {
+                    refreshDados();
+                    setCulturaId(null);
+                    setAutoOpenLoteForm(false);
+                    abrirLote(novo, culturaOpenedFrom === 'propriedade' ? 'propriedade' : 'dashboard');
+                  }}
                 />
               )}
               {mainView === 'lote' && selectedLote && CULTURAS[selectedLote.cultura_id] && (
@@ -397,7 +399,7 @@ function AppInner({ session, displayName, signOut }) {
               {mainView === 'comparacao' && <ComVoltar onBack={voltarMais}><ComparacaoCulturas /></ComVoltar>}
               {mainView === 'analise'    && isGlobalAdmin && (
                 <ComVoltar onBack={voltarMais}>
-                  <AnalysePage onSignOut={signOut} userName={displayName} propriedades={propriedades} userRole={userRole} />
+                  <AnalysePage userName={displayName} propriedades={propriedades} userRole={userRole} />
                 </ComVoltar>
               )}
               {mainView === 'configuracoes' && <SettingsPage onBack={voltarMais} />}

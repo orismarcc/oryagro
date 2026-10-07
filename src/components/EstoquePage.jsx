@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Package2, Plus, TrendingUp, TrendingDown, X, Trash2, AlertTriangle, Pencil, ChevronLeft, Wallet, Boxes } from 'lucide-react';
 import { loadEstoque, upsertInsumo, deleteInsumo, addMovimento, loadMovimentos, loadMovimentosBatch } from '../hooks/useGestao';
 import { loadLotesByPropriedade } from '../hooks/useSupabaseSync';
-import { logDbError } from '../lib/logger';
 import { useFarm } from '../context/FarmContext';
 import { can, FARM_ACTIONS } from '../lib/permissions';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
@@ -14,13 +13,13 @@ import ListaComprasCard from './ListaComprasCard';
 const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
 
 const INSUMOS_PADRAO = [
-  { nome: 'Calcário dolomítico', unidade: 'kg',  quantidade_minima: 50  },
-  { nome: 'Esterco bovino',      unidade: 'kg',  quantidade_minima: 100 },
-  { nome: 'NPK 10-10-10',        unidade: 'kg',  quantidade_minima: 25  },
-  { nome: 'Ureia 46%',           unidade: 'kg',  quantidade_minima: 20  },
-  { nome: 'Nitrato de Cálcio',   unidade: 'kg',  quantidade_minima: 10  },
-  { nome: 'Defensivo foliar',    unidade: 'L',   quantidade_minima: 2   },
-  { nome: 'Sementes (geral)',    unidade: 'un',  quantidade_minima: 100 },
+  { nome: 'Calcário dolomítico', unidade: 'kg' },
+  { nome: 'Esterco bovino',      unidade: 'kg' },
+  { nome: 'NPK 10-10-10',        unidade: 'kg' },
+  { nome: 'Ureia 46%',           unidade: 'kg' },
+  { nome: 'Nitrato de Cálcio',   unidade: 'kg' },
+  { nome: 'Defensivo foliar',    unidade: 'L' },
+  { nome: 'Sementes (geral)',    unidade: 'un' },
 ];
 
 const UNIDADES = ['kg', 'L', 'g', 'mL', 'saco', 'un'];
@@ -280,7 +279,10 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
 
   const [nome,    setNome]    = useState(existingInsumo?.nome    ?? '');
   const [unidade, setUnidade] = useState(existingInsumo?.unidade ?? 'kg');
-  const [min,     setMin]     = useState(existingInsumo?.quantidade_minima != null ? String(existingInsumo.quantidade_minima) : '');
+  // Estoque mínimo: % do nível da última compra (padrão 25%) ou valor fixo
+  const [minTipo, setMinTipo] = useState(existingInsumo?.minimo_tipo ?? 'percent');
+  const [minPct,  setMinPct]  = useState(String(existingInsumo?.minimo_percentual ?? 25));
+  const [minVal,  setMinVal]  = useState(existingInsumo?.quantidade_minima != null ? String(existingInsumo.quantidade_minima) : '');
   // Edição: preço unitário direto (correção). Cadastro: derivado do valor pago.
   const [preco,   setPreco]   = useState(existingInsumo?.preco_unitario != null    ? String(existingInsumo.preco_unitario)    : '');
   // Quantidade inicial — só disponível no cadastro (não no edit, pois a
@@ -299,22 +301,23 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
     e.preventDefault();
     setSaving(true);
 
-    const qtd = isEdit
-      ? existingInsumo.quantidade               // mantém quantidade atual no edit
-      : qtdInicialNum;                          // usa quantidade inicial no cadastro
-
     // Edit → preço digitado; Cadastro → preço calculado do valor pago
     const precoUnit = isEdit ? (parseFloat(preco) || 0) : precoCalculado;
+    const pct = Math.min(100, Math.max(0, parseFloat(minPct) || 0));
 
+    // O saldo NÃO é gravado aqui: nasce em 0 e a quantidade inicial entra
+    // como movimentação (antes ela era somada duas vezes).
     const row = await upsertInsumo({
       id: existingInsumo?.id,
       nome,
       unidade,
-      quantidade: qtd,
-      quantidade_minima: parseFloat(min) || 0,
-      preco_unitario:    precoUnit,
+      preco_unitario: precoUnit,
       propriedadeId,
+      minimoTipo: minTipo,
+      minimoPercentual: pct,
+      quantidadeMinima: parseFloat(minVal) || 0,
     });
+    const qtd = isEdit ? 0 : qtdInicialNum;
 
     setSaving(false);
 
@@ -359,7 +362,7 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
           <div className="flex flex-wrap gap-1.5 mb-1">
             {INSUMOS_PADRAO.map(s => (
               <button key={s.nome} type="button"
-                onClick={() => { setNome(s.nome); setUnidade(s.unidade); setMin(String(s.quantidade_minima)); }}
+                onClick={() => { setNome(s.nome); setUnidade(s.unidade); }}
                 className="text-[11px] px-2.5 py-1 rounded-full font-semibold"
                 style={{ background: 'hsl(140 14% 94%)', color: 'hsl(150 8% 35%)' }}>
                 {s.nome}
@@ -383,27 +386,47 @@ function InsumoFormModal({ onClose, onSaved, propriedadeId, existingInsumo = nul
             style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }} />
         </div>
 
-        {/* Unidade + Qtd mínima */}
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              Unidade
-            </label>
-            <select value={unidade} onChange={e => setUnidade(e.target.value)}
-              className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
-              style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }}>
-              {UNIDADES.map(u => <option key={u}>{u}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              Qtd mínima
-            </label>
-            <input type="number" min="0" step="0.1" value={min}
-              onChange={e => setMin(e.target.value)} placeholder="0"
-              className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
+        {/* Unidade */}
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Unidade
+          </label>
+          <select value={unidade} onChange={e => setUnidade(e.target.value)}
+            className="w-full mt-1 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
+            style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }}>
+            {UNIDADES.map(u => <option key={u}>{u}</option>)}
+          </select>
+        </div>
+
+        {/* Estoque mínimo — % (padrão) ou valor fixo */}
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Estoque mínimo (avisa quando chegar nele)
+          </label>
+          <div className="flex gap-2 mt-1">
+            <div className="flex p-0.5 rounded-xl flex-shrink-0" style={{ background: 'hsl(140 14% 93%)' }}>
+              {[['percent', '%'], ['valor', unidade]].map(([v, lbl]) => (
+                <button key={v} type="button" onClick={() => setMinTipo(v)}
+                  className="px-3 py-2 rounded-lg text-[12px] font-bold"
+                  style={minTipo === v ? { background: '#fff', color: 'hsl(156 64% 31%)' } : { color: 'hsl(150 8% 40%)' }}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+            <input type="number" min="0" step="any"
+              max={minTipo === 'percent' ? 100 : undefined}
+              value={minTipo === 'percent' ? minPct : minVal}
+              onChange={e => (minTipo === 'percent' ? setMinPct(e.target.value) : setMinVal(e.target.value))}
+              className="flex-1 min-w-0 rounded-xl border px-3 py-2.5 text-[13px] outline-none"
               style={{ background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)' }} />
           </div>
+          <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
+            {minTipo === 'percent'
+              ? `${minPct || 0}% do estoque após a última compra${isEdit && existingInsumo.quantidade_referencia
+                  ? ` = ${(existingInsumo.quantidade_referencia * (parseFloat(minPct) || 0) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ${unidade}`
+                  : ''}. Atualiza sozinho a cada compra.`
+              : `Avisa quando o saldo chegar a ${minVal || 0} ${unidade}.`}
+          </p>
         </div>
 
         {/* Quantidade inicial — APENAS no cadastro */}

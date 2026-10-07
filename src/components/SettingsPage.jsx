@@ -274,7 +274,7 @@ function NotificacoesSection() {
   const handleTest = async () => {
     setTesting(true); setTestResult(null);
     try {
-      const { sendWhatsApp, gerarMensagemCronograma } = await import('../hooks/useWhatsApp');
+      const { sendWhatsApp } = await import('../hooks/useWhatsApp');
       const msg = '🌱 *OryAgro — Teste de notificação*\n\nSe você recebeu esta mensagem, a configuração está funcionando! ✅';
       const result = await sendWhatsApp({ config, mensagem: msg, tipo: 'teste' });
       setTestResult(result);

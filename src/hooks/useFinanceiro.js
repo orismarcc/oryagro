@@ -60,20 +60,3 @@ export async function loadDreRawData() {
     plantios:   plantiosRes.data   || [],
   };
 }
-
-/**
- * Carrega ciclos_historico ordenados por archived_at desc
- */
-export async function loadCiclosHistorico() {
-  const userId = await getUserId();
-  if (!userId) return [];
-
-  const { data, error } = await supabase
-    .from('ciclos_historico')
-    .select('*')
-    .eq('user_id', userId)
-    .order('archived_at', { ascending: false });
-
-  if (error) { logDbError('loadCiclosHistorico', error); return []; }
-  return data || [];
-}

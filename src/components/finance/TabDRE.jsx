@@ -273,7 +273,6 @@ import LoteCard from './LoteCard';
                   lote={lote}
                   dreMap={dreMap}
                   anoFiltro={anoFiltro}
-                  propriedades={propriedades}
                 />
               ))}
             </div>

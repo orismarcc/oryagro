@@ -7,7 +7,7 @@ import { fmtBRL, getCultura } from './helpers';
 import { calcLucroLote } from '../../lib/financeiro';
 import DreLine from './DreLine';
 
-function LoteCard({ lote, dreMap, anoFiltro, propriedades }) {
+function LoteCard({ lote, dreMap, anoFiltro }) {
   const [collapsed, setCollapsed] = useState(true);
   const [expandedAnos, setExpandedAnos] = useState({});
 

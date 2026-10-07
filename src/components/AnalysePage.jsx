@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CULTURAS } from '../data/culturas';
 import { exportarRelatorioPDF } from '../lib/pdfExport';
 import { gerarPdfCreditoAgricola } from '../lib/pdfCreditoAgricola';
-import { loadTodosLotes, loadAllColheitaEventos } from '../hooks/useSupabaseSync';
+import { loadTodosLotes } from '../hooks/useSupabaseSync';
+import { loadColheitas } from '../hooks/useProducaoRegistros';
 import { loadMovimentosByLote, loadTodasVendas, loadMaoObraByLote, loadCiclosHistorico } from '../hooks/useGestao';
 import { loadTodasDespesas, loadDespesasByLote } from '../hooks/useDespesas';
 import { parseCicloDias } from '../lib/lifecycle';
@@ -1037,7 +1038,7 @@ function CollapsibleCard({ label, delay = 0, defaultOpen = true, children }) {
   );
 }
 
-export default function AnalysePage({ onSignOut, userName, propriedades = [], userRole = null }) {
+export default function AnalysePage({ userName, propriedades = [], userRole = null }) {
   // Popula o cache singleton de curvas_producao para que getRampFactor use dados do BD
   useCurvasProducao();
 
@@ -1057,7 +1058,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([loadTodosLotes(500), loadAllColheitaEventos(), loadTodasVendas(), loadTodasDespesas(), loadCiclosHistorico()])
+    Promise.all([loadTodosLotes(500), loadColheitas(), loadTodasVendas(), loadTodasDespesas(), loadCiclosHistorico()])
       .then(([data, eventos, vendas, desp, ciclos]) => {
         if (!cancelled) {
           setLotes(Array.isArray(data) ? data : []);
@@ -1078,7 +1079,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
   const handleExportPDF = async () => {
     setExportingPDF(true);
     try {
-      await exportarRelatorioPDF(lotes, eventosColheita, todasVendas, propriedades);
+      await exportarRelatorioPDF(lotes, eventosColheita, todasVendas);
     } finally {
       setExportingPDF(false);
     }
@@ -1091,8 +1092,6 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
         produtor: produtorForm,
         ciclos: ciclosHistorico,
         lotes,
-        vendas: todasVendas,
-        despesas,
         propriedades,
       });
       setShowCreditoModal(false);
@@ -1109,8 +1108,6 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
     ? lotesAtivos.filter((l) => String(l.id) === selectedLoteId)
     : lotesAtivos;
 
-  const totalPlantas = lotesAtivos.reduce((s, l) => s + (l.total_plantas || 0), 0);
-  const areaAtiva = lotesAtivos.reduce((s, l) => s + (l.area_ha || 0), 0);
 
   // 10C: block technicians from the Analysis page
   if (userRole !== null && !can(userRole, FARM_ACTIONS.VIEW_ANALYSIS)) {
@@ -1171,10 +1168,7 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
           // Compute prod/revenue estimates for current year
           let kgAnoAtual = 0;
           let receitaAnoAtual = 0;
-          let anoPico = currentYear;
-          let maxReceita = 0;
           const yearsToCheck = Array.from({ length: 7 }, (_, i) => currentYear - 1 + i);
-          const projByYearKpi = {};
           lotesFiltrados.forEach(l => {
             const c = getCultura(l.cultura_id);
             if (!c) return;
@@ -1183,18 +1177,11 @@ export default function AnalysePage({ onSignOut, userName, propriedades = [], us
               const factor = getRampFactor(c.id, yr - plantYear);
               const { kg } = estimateKgAnual(l, c.id, factor);
               const priceKg = c.venda?.precoUnitario ?? 3.5;
-              projByYearKpi[yr] = (projByYearKpi[yr] || 0) + kg * priceKg;
               if (yr === currentYear) {
                 kgAnoAtual += kg;
                 receitaAnoAtual += kg * priceKg;
               }
             });
-          });
-          yearsToCheck.forEach(yr => {
-            if ((projByYearKpi[yr] || 0) > maxReceita) {
-              maxReceita = projByYearKpi[yr];
-              anoPico = yr;
-            }
           });
           const areaFilt = lotesFiltrados.reduce((s, l) => s + (l.area_ha || 0), 0);
           return (

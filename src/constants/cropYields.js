@@ -8,7 +8,7 @@
  * NOTE: safrasAno is informational only (flushes or cycles per year) and is NOT
  * multiplied in production formulas — defaultYieldValue already represents the ANNUAL total.
  */
-export const CROP_YIELDS = {
+const CROP_YIELDS = {
   acerola: {
     cropName: 'Acerola',
     unit: 'per_plant',
@@ -230,7 +230,6 @@ export function estimateKgAnual(lote, culturaId, factor) {
         const impliedKgHa = fullKg / areaHa;
         const { min, max } = base.cfg.peakYieldPerHectare;
         if (impliedKgHa < min || impliedKgHa > max) {
-          // eslint-disable-next-line no-console
           console.warn(
             `[OryAgro] Acerola yield consistency check failed for lot ${lote.id}: implied ${Math.round(impliedKgHa)} kg/ha is outside expected range [${min}–${max}].`,
           );

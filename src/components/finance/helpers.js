@@ -53,7 +53,7 @@ export function anoFromDate(dateStr) {
  * Uma data de jul/2025 a jun/2026 pertence à safra "2025/26".
  * Retorna o rótulo da safra (ex.: "2025/26") ou null.
  */
-export function safraFromDate(dateStr, startMonth = 7) {
+function safraFromDate(dateStr, startMonth = 7) {
   if (!dateStr) return null;
   const d = new Date(dateStr + 'T12:00:00');
   const y = d.getFullYear();

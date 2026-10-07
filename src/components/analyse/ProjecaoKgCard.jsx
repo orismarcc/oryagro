@@ -75,15 +75,10 @@ import { getCultura, safeResolveLifecycle, getRampFactor } from './utils';
   // Build a map of plantio_id → total harvest kg from recorded events
   const harvestKgByLote = {};
   eventosColheita.forEach(ev => {
-    try {
-      const d = typeof ev.descricao === 'string' ? JSON.parse(ev.descricao) : (ev.descricao || {});
-      const qtd = parseFloat(d?.qtd) || 0;
-      const unidade = d?.unidade || 'kg';
-      const qtdKg = unidade === 't' ? qtd * 1000 : qtd;
-      if (qtdKg > 0 && ev.plantio_id) {
-        harvestKgByLote[String(ev.plantio_id)] = (harvestKgByLote[String(ev.plantio_id)] || 0) + qtdKg;
-      }
-    } catch { /* ignore parse errors */ }
+    const qtdKg = ev.quantidade_kg || 0;
+    if (qtdKg > 0 && ev.plantio_id) {
+      harvestKgByLote[String(ev.plantio_id)] = (harvestKgByLote[String(ev.plantio_id)] || 0) + qtdKg;
+    }
   });
 
   // Find completed lotes that have recorded harvest data

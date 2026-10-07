@@ -2,12 +2,12 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, CalendarDays, X, DollarSign, CheckCircle2, AlertCircle, Wheat, TrendingUp } from 'lucide-react';
 import { CULTURAS } from '../data/culturas';
-import { loadTodosLotes, loadAllColheitaEventos } from '../hooks/useSupabaseSync';
+import { loadTodosLotes } from '../hooks/useSupabaseSync';
+import { loadColheitas } from '../hooks/useProducaoRegistros';
 import { cacheGet, cacheSet } from '../hooks/useOfflineCache';
 import { supabase } from '../lib/supabase';
 import { updateParcela } from '../hooks/useCompradores';
 import { STATUS, getCategoria, loadAtividadesPorLotes, concluirLancamento, hojeLocalISO } from '../hooks/useAtividades';
-import { loadEstoque } from '../hooks/useGestao';
 import { useAnotar } from '../context/AnotarContext';
 import { useToast } from '../context/ToastContext';
 
@@ -309,7 +309,7 @@ function SumarioMensal({ monthStart, atividadesPorDia, today, colheitaEventos, l
       if (!ev.data) return sum;
       const d = new Date(ev.data + 'T12:00:00');
       if (d.getMonth() !== m || d.getFullYear() !== y) return sum;
-      return sum + (parseFloat(ev.quantidade) || 0);
+      return sum + (ev.quantidade_kg || 0);
     }, 0);
   }, [colheitaEventos, m, y]);
 
@@ -322,7 +322,7 @@ function SumarioMensal({ monthStart, atividadesPorDia, today, colheitaEventos, l
       if (!ev.data) return sum;
       const d = new Date(ev.data + 'T12:00:00');
       if (d.getMonth() !== m || d.getFullYear() !== y) return sum;
-      const kg = parseFloat(ev.quantidade) || 0;
+      const kg = ev.quantidade_kg || 0;
       if (!kg) return sum;
       const lote = loteById[ev.plantio_id];
       if (!lote) return sum;
@@ -588,7 +588,6 @@ export default function CalendarioPage() {
   const { anotar, versao, avisarMudanca } = useAnotar();
   const toast = useToast();
   const [atividadesPorLote, setAtividadesPorLote] = useState({});
-  const [estoque, setEstoque] = useState([]);
   const [concluindo, setConcluindo] = useState(false);
   const [calView, setCalView] = useState('month');
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
@@ -628,7 +627,7 @@ export default function CalendarioPage() {
       });
 
     // 3. Load harvest events for monthly summary
-    loadAllColheitaEventos().then(evs => setColheitaEventos(evs)).catch(() => {});
+    loadColheitas().then(evs => setColheitaEventos(evs)).catch(() => {});
   }, []);
 
   // ── Lançamentos do cronograma (Supabase é a fonte da verdade) ──────────────
@@ -638,19 +637,18 @@ export default function CalendarioPage() {
   useEffect(() => {
     let cancel = false;
     loadAtividadesPorLotes(loteKey ? loteKey.split(',') : []).then(rows => {
-      if (cancel) return;
+      if (cancel || !rows) return;  // falha de leitura: mantém o que já está na tela
       const g = {};
       rows.forEach(r => { (g[r.plantio_id] = g[r.plantio_id] || []).push(r); });
       setAtividadesPorLote(g);
     });
-    loadEstoque(null).then(r => { if (!cancel) setEstoque(r || []); }).catch(() => {});
     return () => { cancel = true; };
   }, [loteKey, versao]);
 
   const concluirAtiv = async (ativ) => {
     setConcluindo(true);
     try {
-      const r = await concluirLancamento(ativ.raw, hojeLocalISO(), estoque);
+      const r = await concluirLancamento(ativ.raw, hojeLocalISO());
       if (!r) { toast.error('Não foi possível marcar como feito.'); return; }
       toast.success('Feito! ✓');
       setPopupAtiv(null);

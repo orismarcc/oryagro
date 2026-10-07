@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Package2, Plus, Building2, Leaf, CheckCircle2, AlertTriangle, CalendarDays, AlertCircle, Clock, ArrowRight, Users, UserPlus, Shield, Trash2, ChevronDown, Database, Loader2, History, Sprout, MapPin, Ruler, X, TreeDeciduous, Zap } from 'lucide-react';
 import { loadLotesByPropriedade, deleteLoteCompleto, loadTalhoesPorPropriedade, criarTalhao, criarSafraDeTalhao, deleteTalhaoComSeguranca } from '../hooks/useSupabaseSync';
-import { useCronogramaStatusBatch } from '../hooks/useCronogramaSync';
-import { resumoAgendados } from '../hooks/useAtividades';
+import { resumoAgendados, loadAtividadesPorLotes } from '../hooks/useAtividades';
+import { useAnotar } from '../context/AnotarContext';
 import { calcularPlantas } from '../hooks/useSimulador';
 import { loadEstoque } from '../hooks/useGestao';
 import { CULTURAS, CULTURAS_LIST } from '../data/culturas';
@@ -913,8 +913,19 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
   };
 
   // Lançamentos do cronograma (Supabase) — base dos badges de agendamento
-  const loteIds = useMemo(() => lotes.map(l => l.id), [lotes]);
-  const { atividadesPorLote } = useCronogramaStatusBatch(loteIds);
+  const { versao } = useAnotar();
+  const loteKey = lotes.map(l => l.id).join(',');
+  const [atividadesPorLote, setAtividadesPorLote] = useState({});
+  useEffect(() => {
+    let cancel = false;
+    loadAtividadesPorLotes(loteKey ? loteKey.split(',') : []).then(rows => {
+      if (cancel || !rows) return;
+      const g = {};
+      rows.forEach(r => { (g[r.plantio_id] = g[r.plantio_id] || []).push(r); });
+      setAtividadesPorLote(g);
+    });
+    return () => { cancel = true; };
+  }, [loteKey, versao]);
 
   const canDeleteLote = can(userRole, FARM_ACTIONS.DELETE_ANY);
 

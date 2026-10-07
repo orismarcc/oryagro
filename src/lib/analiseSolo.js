@@ -54,18 +54,18 @@ const faixa = (valor, cortes, rotulos) => {
   return rotulos[rotulos.length - 1];
 };
 
-export const classificarP   = (p)  => faixa(num(p),  [6, 12, 20, 40], ['Muito Baixo', 'Baixo', 'Médio', 'Bom', 'Muito Bom']); // mg/dm³ (resina)
-export const classificarK   = (k)  => faixa(num(k),  [25, 40, 80, 120], ['Muito Baixo', 'Baixo', 'Médio', 'Bom', 'Muito Bom']); // mg/dm³
-export const classificarCa  = (ca) => faixa(num(ca), [1.5, 4.0], ['Baixo', 'Médio', 'Bom']); // cmolc
-export const classificarMg  = (mg) => faixa(num(mg), [0.5, 1.0], ['Baixo', 'Médio', 'Bom']); // cmolc
-export const classificarMO  = (mo) => faixa(num(mo), [15, 30], ['Baixo', 'Médio', 'Bom']);   // g/dm³
-export const classificarZn  = (zn) => faixa(num(zn), [0.6, 1.2], ['Baixo', 'Médio', 'Alto']); // mg/dm³
-export const classificarV   = (v)  => faixa(v,       [25, 50, 70], ['Muito Baixo', 'Baixo', 'Bom', 'Alto']); // %
-export const classificarAlSat = (m) => faixa(m,      [15, 30, 50], ['Baixo', 'Moderado', 'Alto', 'Muito Alto']); // %
-export const classificarPh  = (ph) => faixa(num(ph), [4.4, 5.0, 5.5, 6.0], ['Muito Ácido', 'Ácido', 'Médio Ácido', 'Bom', 'Alcalino']);
+const classificarP   = (p)  => faixa(num(p),  [6, 12, 20, 40], ['Muito Baixo', 'Baixo', 'Médio', 'Bom', 'Muito Bom']); // mg/dm³ (resina)
+const classificarK   = (k)  => faixa(num(k),  [25, 40, 80, 120], ['Muito Baixo', 'Baixo', 'Médio', 'Bom', 'Muito Bom']); // mg/dm³
+const classificarCa  = (ca) => faixa(num(ca), [1.5, 4.0], ['Baixo', 'Médio', 'Bom']); // cmolc
+const classificarMg  = (mg) => faixa(num(mg), [0.5, 1.0], ['Baixo', 'Médio', 'Bom']); // cmolc
+const classificarMO  = (mo) => faixa(num(mo), [15, 30], ['Baixo', 'Médio', 'Bom']);   // g/dm³
+const classificarZn  = (zn) => faixa(num(zn), [0.6, 1.2], ['Baixo', 'Médio', 'Alto']); // mg/dm³
+const classificarV   = (v)  => faixa(v,       [25, 50, 70], ['Muito Baixo', 'Baixo', 'Bom', 'Alto']); // %
+const classificarAlSat = (m) => faixa(m,      [15, 30, 50], ['Baixo', 'Moderado', 'Alto', 'Muito Alto']); // %
+const classificarPh  = (ph) => faixa(num(ph), [4.4, 5.0, 5.5, 6.0], ['Muito Ácido', 'Ácido', 'Médio Ácido', 'Bom', 'Alcalino']);
 
 // ── Metas de saturação por bases (V2) e faixa de pH ideal por cultura ─────────
-export const METAS_CULTURA = {
+const METAS_CULTURA = {
   acerola: { v2: 65, phIdeal: '5,5–6,0' },
   abacaxi: { v2: 55, phIdeal: '4,5–5,5' },
   // Maracujá — guia Horta Minas, cap. 5: pH 6,0–6,5 e saturação por bases 70–80%.
@@ -74,7 +74,7 @@ export const METAS_CULTURA = {
   _anual:  { v2: 70, phIdeal: '6,0–7,0' },
 };
 
-export function metaCultura(cultura) {
+function metaCultura(cultura) {
   if (!cultura) return METAS_CULTURA._anual;
   if (METAS_CULTURA[cultura.id]) return METAS_CULTURA[cultura.id];
   return cultura.tipoCultura === 'perene' ? METAS_CULTURA._perene : METAS_CULTURA._anual;
@@ -148,7 +148,7 @@ const fmtKg = (kg) => `${Math.round(kg)} kg`;
  *           diagnostico, resumo, etapas } onde cada etapa tem `offset` (DAP
  *           relativo ao plantio no campo; negativo = antes do plantio).
  */
-export function montarPlanoAdubacao({ analise, cultura, lote }) {
+export function montarPlanoAdubacao({ analise, cultura }) {
   if (!analise || !cultura) return null;
   const a = analise;
   const interp = interpretarSolo(a, cultura);
@@ -243,7 +243,7 @@ export function montarPlanoAdubacao({ analise, cultura, lote }) {
   });
 
   // resumo de coberturas (agregado)
-  resumo.push(...resumoCoberturas(coberturas, phAcido));
+  resumo.push(...resumoCoberturas(coberturas));
 
   return {
     precisaCalagem, calagem, tipoCalcario, dolomitico,
@@ -462,7 +462,7 @@ function cobAxila(ordem, offset, fonte, nG, kG, modo) {
   };
 }
 
-function resumoCoberturas(coberturas, phAcido) {
+function resumoCoberturas(coberturas) {
   return coberturas.map((c) => ({
     produto: c.produto.split(' + ')[0],
     total: c.dose,

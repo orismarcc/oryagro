@@ -16,7 +16,6 @@ import {
   updateLoteStatus,
   arquivarCicloLote,
   loadMaoObraRegistros,
-  loadMovimentosByLote,
 } from '../hooks/useGestao';
 import { loadDespesasByLote } from '../hooks/useDespesas';
 import { registrarPlantio } from '../hooks/useSupabaseSync';
@@ -198,10 +197,9 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
     setConcluindo(true);
     try {
       // Load all data needed for the archive summary in parallel
-      const [vendas, despesas, movimentos, maoObraRegistros] = await Promise.all([
+      const [vendas, despesas, maoObraRegistros] = await Promise.all([
         loadVendas(lote.id),
         loadDespesasByLote(lote.id),
-        loadMovimentosByLote(lote.id),
         loadMaoObraRegistros(lote.id),
       ]);
       if (vendas.length === 0) {
@@ -212,7 +210,7 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
       }
       // A4-12: arquivarCicloLote retorna null em falha; não marcar como concluído
       // se o histórico não foi salvo no Supabase.
-      const arquivado = await arquivarCicloLote(lote, vendas, despesas, movimentos, maoObraRegistros);
+      const arquivado = await arquivarCicloLote(lote, vendas, despesas, maoObraRegistros);
       if (!arquivado) {
         toast.error('Não foi possível arquivar o ciclo no histórico. O lote NÃO foi marcado como concluído. Tente novamente.');
         return; // finally resets setConcluindo

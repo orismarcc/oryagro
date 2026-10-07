@@ -2,38 +2,6 @@ import { supabase, getUserId } from '../lib/supabase';
 import { logDbError } from '../lib/logger';
 import { insertOfflineSafe } from '../lib/outbox';
 
-// ── Diário de campo ──────────────────────────────────────────────────────────
-
-export async function loadDiario(plantioId = null) {
-  const userId = await getUserId();
-  if (!userId) return [];
-  let q = supabase
-    .from('diario_campo')
-    .select('*')
-    .eq('user_id', userId)
-    .order('data', { ascending: false })
-    .order('created_at', { ascending: false });
-  if (plantioId) q = q.eq('plantio_id', plantioId);
-  const { data } = await q;
-  return data || [];
-}
-
-export async function addDiarioEntry({ plantioId, data, tipo, texto }) {
-  const userId = await getUserId();
-  if (!userId) return null;
-  // Offline-safe: enfileira no outbox e segue otimista se sem sinal (campo).
-  const { row, error } = await insertOfflineSafe('diario_campo', {
-    user_id: userId, plantio_id: plantioId || null, data, tipo, texto,
-  });
-  if (error) { logDbError('addDiarioEntry', error); return null; }
-  return row;
-}
-
-export async function deleteDiarioEntry(id) {
-  const { error } = await supabase.from('diario_campo').delete().eq('id', id);
-  return !error;
-}
-
 // ── Estoque ─────────────────────────────────────────────────────────────��─────
 
 export async function loadEstoque(propriedadeId = null) {
@@ -49,24 +17,39 @@ export async function loadEstoque(propriedadeId = null) {
   return data || [];
 }
 
-export async function upsertInsumo({ id, nome, unidade, quantidade, quantidade_minima, preco_unitario, propriedadeId }) {
+/**
+ * Cria ou edita um insumo. A QUANTIDADE não é gravada aqui: o saldo é mantido
+ * pelas movimentações (gatilho no banco). Um insumo novo nasce com 0 e recebe
+ * uma "entrada" (estoque inicial ou compra).
+ *
+ * Estoque mínimo: `minimoTipo` 'percent' (padrão, 25% do nível da última
+ * compra — calculado no banco) ou 'valor' (quantidade fixa em `quantidadeMinima`).
+ */
+export async function upsertInsumo({
+  id, nome, unidade, preco_unitario, propriedadeId,
+  minimoTipo = 'percent', minimoPercentual = 25, quantidadeMinima = 0,
+}) {
   const userId = await getUserId();
   if (!userId) return null;
   const payload = {
     user_id: userId,
     nome,
     unidade,
-    quantidade,
-    quantidade_minima,
-    preco_unitario,
+    preco_unitario: preco_unitario ?? 0,
+    minimo_tipo: minimoTipo,
+    minimo_percentual: minimoPercentual,
+    ...(minimoTipo === 'valor' ? { quantidade_minima: parseFloat(quantidadeMinima) || 0 } : {}),
     ...(propriedadeId ? { propriedade_id: propriedadeId } : {}),
     updated_at: new Date().toISOString(),
   };
-  const { data, error } = id
-    ? await supabase.from('estoque_insumos').update(payload).eq('id', id).select().single()
-    : await supabase.from('estoque_insumos').insert(payload).select().single();
+  if (id) {
+    const { data, error } = await supabase.from('estoque_insumos').update(payload).eq('id', id).select().single();
+    if (error) { logDbError('upsertInsumo', error); return null; }
+    return data;
+  }
+  const { row, error } = await insertOfflineSafe('estoque_insumos', { ...payload, quantidade: 0 });
   if (error) { logDbError('upsertInsumo', error); return null; }
-  return data;
+  return row;
 }
 
 export async function deleteInsumo(id) {
@@ -74,151 +57,28 @@ export async function deleteInsumo(id) {
   return !error;
 }
 
-export async function addMovimento({ insumoId, tipo, quantidade, observacao, data, plantioId, despesaId, cronogramaAtividadeId, precoUnitarioMovimento }) {
+/**
+ * Registra uma movimentação (entrada/saída). O saldo do insumo, o preço médio
+ * e o estoque mínimo são atualizados por gatilhos no banco — por isso esta
+ * gravação pode ir para a fila offline sem risco de contar duas vezes.
+ * Retorna o id da movimentação (ou null).
+ */
+export async function addMovimento({ insumoId, tipo, quantidade, observacao, data, plantioId, despesaId, precoUnitarioMovimento }) {
   const userId = await getUserId();
   if (!userId) return null;
-
-  // 1. Inserir movimento — retorna a linha para que o chamador conheça o id
-  // (A4-08: rastreabilidade; A4-03/04: vinculação a despesa / atividade do cronograma)
-  // precoUnitarioMovimento: preço pago por unidade nesta entrada. Quando informado
-  // numa 'entrada', o trigger tg_estoque_movimentos_cmp recalcula o preço médio
-  // ponderado do insumo.
-  const { data: movRow, error: mErr } = await supabase
-    .from('estoque_movimentos')
-    .insert({
-      user_id: userId,
-      insumo_id: insumoId,
-      tipo,
-      quantidade,
-      observacao: observacao || null,
-      data,
-      plantio_id: plantioId || null,
-      despesa_id: despesaId || null,
-      cronograma_atividade_id: cronogramaAtividadeId || null,
-      preco_unitario_movimento: (precoUnitarioMovimento != null && precoUnitarioMovimento > 0)
-        ? precoUnitarioMovimento
-        : null,
-    })
-    .select('id')
-    .single();
-  if (mErr) { logDbError('addMovimento', mErr); return null; }
-
-  // 2. Atualizar quantidade no estoque via RPC atômico (I-08: evita race condition)
-  const delta = tipo === 'entrada' ? quantidade : -quantidade;
-  const { error: rpcErr } = await supabase.rpc('adjust_insumo_quantidade', {
-    p_insumo_id: insumoId,
-    p_delta: delta,
+  const { row, error } = await insertOfflineSafe('estoque_movimentos', {
+    user_id: userId,
+    insumo_id: insumoId,
+    tipo,
+    quantidade,
+    observacao: observacao || null,
+    data,
+    plantio_id: plantioId || null,
+    despesa_id: despesaId || null,
+    preco_unitario_movimento: precoUnitarioMovimento > 0 ? precoUnitarioMovimento : null,
   });
-  if (rpcErr) {
-    // Fallback: read-then-update (não atômico, mas mantém funcionamento)
-    logDbError('addMovimento:rpc_fallback', rpcErr);
-    const { data: current } = await supabase
-      .from('estoque_insumos')
-      .select('quantidade')
-      .eq('id', insumoId)
-      .single();
-    if (current) {
-      await supabase
-        .from('estoque_insumos')
-        .update({
-          quantidade: Math.max(0, current.quantidade + delta),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', insumoId);
-    }
-  }
-  return movRow?.id ?? true;
-}
-
-/**
- * A4-08: Exclui um movimento e ajusta o saldo do insumo atomicamente via RPC.
- * Fallback: read-then-update + delete (não atômico) caso a RPC não esteja disponível.
- */
-export async function deleteMovimento(movimentoId) {
-  if (!movimentoId) return false;
-  const { data, error } = await supabase.rpc('delete_movimento_with_balance', {
-    p_movimento_id: movimentoId,
-  });
-  if (!error) return data === true;
-
-  // Fallback caso a RPC não esteja disponível (migration ainda não aplicada)
-  logDbError('deleteMovimento:rpc_fallback', error);
-  const { data: mov } = await supabase
-    .from('estoque_movimentos')
-    .select('insumo_id, tipo, quantidade')
-    .eq('id', movimentoId)
-    .single();
-  if (!mov) return false;
-  const delta = mov.tipo === 'entrada' ? -mov.quantidade : mov.quantidade;
-  const { data: current } = await supabase
-    .from('estoque_insumos')
-    .select('quantidade')
-    .eq('id', mov.insumo_id)
-    .single();
-  if (current) {
-    await supabase
-      .from('estoque_insumos')
-      .update({
-        quantidade: Math.max(0, current.quantidade + delta),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', mov.insumo_id);
-  }
-  const { error: delErr } = await supabase.from('estoque_movimentos').delete().eq('id', movimentoId);
-  return !delErr;
-}
-
-/**
- * A4-03: Exclui todos os movimentos vinculados a uma despesa, restaurando o saldo.
- * Usado quando a despesa correspondente é deletada.
- */
-export async function deleteMovimentosByDespesa(despesaId) {
-  if (!despesaId) return 0;
-  const userId = await getUserId();
-  if (!userId) return 0;
-  const { data: rows } = await supabase
-    .from('estoque_movimentos')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('despesa_id', despesaId);
-  if (!rows?.length) return 0;
-  let n = 0;
-  for (const row of rows) {
-    if (await deleteMovimento(row.id)) n += 1;
-  }
-  return n;
-}
-
-/**
- * A4-04: Exclui o movimento vinculado a uma etapa do cronograma, restaurando saldo.
- * Usado quando o usuário desfaz a confirmação da etapa ou remove a etapa.
- */
-export async function deleteMovimentoByCronogramaAtividade(cronogramaAtividadeId) {
-  if (!cronogramaAtividadeId) return 0;
-  const userId = await getUserId();
-  if (!userId) return 0;
-  const { data: rows, error } = await supabase
-    .from('estoque_movimentos')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('cronograma_atividade_id', cronogramaAtividadeId);
-  if (error) logDbError('deleteMovimentoByCronogramaAtividade:select', error);
-  if (!rows?.length) return 0;
-  // Cada deleteMovimento usa o RPC atômico delete_movimento_with_balance.
-  // O loop não é uma transação única, então uma falha parcial deixaria o saldo
-  // inconsistente. Detectamos isso comparando o total e logamos (→ toast) para
-  // que o usuário/dev saiba que precisa reconciliar, em vez de falhar em silêncio.
-  let n = 0;
-  for (const row of rows) {
-    if (await deleteMovimento(row.id)) n += 1;
-  }
-  if (n !== rows.length) {
-    logDbError(
-      'deleteMovimentoByCronogramaAtividade:parcial',
-      new Error(`Reverteu ${n}/${rows.length} movimentos — saldo de estoque pode estar inconsistente`),
-    );
-  }
-  return n;
+  if (error) { logDbError('addMovimento', error); return null; }
+  return row?.id ?? null;
 }
 
 export async function loadMovimentos(insumoId) {
@@ -426,7 +286,7 @@ export async function updateLoteStatus(id, status) {
  * "concluído" mesmo se o Supabase tivesse falhado. Agora propaga erro para o
  * chamador via valor de retorno.
  */
-export async function arquivarCicloLote(lote, vendas = [], _eventos = [], movimentos = [], maoObraRegistros = []) {
+export async function arquivarCicloLote(lote, vendas = [], despesas = [], maoObraRegistros = []) {
   try {
     const totalVendasKg = vendas.reduce((s, v) => s + (v.quantidade ?? 0), 0);
     const receitaTotal  = vendas.reduce((s, v) => s + (v.quantidade ?? 0) * (v.preco_unitario ?? 0), 0);
@@ -436,8 +296,12 @@ export async function arquivarCicloLote(lote, vendas = [], _eventos = [], movime
       ? Math.max(0, Math.floor((Date.now() - new Date(dataPlantio + 'T12:00:00')) / 86_400_000))
       : null;
 
-    const custoInsumos  = movimentos.reduce((s, m) => s + (m.quantidade * (m.insumo?.preco_unitario ?? 0)), 0);
-    const custoMaoObra  = maoObraRegistros.reduce((s, r) => s + ((r.horas ?? 0) * (r.valor_hora ?? 0)), 0);
+    // Custos = o que foi efetivamente pago (despesas do lote). Mão de obra
+    // separada; o restante (insumos, máquinas, etc.) entra em custoInsumos.
+    const valor = (d) => parseFloat(d.valor) || 0;
+    const custoMaoObra = despesas.filter(d => d.categoria === 'Mão de Obra').reduce((s, d) => s + valor(d), 0)
+      + maoObraRegistros.reduce((s, r) => s + valor(r), 0);
+    const custoInsumos = despesas.filter(d => d.categoria !== 'Mão de Obra').reduce((s, d) => s + valor(d), 0);
 
     const ciclo = {
       loteId:        lote.id,
@@ -500,35 +364,9 @@ export async function loadMaoObraRegistros(plantioId) {
   return data || [];
 }
 
-export async function addMaoObraRegistro({ plantioId, dataInicio, dataFim, valor, descricao, prestador }) {
-  const userId = await getUserId();
-  if (!userId) return null;
-  const { data: row, error } = await supabase
-    .from('mao_obra_registros')
-    .insert({
-      user_id:     userId,
-      plantio_id:  plantioId,
-      data_inicio: dataInicio,
-      data_fim:    dataFim || null,
-      valor:       valor,
-      descricao:   descricao || null,
-      prestador:   prestador || null,
-    })
-    .select()
-    .single();
-  if (error) { logDbError('addMaoObraRegistro', error); return null; }
-  return row;
-}
-
-export async function deleteMaoObraRegistro(id) {
-  const { error } = await supabase.from('mao_obra_registros').delete().eq('id', id);
-  if (error) { logDbError('deleteMaoObraRegistro', error); return false; }
-  return true;
-}
-
 // ── Ciclos histórico (Supabase) ────────────────────────────────
 
-export async function saveCicloHistorico({ loteId, loteNome, culturaId, dataPlantio, dataConclusao, totalVendasKg, receitaTotal, custoInsumos, custoMaoObra, diasCicloReal, talhaoId = null, safraNúmero = null }) {
+async function saveCicloHistorico({ loteId, loteNome, culturaId, dataPlantio, dataConclusao, totalVendasKg, receitaTotal, custoInsumos, custoMaoObra, diasCicloReal, talhaoId = null, safraNúmero = null }) {
   const userId = await getUserId();
   if (!userId) return null;
   const { data: row, error } = await supabase
@@ -569,45 +407,4 @@ export async function loadCiclosHistorico() {
     .order('archived_at', { ascending: false });
   if (error) { logDbError('loadCiclosHistorico', error); return []; }
   return data || [];
-}
-
-// ── Op#8: Preços de insumos por lote — sincronizados via simulador_configs ──
-// Usa cultura_id = '__lote_precos__<loteId>' como chave — sem migration necessária.
-
-/**
- * Salva preços de insumos de um lote no Supabase (debounced pelo chamador).
- */
-export async function savePrecoInsumos(loteId, precos) {
-  if (!loteId) return;
-  const userId = await getUserId();
-  if (!userId) return;
-  await supabase
-    .from('simulador_configs')
-    .upsert(
-      {
-        user_id:    userId,
-        cultura_id: `__lote_precos__${loteId}`,
-        valores:    precos,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,cultura_id' },
-    );
-}
-
-/**
- * Carrega preços de insumos de um lote do Supabase.
- * Retorna o objeto de preços ou null se não encontrado / erro.
- */
-export async function loadPrecoInsumos(loteId) {
-  if (!loteId) return null;
-  const userId = await getUserId();
-  if (!userId) return null;
-  const { data, error } = await supabase
-    .from('simulador_configs')
-    .select('valores')
-    .eq('user_id', userId)
-    .eq('cultura_id', `__lote_precos__${loteId}`)
-    .single();
-  if (error || !data) return null;
-  return data.valores ?? null;
 }

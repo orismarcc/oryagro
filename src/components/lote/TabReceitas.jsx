@@ -205,7 +205,9 @@ function TabReceitas({ cultura, lote, canDelete }) {
         await supabase.from('venda_parcelas').delete().eq('venda_id', id);
         await deleteVenda(id);
         setVendas(prev => prev.filter(v => v.id !== id));
-      } catch {}
+      } catch {
+        toast.error('Não foi possível excluir a venda. Tente novamente.');
+      }
       setConfirmDeleteId(null);
     } else {
       // First click — ask for confirmation
@@ -222,8 +224,6 @@ function TabReceitas({ cultura, lote, canDelete }) {
   const precoMedio = totalQty > 0 ? totalReceita / totalQty : 0;
 
   const previewTotal = (parseFloat(form.quantidade) || 0) * (parseFloat(form.precoUnitario) || 0);
-
-  const compradorSelecionado = compradores.find(c => c.id === form.compradorId);
 
   return (
     <div

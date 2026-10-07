@@ -26,6 +26,3 @@ export function cacheGet(key, maxAgeMs = MAX_AGE_MS) {
   }
 }
 
-export function cacheClear(key) {
-  try { localStorage.removeItem(CACHE_PREFIX + key); } catch {}
-}

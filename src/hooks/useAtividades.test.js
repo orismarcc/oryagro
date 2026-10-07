@@ -3,9 +3,9 @@ import { describe, it, expect, vi } from 'vitest';
 // As funções testadas são puras; o resto do módulo fala com o Supabase.
 vi.mock('../lib/supabase', () => ({ supabase: {}, getUserId: async () => null }));
 vi.mock('../lib/logger', () => ({ logDbError: () => {} }));
-vi.mock('./useGestao', () => ({ addMovimento: vi.fn(), deleteMovimentoByCronogramaAtividade: vi.fn() }));
+vi.mock('../lib/outbox', () => ({ insertOfflineSafe: vi.fn(), updateOfflineSafe: vi.fn(), deleteOfflineSafe: vi.fn(), pendentes: () => [] }));
 
-const { qtdNaUnidadeDoEstoque, gerarDatas, resumoAgendados, getCategoria } = await import('./useAtividades');
+const { qtdNaUnidadeDoEstoque, gerarDatas, resumoAgendados, getCategoria, linhaDoRegistro } = await import('./useAtividades');
 
 describe('qtdNaUnidadeDoEstoque — baixa no estoque na unidade certa', () => {
   it('mesma unidade passa direto', () => {
@@ -82,5 +82,27 @@ describe('getCategoria', () => {
   });
   it('anotação existe e não usa insumo', () => {
     expect(getCategoria('anotacao').usaInsumo).toBe(false);
+  });
+});
+
+describe('linhaDoRegistro — formulário do Anotar → colunas do banco', () => {
+  const base = { categoria: 'adubacao_solo', etapa: '', produto: 'Sulfato', insumoId: 'i1', quantidade: '25', unidade: 'g', observacao: '', data: '2026-10-07' };
+  it('realizado: data de execução, status feito, título = produto', () => {
+    expect(linhaDoRegistro({ ...base, agendado: false })).toMatchObject({
+      etapa: 'Sulfato', status: 'feito', data_execucao: '2026-10-07', data_prevista: null,
+      quantidade: 25, unidade: 'g', insumo_id: 'i1', tipo: 'adubo',
+    });
+  });
+  it('agendado: data prevista', () => {
+    expect(linhaDoRegistro({ ...base, agendado: true })).toMatchObject({
+      status: 'agendado', data_prevista: '2026-10-07', data_execucao: null,
+    });
+  });
+  it('quantidade com vírgula; sem quantidade não grava unidade', () => {
+    expect(linhaDoRegistro({ ...base, quantidade: '2,5' }).quantidade).toBe(2.5);
+    expect(linhaDoRegistro({ ...base, quantidade: '' })).toMatchObject({ quantidade: null, unidade: null });
+  });
+  it('sem título nem produto usa o nome da categoria', () => {
+    expect(linhaDoRegistro({ ...base, produto: '', categoria: 'poda' }).etapa).toBe('Poda / condução');
   });
 });

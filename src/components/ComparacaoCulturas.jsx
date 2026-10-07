@@ -186,7 +186,6 @@ async function generatePDF(sorted, effectiveArea) {
 
   const tableRows = sorted.map((c, i) => {
     const calc = calcs[i];
-    const tipo = c.tipo === 'campo' ? 'Campo' : 'Canteiro';
     const canteiroInfo = c.tipo !== 'campo' ? `${calc.nC} ctrs` : '';
     return [
       c.nome,
@@ -310,7 +309,7 @@ function SectionLabel({ children, color }) {
 
 // ── CostBreakdown (inside edit panel) ─────────────────────────────────────────
 
-function CostBreakdown({ composicao, custoTotal, cor }) {
+function CostBreakdown({ composicao, custoTotal }) {
   return (
     <div className="col-span-2 rounded-xl p-3 mb-1" style={{ background: 'hsl(140 14% 97%)' }}>
       <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
@@ -507,7 +506,6 @@ function CulturaRow({ cultura, rank, areaHa }) {
   const nCanteiros   = calcNCanteirosPorHa(cultura, areaHa);
   const [editOpen, setEditOpen]   = useState(false);
   const [overrides, setOverrides] = useState({});
-  const [showInsumos, setShowInsumos] = useState(false);
 
   const set = (campo, val) => setOverrides(o => ({ ...o, [campo]: val }));
 
