@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useToast } from '../../context/ToastContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Plus, Trash2, Receipt, PackagePlus, Pencil, X, Check } from 'lucide-react';
+import { Loader2, Plus, Trash2, Receipt, PackagePlus, Pencil, X, Check, Paperclip, Home } from 'lucide-react';
 import {
   CATEGORIAS_DESPESA,
   registrarCompra,
@@ -13,6 +13,13 @@ import {
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { loadEstoque } from '../../hooks/useGestao';
 import { today, formatDatePtBR, fmtBRL, fmtNumber } from './shared';
+import {
+  loadMembros, loadRateios, loadComprovantes, salvarRateio, uploadComprovante,
+} from '../../hooks/useRateio';
+import RateioEditor from '../rateio/RateioEditor';
+import DespesaExtras from '../rateio/DespesaExtras';
+
+const RATEIO_VAZIO = { linhas: [], pagadorId: '' };
 
 function TabDespesas({ lote, cor, canDelete }) {
   const SAFE_BOTTOM = 'calc(env(safe-area-inset-bottom, 0px) + 84px)';
@@ -23,6 +30,12 @@ function TabDespesas({ lote, cor, canDelete }) {
   const [saving, setSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [editId, setEditId] = useState(null); // despesa em edição (null = modo adicionar)
+  // Sócios do lote e a divisão de cada despesa entre eles
+  const [membros, setMembros] = useState([]);
+  const [rateioForm, setRateioForm] = useState(RATEIO_VAZIO);
+  const [rateios, setRateios] = useState({});
+  const [anexos, setAnexos] = useState({});
+  const [arquivos, setArquivos] = useState([]); // comprovantes escolhidos no formulário
 
   const [form, setForm] = useState({
     data: today(),
@@ -69,11 +82,16 @@ function TabDespesas({ lote, cor, canDelete }) {
     }));
   }, [form.produto, form.subcategoria, form.categoria, estoqueForm.enabled]);
 
+  // Só a primeira carga mostra o spinner; recargas (quitar, anexar) são silenciosas.
   const fetchRegistros = useCallback(async () => {
-    setLoading(true);
     try {
-      const data = await loadDespesasByLote(lote.id);
+      const [data, ms] = await Promise.all([loadDespesasByLote(lote.id), loadMembros(lote.id)]);
       setRegistros(data ?? []);
+      setMembros(ms);
+      const ids = (data ?? []).map(d => d.id);
+      const [rs, an] = await Promise.all([loadRateios(ids), loadComprovantes(ids)]);
+      setRateios(rs);
+      setAnexos(an);
     } finally {
       setLoading(false);
     }
@@ -115,6 +133,7 @@ function TabDespesas({ lote, cor, canDelete }) {
         return;
       }
       if (r.offline) toast.info('Sem sinal: a despesa foi salva no aparelho e sobe quando a conexão voltar.');
+      else await gravarExtras(r.despesaId);
       await fetchRegistros();
       resetForm();
       setEstoqueForm({ enabled: false, nomeInsumo: '' });
@@ -125,10 +144,34 @@ function TabDespesas({ lote, cor, canDelete }) {
     }
   };
 
+  // Divisão entre os sócios + comprovantes escolhidos no formulário.
+  const gravarExtras = async (despesaId) => {
+    if (!despesaId) return;
+    if (membros.length && rateioForm.linhas.length) {
+      const ok = await salvarRateio(despesaId, rateioForm.linhas, rateioForm.pagadorId || null);
+      if (!ok) toast.error('A despesa foi salva, mas a divisão entre os sócios não. Edite para tentar de novo.');
+    }
+    for (const f of arquivos) {
+      const up = await uploadComprovante(despesaId, f);
+      if (!up || up.erro) toast.error(`O comprovante "${f.name}" não subiu (use foto ou PDF de até 10 MB).`);
+    }
+  };
+
   // Preenche o formulário com a despesa e entra em modo de edição.
   const startEdit = (r) => {
     setConfirmDeleteId(null);
     setEditId(r.id);
+    setArquivos([]);
+    const atual = rateios[r.id] || [];
+    setRateioForm(atual.length
+      ? {
+          pagadorId: r.pagador_membro_id || '',
+          linhas: membros.map(m => {
+            const x = atual.find(a => a.membro_id === m.id);
+            return { membroId: m.id, nome: m.nome, valor: x ? Number(x.valor) : 0, status: x?.status || 'pago' };
+          }),
+        }
+      : RATEIO_VAZIO);
     setEstoqueForm({ enabled: false, nomeInsumo: '' });
     setForm({
       data:         r.data || today(),
@@ -146,7 +189,7 @@ function TabDespesas({ lote, cor, canDelete }) {
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const resetForm = () => setForm({
+  const resetForm = () => { setRateioForm(RATEIO_VAZIO); setArquivos([]); setForm({
     data: today(),
     categoria: CATEGORIAS_DESPESA[0].label,
     subcategoria: '',
@@ -157,7 +200,7 @@ function TabDespesas({ lote, cor, canDelete }) {
     prestador: '',
     valor: '',
     observacao: '',
-  });
+  }); };
 
   const cancelEdit = () => { setEditId(null); resetForm(); };
 
@@ -179,6 +222,7 @@ function TabDespesas({ lote, cor, canDelete }) {
         observacao:   form.observacao || null,
       });
       if (!updated) { toast.error('Erro ao salvar. Tente novamente.'); return; }
+      await gravarExtras(editId);
       // atualização otimista + refetch (o realtime também sincroniza)
       setRegistros(prev => prev.map(r => (r.id === editId ? { ...r, ...updated } : r)));
       cancelEdit();
@@ -378,6 +422,20 @@ function TabDespesas({ lote, cor, canDelete }) {
           </div>
         </div>
 
+        {/* Divisão entre os sócios do lote (cadastrados na aba Lote) */}
+        <RateioEditor membros={membros} total={form.valor} value={rateioForm} onChange={setRateioForm} cor={cor} />
+
+        {/* Comprovante de pagamento (foto ou PDF) */}
+        <div className="mb-3">
+          <label className="flex items-center gap-2 w-full rounded-xl border border-dashed px-3 py-2.5 text-[13px] font-semibold cursor-pointer"
+            style={{ borderColor: `${cor}60`, color: cor }}>
+            <Paperclip size={15} />
+            {arquivos.length ? `${arquivos.length} comprovante(s) escolhido(s)` : 'Anexar comprovante (foto ou PDF)'}
+            <input type="file" accept="image/*,application/pdf" multiple hidden
+              onChange={e => { setArquivos([...(e.target.files || [])]); e.target.value = ''; }} />
+          </label>
+        </div>
+
         {/* Estoque toggle — só aparece para categorias relevantes, e não na edição
             (a vinculação com o estoque é feita apenas ao registrar a despesa). */}
         {showEstoqueToggle && !editId && (
@@ -519,82 +577,92 @@ function TabDespesas({ lote, cor, canDelete }) {
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="card p-4 flex items-start gap-3"
+              className="card p-4"
             >
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <span
-                    className="text-[11px] font-bold px-2 py-0.5 rounded-full"
-                    style={{ background: `${cor}18`, color: cor }}
-                  >
-                    {formatDatePtBR(r.data)}
-                  </span>
-                  <span
-                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                    style={{ background: 'hsl(140 14% 94%)', color: 'hsl(150 8% 40%)' }}
-                  >
-                    {r.categoria}
-                  </span>
-                  {r.subcategoria && (
-                    <span className="text-[10px] text-muted-foreground">{r.subcategoria}</span>
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <span
+                      className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                      style={{ background: `${cor}18`, color: cor }}
+                    >
+                      {formatDatePtBR(r.data)}
+                    </span>
+                    <span
+                      className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                      style={{ background: 'hsl(140 14% 94%)', color: 'hsl(150 8% 40%)' }}
+                    >
+                      {r.categoria}
+                    </span>
+                    {r.subcategoria && (
+                      <span className="text-[10px] text-muted-foreground">{r.subcategoria}</span>
+                    )}
+                    {r.despesa_origem_id && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1"
+                        style={{ background: 'hsl(210 60% 94%)', color: 'hsl(210 55% 35%)' }}>
+                        <Home size={10} /> Parte da compra da propriedade
+                      </span>
+                    )}
+                  </div>
+                  {r.produto && (
+                    <p className="text-[13px] font-bold text-foreground mb-0.5">{r.produto}</p>
                   )}
-                </div>
-                {r.produto && (
-                  <p className="text-[13px] font-bold text-foreground mb-0.5">{r.produto}</p>
-                )}
-                {r.descricao && (
-                  <p className="text-[12px] text-muted-foreground mb-0.5">{r.descricao}</p>
-                )}
-                {r.prestador && (
-                  <p className="text-[11px] text-muted-foreground mb-0.5">👤 {r.prestador}</p>
-                )}
-                <div className="flex items-baseline gap-3">
-                  <p className="text-[14px] font-bold" style={{ color: cor }}>{fmtBRL(r.valor)}</p>
-                  {r.quantidade != null && (
-                    <p className="text-[11px] text-muted-foreground">
-                      {fmtNumber(r.quantidade)} {r.unidade}
-                    </p>
+                  {r.descricao && (
+                    <p className="text-[12px] text-muted-foreground mb-0.5">{r.descricao}</p>
                   )}
+                  {r.prestador && (
+                    <p className="text-[11px] text-muted-foreground mb-0.5">👤 {r.prestador}</p>
+                  )}
+                  <div className="flex items-baseline gap-3">
+                    <p className="text-[14px] font-bold" style={{ color: cor }}>{fmtBRL(r.valor)}</p>
+                    {r.quantidade != null && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {fmtNumber(r.quantidade)} {r.unidade}
+                      </p>
+                    )}
+                  </div>
                 </div>
+                {canDelete && (
+                  confirmDeleteId === r.id ? (
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={() => handleDelete(r.id)}
+                        className="text-[11px] font-bold px-2 py-1 rounded-lg bg-red-100 text-red-600"
+                      >
+                        Confirmar
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="text-[11px] font-bold px-2 py-1 rounded-lg bg-gray-100 text-gray-500"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center flex-shrink-0">
+                      <motion.button
+                        whileTap={{ scale: 0.85 }}
+                        onClick={() => startEdit(r)}
+                        aria-label="Editar despesa"
+                        className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-muted-foreground hover:text-blue-500 transition-colors"
+                        style={editId === r.id ? { color: cor } : undefined}
+                      >
+                        <Pencil size={14} />
+                      </motion.button>
+                      <motion.button
+                        whileTap={{ scale: 0.85 }}
+                        onClick={() => setConfirmDeleteId(r.id)}
+                        aria-label="Excluir despesa"
+                        className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </motion.button>
+                    </div>
+                  )
+                )}
               </div>
-              {canDelete && (
-                confirmDeleteId === r.id ? (
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button
-                      onClick={() => handleDelete(r.id)}
-                      className="text-[11px] font-bold px-2 py-1 rounded-lg bg-red-100 text-red-600"
-                    >
-                      Confirmar
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteId(null)}
-                      className="text-[11px] font-bold px-2 py-1 rounded-lg bg-gray-100 text-gray-500"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center flex-shrink-0">
-                    <motion.button
-                      whileTap={{ scale: 0.85 }}
-                      onClick={() => startEdit(r)}
-                      aria-label="Editar despesa"
-                      className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-muted-foreground hover:text-blue-500 transition-colors"
-                      style={editId === r.id ? { color: cor } : undefined}
-                    >
-                      <Pencil size={14} />
-                    </motion.button>
-                    <motion.button
-                      whileTap={{ scale: 0.85 }}
-                      onClick={() => setConfirmDeleteId(r.id)}
-                      aria-label="Excluir despesa"
-                      className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 size={14} />
-                    </motion.button>
-                  </div>
-                )
-              )}
+              {/* Divisão entre os sócios e comprovantes — largura toda do cartão */}
+              <DespesaExtras despesa={r} rateio={rateios[r.id]} anexos={anexos[r.id]} cor={cor} onMudou={fetchRegistros} />
             </motion.div>
           ))}
         </div>

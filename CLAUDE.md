@@ -15,7 +15,7 @@ App de gestão agrícola (PWA web — **não há app nativo/APK, por decisão do
 |---|---|
 | GitHub | `orismarcc/oryagro`, branch `master` |
 | Supabase (Postgres, Auth, Storage) | projeto `yjwwbynuqnfqkjdoexhm` |
-| Supabase Storage | bucket privado `oryagro-attachments` (fotos dos registros) |
+| Supabase Storage | bucket privado `oryagro-attachments` (fotos dos registros e comprovantes de despesa) |
 | Vercel | projeto `oryagro` (`prj_12WbKrOQwd6vR4Zzw8Q7sdchPkAN`, time `team_Ljm5PgjI6A4F49Q2TwF7dNcR`) → https://oryagro.vercel.app — **sem integração Git**: só publica via `vercel --prod` |
 | APIs externas (sem chave) | Open-Meteo (clima/geocoding), tiles OSM e Esri ArcGIS |
 
@@ -23,7 +23,7 @@ App de gestão agrícola (PWA web — **não há app nativo/APK, por decisão do
 
 ## 4. Segurança
 - O frontend só conhece `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` (`src/lib/supabase.js`). **Nunca** coloque `SUPABASE_ACCESS_TOKEN`, service role ou qualquer segredo em variável `VITE_*` nem em código do `src/`. `.env*` e `*.key/*.pem/*.jks` estão no `.gitignore`.
-- Toda proteção de dados é **RLS no Postgres**: as 21 tabelas de `public` têm RLS ligado. Padrão: dono por `user_id = auth.uid()`; compartilhamento por propriedade via `farm_members` e as funções `is_farm_member()` / `is_farm_admin()`. Tabelas filhas (ex.: `cronograma_atividades`) checam o dono pelo `plantio_id`.
+- Toda proteção de dados é **RLS no Postgres**: as 24 tabelas de `public` têm RLS ligado. Padrão: dono por `user_id = auth.uid()`; compartilhamento por propriedade via `farm_members` e as funções `is_farm_member()` / `is_farm_admin()`; sócio de um lote só via `lote_membros` e `is_lote_membro()` / `pode_gerir_lote()` (vê só aquele lote). Tabelas filhas (ex.: `cronograma_atividades`) checam o dono pelo `plantio_id`.
 - **Toda tabela nova precisa:** RLS ligado + policy (dono e/ou membro da fazenda); `user_id` quando for dado do usuário; índice nas FKs. Funções `SECURITY DEFINER` devem ter `SET search_path = public` e checar `auth.uid()` quando agirem em nome do usuário.
 - Storage: arquivos em `user/<auth.uid()>/...` (policies `anexos_storage_*`); exibir sempre por URL assinada (`createSignedUrls`), nunca bucket público.
 - Papéis na UI: `src/lib/permissions.js` (`can(role, FARM_ACTIONS.X)`; papéis `admin` e `technician`). É conveniência de interface — a garantia real é o RLS.
@@ -31,7 +31,7 @@ App de gestão agrícola (PWA web — **não há app nativo/APK, por decisão do
 - Postgres 15: `CREATE POLICY IF NOT EXISTS` não existe — use `DROP POLICY IF EXISTS ...; CREATE POLICY ...` (o `scripts/validate-migrations.js` barra isso no commit).
 
 ## 5. Modelo de dados e regras de negócio
-`propriedades` → `talhoes` (área física, mapa GPS) → `plantios` (= **lote**/safra; `cultura_id` aponta para `src/data/culturas.js`) → `cronograma_atividades` (**registros** do produtor), `despesas`, `vendas` + `venda_parcelas`, `producao_registros`, `atividade_fotos`. Estoque por propriedade: `estoque_insumos` → `estoque_movimentos`. Outras: `farm_members`, `audit_log`, `curvas_producao`, `simulador_configs`, `ciclos_historico`, `compradores`.
+`propriedades` → `talhoes` (área física, mapa GPS) → `plantios` (= **lote**/safra; `cultura_id` aponta para `src/data/culturas.js`) → `cronograma_atividades` (**registros** do produtor), `despesas`, `vendas` + `venda_parcelas`, `producao_registros`, `atividade_fotos`. Estoque por propriedade: `estoque_insumos` → `estoque_movimentos`. Sócios e rateio: `lote_membros` → `despesa_rateios`; comprovantes em `despesa_anexos`. Outras: `farm_members`, `audit_log`, `curvas_producao`, `simulador_configs`, `ciclos_historico`, `compradores`.
 
 Regras não óbvias:
 - **Nada é previsto pelo sistema.** O cronograma do lote é só o que o produtor anota: `status` `feito` (com `data_execucao`) ou `agendado` (com `data_prevista`). `pendente`/`removida` são legado do antigo plano-guia e não aparecem. O guia da cultura (`GuiaCultura.jsx`) é **só consulta**.
@@ -45,6 +45,9 @@ Regras não óbvias:
 - **Gravação offline-safe:** registros, compras e movimentações passam por `src/lib/outbox.js` (insert/update/delete por id gerado no cliente, reenvio em ordem). `cronograma_atividades` **não tem** coluna `user_id`.
 - `producaoModelo` por cultura (`planta` = kg/planta × plantas; `ha` = kg/ha × área). Culturas com `cronogramaGuiaCompleto` (ex.: maracujá) mantêm os dias do guia sem reescalonar.
 - Receitas = `vendas` (+ `venda_parcelas`); anotações livres = registro categoria `anotacao`.
+- **Sócios do lote** (`lote_membros`): entram por e-mail; o `user_id` é ligado sozinho quando a conta com esse e-mail existe ou é criada (`handle_new_user`). O app **não cria contas**.
+- **Rateio** (`despesa_rateios`): cada despesa do lote pode ser dividida entre os sócios (partes iguais por padrão, editáveis); cada parte é `pago` ou `pendente`. Pendentes aparecem em destaque no Início até a quitação. Contas em `src/lib/rateio.js`.
+- **Compra da propriedade:** despesa "mãe" sem `plantio_id` + uma despesa por lote com `despesa_origem_id`. Só as filhas contam no financeiro (o DRE ignora despesas sem lote e `loadTodasDespesas` descarta a mãe) — nunca some as duas.
 
 ## 6. Convenções de código
 - JavaScript (sem TypeScript), React 19 + Vite 6 + Tailwind 4 (`@config` em `src/index.css` → `tailwind.config.js`), framer-motion, lucide-react, Leaflet, jsPDF, recharts. Comentários e textos de UI em português.
@@ -52,6 +55,7 @@ Regras não óbvias:
 - **Fontes únicas (não duplique):**
   - Registros, offline e fotos: `src/hooks/useAtividades.js`.
   - Compra = despesa + entrada no estoque: `registrarCompra` em `src/hooks/useDespesas.js`.
+  - Sócios, rateio, pendências, comprovantes e compra da propriedade: `src/hooks/useRateio.js` (telas em `src/components/rateio/`).
   - Fila offline: `src/lib/outbox.js`.
   - localStorage: `src/lib/safeStorage.js` (nunca chame `localStorage.setItem` direto).
   - Permissões: `src/lib/permissions.js`.
@@ -82,7 +86,7 @@ Regras não óbvias:
 - Linguagem simples de produtor, em português do Brasil; números no formato pt-BR.
 
 ## Decisões já tomadas (03/11/2026)
-- Histórico de migrations alinhado (38 arquivos = 38 linhas em `supabase_migrations.schema_migrations`).
+- Histórico de migrations alinhado (39 arquivos = 39 linhas em `supabase_migrations.schema_migrations`).
 - Tabelas legadas (`plantio_eventos`, `diario_campo`, `aplicacoes_campo`, `receitas`) removidas.
 - Sem APK/Capacitor: o produto é só o PWA web.
 - Supabase no plano gratuito **pausa após ~7 dias sem uso** (status `INACTIVE`). Se o app não carregar dados, verifique e reative (painel do Supabase → Restore, ou `POST /v1/projects/yjwwbynuqnfqkjdoexhm/restore`).

@@ -29,6 +29,7 @@ import { geojsonToPoints } from '../lib/geo';
 import IrrigacaoKitForm from './IrrigacaoKitForm';
 import TabDespesas from './lote/TabDespesas';
 import TabReceitas from './lote/TabReceitas';
+import MembrosLoteCard from './rateio/MembrosLoteCard';
 
 // ─── WeatherWidget ──────────────────────────────────────────────────────────
 
@@ -515,6 +516,9 @@ export default function LotePage({ lote, cultura, onBack, userRole = null, propr
                   {propriedade?.nome && <Dado lbl="Propriedade" v={propriedade.nome} />}
                 </div>
               </div>
+
+              {/* Sócios do lote — dividem as despesas */}
+              <MembrosLoteCard loteId={lote.id} cor={cor} podeGerir={can(userRole, FARM_ACTIONS.MANAGE_MEMBERS)} />
 
               {/* Guia técnico da cultura (consulta) */}
               {onAbrirGuia && (

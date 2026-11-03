@@ -180,13 +180,12 @@ export function getUnidade(categoria, subcategoria) {
  * Returns array sorted by date descending.
  */
 export async function loadDespesasByLote(plantioId) {
-  const userId = await getUserId();
-  if (!userId || !plantioId) return [];
-
+  if (!plantioId) return [];
+  // Sem filtro por user_id: o lote pode ter despesas lançadas por outros membros
+  // ou pelo dono da propriedade (o RLS decide quem vê).
   const { data, error } = await supabase
     .from('despesas')
     .select('*')
-    .eq('user_id', userId)
     .eq('plantio_id', plantioId)
     .order('data', { ascending: false });
 
@@ -211,7 +210,11 @@ export async function loadTodasDespesas(propriedadeId = null) {
 
   const { data, error } = await q;
   if (error) { logDbError('loadTodasDespesas', error); return []; }
-  return data || [];
+  // Compra da propriedade distribuída entre lotes: conta só os destinos (a
+  // "mãe" repete o mesmo dinheiro).
+  const rows = data || [];
+  const maes = new Set(rows.map(d => d.despesa_origem_id).filter(Boolean));
+  return rows.filter(d => !maes.has(d.id));
 }
 
 const normNome = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
@@ -226,7 +229,7 @@ const normNome = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f
  * 3. o preço unitário da entrada = valor ÷ quantidade (alimenta o preço médio).
  * Tudo é offline-safe; saldo, preço médio e mínimo são atualizados no banco.
  *
- * @returns {{ ok: boolean, offline?: boolean, motivo?: string }}
+ * @returns {{ ok: boolean, offline?: boolean, despesaId?: string, motivo?: string }}
  */
 export async function registrarCompra({
   plantioId = null, propriedadeId = null, data, categoria, subcategoria, produto,
@@ -281,7 +284,7 @@ export async function registrarCompra({
       nome: item.nome, unidade: unidade || 'un', propriedadeId,
       preco_unitario: valorNum > 0 ? valorNum / qtd : 0,
     });
-    if (!item) return { ok: true, offline: queued, motivo: 'insumo' };  // despesa salva; estoque não
+    if (!item) return { ok: true, offline: queued, despesaId: despesa.id, motivo: 'insumo' };  // despesa salva; estoque não
   }
   if (item && qtdEstoque) {
     await addMovimento({
@@ -295,7 +298,7 @@ export async function registrarCompra({
       precoUnitarioMovimento: valorNum > 0 ? valorNum / qtdEstoque : null,
     });
   }
-  return { ok: true, offline: queued };
+  return { ok: true, offline: queued, despesaId: despesa.id };
 }
 
 /**

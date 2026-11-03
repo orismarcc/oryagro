@@ -219,7 +219,7 @@ export function estimateKgAnual(lote, culturaId, factor) {
   if (base.method === 'unavailable') return { kg: 0, hasConfig: true,  method: 'unavailable' };
   if (factor <= 0) return { kg: 0, hasConfig: true, method: base.method };
 
-  let fullKg = 0;
+  let fullKg;
   if (base.cfg.unit === 'per_plant') {
     // base.value = total_plantas
     fullKg = base.value * base.cfg.defaultYieldValue;

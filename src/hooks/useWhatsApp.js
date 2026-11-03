@@ -53,7 +53,7 @@ export async function sendWhatsApp({ config, mensagem, tipo, plantioId }) {
   if (!config?.enabled) return { ok: false, error: 'WhatsApp não habilitado' };
   if (!config?.to_number) return { ok: false, error: 'Número de destino não configurado' };
 
-  let result = { ok: false, error: 'Provider não implementado' };
+  let result;
 
   try {
     switch (config.provider) {

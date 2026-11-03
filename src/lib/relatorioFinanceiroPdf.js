@@ -65,7 +65,7 @@ export function gerarRelatorioFinanceiroPDF({ rawData, propriedades = [], produt
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
   const M = 14;
-  let y = 0;
+  let y;
 
   doc.setFillColor(...GREEN);
   doc.rect(0, 0, W, 24, 'F');

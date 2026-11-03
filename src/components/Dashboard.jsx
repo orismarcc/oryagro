@@ -25,6 +25,7 @@ import { supabase } from '../lib/supabase';
 import { useAnotar } from '../context/AnotarContext';
 import { useToast } from '../context/ToastContext';
 import Logo from './Logo';
+import PendenciasCard from './rateio/PendenciasCard';
 
 const BRAND = 'hsl(156 64% 31%)';
 
@@ -174,6 +175,9 @@ export default function Dashboard({ onAddLote, onSelectLote, onGoEstoque, onGoAg
             </motion.button>
           </div>
         </div>
+
+        {/* ── Pagamentos pendentes entre sócios (sempre em destaque) ── */}
+        <PendenciasCard lotePorId={lotePorId} versao={versao} />
 
         {loading ? (
           <div className="flex justify-center py-16"><Loader2 size={24} className="animate-spin" style={{ color: BRAND }} /></div>

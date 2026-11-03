@@ -128,7 +128,7 @@ export async function exportarRelatorioPDF(lotes, eventosColheita, todasVendas) 
     const venda = c.venda || {};
     const sobr = (venda.sobrevivencia || 90) / 100;
     const preco = venda.precoUnitario || 0;
-    let qtd = 0;
+    let qtd;
     if (venda.producaoKgPorHa) {
       qtd = venda.producaoKgPorHa * (parseFloat(l.area_ha) || 1) * sobr;
     } else if (venda.producaoBase) {

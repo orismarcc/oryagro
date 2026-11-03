@@ -20,6 +20,7 @@ import PropriedadeLocalCard from './PropriedadeLocalCard';
 import TalhaoMapEditor from './TalhaoMapEditor';
 import TalhaoMapPreview from './TalhaoMapPreview';
 import { geojsonToPoints as geojsonToPts } from '../lib/geo';
+import ComprasPropriedadeCard from './rateio/ComprasPropriedadeCard';
 
 
 
@@ -868,6 +869,7 @@ function ActionTile({ icon: Icon, label, sub, onClick, primary = false, badge = 
 
 export default function PropriedadePage({ propriedade, userRole, onBack, onSelectLote, onGoEstoque, onAddLote, onSelectTalhao }) {
   const [lotes, setLotes]         = useState([]);
+  const [todosLotes, setTodosLotes] = useState([]); // anuais + safras de perenes (nomes nas compras)
   const [talhoes, setTalhoes]     = useState([]);
   const [alertas, setAlertas]     = useState(0);
   const [loading, setLoading]     = useState(true);
@@ -887,6 +889,7 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
       loadTalhoesPorPropriedade(propriedade.id),
     ]).then(([ls, insumos, ts]) => {
       // Lotes anuais: não têm talhao_id OU tipo_cultura == 'anual'
+      setTodosLotes(ls);
       setLotes(ls.filter(l => !l.talhao_id && l.tipo_cultura !== 'perene'));
       setTalhoes(ts ?? []);
       setAlertas(insumos.filter(i => i.quantidade <= i.quantidade_minima && i.quantidade_minima > 0).length);
@@ -1141,6 +1144,9 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
             </div>
           )}
         </div>
+
+        {/* Gastos lançados na propriedade e distribuídos entre os lotes */}
+        <ComprasPropriedadeCard propriedade={propriedade} lotes={todosLotes} podeLancar={canDeleteLote} />
 
         <FarmMembersSection propriedade={propriedade} userRole={userRole} />
       </div>

@@ -1,0 +1,95 @@
+/**
+ * rateio.js — regras puras de divisão de despesas.
+ *
+ * - Despesa do LOTE dividida entre os membros (sócios) do lote: por padrão em
+ *   partes iguais, cada valor editável; cada parte é "pago" ou "pendente".
+ * - Compra da PROPRIEDADE distribuída entre lotes: ao digitar a quantidade que
+ *   foi para um lote, o valor sai proporcional ao valor cheio da compra.
+ * Tudo em centavos inteiros para a soma fechar exatamente com o total.
+ */
+
+const cents = (v) => Math.round((Number(v) || 0) * 100);
+
+/** Número digitado (aceita vírgula). Vazio/ inválido → NaN. */
+export function numero(v) {
+  if (typeof v === 'number') return v;
+  const s = String(v ?? '').trim().replace(/\s/g, '');
+  if (!s) return NaN;
+  // "1.234,56" → 1234.56 ; "1234,5" → 1234.5 ; "1234.5" → 1234.5
+  const norm = s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s;
+  return Number(norm);
+}
+
+/**
+ * Divide `total` em `n` partes iguais (2 casas). Os centavos que sobram vão
+ * para as primeiras partes: 440 / 3 → [146.67, 146.67, 146.66].
+ */
+export function dividirIgual(total, n) {
+  if (!Number.isFinite(Number(total)) || !(n > 0)) return [];
+  const t = cents(total);
+  const base = Math.floor(t / n);
+  const resto = t - base * n;
+  return Array.from({ length: n }, (_, i) => (base + (i < resto ? 1 : 0)) / 100);
+}
+
+/** Valor proporcional: `qtd` de `qtdTotal` custa quanto de `valorTotal`. */
+export function valorProporcional(qtd, qtdTotal, valorTotal) {
+  const q = numero(qtd), qt = numero(qtdTotal), vt = numero(valorTotal);
+  if (!Number.isFinite(q) || !Number.isFinite(qt) || !Number.isFinite(vt) || qt <= 0 || q < 0) return null;
+  return Math.round((q / qt) * vt * 100) / 100;
+}
+
+/** Soma em centavos (evita 0.1 + 0.2). */
+export function somar(valores) {
+  return valores.reduce((s, v) => s + cents(numero(v) || 0), 0) / 100;
+}
+
+/** Diferença entre o total e a soma das partes (0 = fecha certinho). */
+export function diferenca(total, partes) {
+  return (cents(numero(total) || 0) - cents(somar(partes))) / 100;
+}
+
+/**
+ * Linhas iniciais do rateio de uma despesa: todos os membros, partes iguais.
+ * `pagadorId` (quem pagou na hora) já entra como "pago"; os demais como
+ * "pendente" se houver pagador, senão "pago" (cada um pagou a sua parte).
+ */
+export function rateioInicial(membros, total, pagadorId = null) {
+  const valores = dividirIgual(total, membros.length);
+  return membros.map((m, i) => ({
+    membroId: m.id,
+    nome: m.nome,
+    valor: valores[i] ?? 0,
+    status: !pagadorId || m.id === pagadorId ? 'pago' : 'pendente',
+  }));
+}
+
+/**
+ * Redistribui o total entre as linhas NÃO editadas à mão, mantendo as
+ * editadas. Útil quando o total muda ou alguém ajusta uma parte.
+ */
+export function redistribuir(linhas, total, editadas = new Set()) {
+  const fixas = linhas.filter(l => editadas.has(l.membroId));
+  const livres = linhas.filter(l => !editadas.has(l.membroId));
+  const sobra = Math.max(0, (cents(numero(total) || 0) - cents(somar(fixas.map(l => l.valor)))) / 100);
+  const valores = dividirIgual(sobra, livres.length);
+  let i = 0;
+  return linhas.map(l => (editadas.has(l.membroId) ? l : { ...l, valor: valores[i++] ?? 0 }));
+}
+
+/**
+ * Resumo das pendências: total em aberto por pessoa.
+ * `rateios` = [{ membro_id, valor, status, membro: { nome } }]
+ */
+export function pendenciasPorPessoa(rateios) {
+  const m = new Map();
+  for (const r of rateios) {
+    if (r.status !== 'pendente') continue;
+    const k = r.membro_id;
+    const cur = m.get(k) || { membroId: k, nome: r.membro?.nome || '—', total: 0, itens: 0 };
+    cur.total = (cents(cur.total) + cents(r.valor)) / 100;
+    cur.itens += 1;
+    m.set(k, cur);
+  }
+  return [...m.values()].sort((a, b) => b.total - a.total);
+}

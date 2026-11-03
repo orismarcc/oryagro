@@ -62,15 +62,30 @@ export async function registrarPlantio(payload) {
 }
 
 /**
+ * Ids dos lotes em que o usuário é MEMBRO (sócio) sem ser o dono — ex.: o
+ * Samuel no lote de acerola. Entram junto com os lotes próprios nas listagens.
+ */
+async function idsLotesComoMembro(userId) {
+  const { data, error } = await supabase.from('lote_membros').select('plantio_id').eq('user_id', userId);
+  if (error) { logDbError('idsLotesComoMembro', error); return []; }
+  return [...new Set((data || []).map(r => r.plantio_id))];
+}
+
+/** Filtro "meus lotes": os que criei + os em que sou membro. */
+function filtroMeusLotes(q, userId, idsMembro) {
+  return idsMembro.length
+    ? q.or(`user_id.eq.${userId},id.in.(${idsMembro.join(',')})`)
+    : q.eq('user_id', userId);
+}
+
+/**
  * Load all plantio lots for a specific cultura (only current user's).
  */
 export async function loadLotes(culturaId) {
   const userId = await getUserId();
   if (!userId) return [];
-  const { data, error } = await supabase
-    .from('plantios')
-    .select('*')
-    .eq('user_id', userId)
+  const idsMembro = await idsLotesComoMembro(userId);
+  const { data, error } = await filtroMeusLotes(supabase.from('plantios').select('*'), userId, idsMembro)
     .eq('cultura_id', culturaId)
     .order('data_plantio', { ascending: false });
   if (error) logDbError('loadLotes', error);
@@ -91,10 +106,8 @@ export async function loadTodosLotes(limit = 8) {
     if (cached) return cached;
   }
 
-  const { data, error } = await supabase
-    .from('plantios')
-    .select('*')
-    .eq('user_id', userId)
+  const idsMembro = await idsLotesComoMembro(userId);
+  const { data, error } = await filtroMeusLotes(supabase.from('plantios').select('*'), userId, idsMembro)
     .order('data_plantio', { ascending: false })
     .limit(limit);
 
@@ -162,9 +175,17 @@ export async function loadPropriedades() {
     return owned || (cacheGet(cacheKey) ?? []);
   }
 
+  // Propriedades dos lotes em que o usuário é membro (sócio de um lote só)
+  const idsMembro = await idsLotesComoMembro(userId);
+  let viaLote = [];
+  if (idsMembro.length) {
+    const { data: ls } = await supabase.from('plantios').select('propriedades(*)').in('id', idsMembro);
+    viaLote = (ls || []).map(r => ({ propriedades: r.propriedades }));
+  }
+
   // Flatten and deduplicate by id (I-14: guard against duplicate memberships)
   const seen = new Set();
-  const farms = (data || [])
+  const farms = [...(data || []), ...viaLote]
     .map(row => row.propriedades)
     .filter(p => p && !seen.has(p.id) && seen.add(p.id))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
