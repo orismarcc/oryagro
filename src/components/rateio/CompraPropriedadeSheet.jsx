@@ -10,7 +10,7 @@ import { CATEGORIAS_DESPESA, getUnidade } from '../../hooks/useDespesas';
 import { loadLotesByPropriedade } from '../../hooks/useSupabaseSync';
 import { loadMembrosPorLotes, registrarCompraPropriedade, uploadComprovante } from '../../hooks/useRateio';
 import { hojeLocalISO } from '../../hooks/useAtividades';
-import { numero, valorProporcional, dividirIgual, diferenca } from '../../lib/rateio';
+import { numero, valorProporcional, dividirIgual, diferenca, soSocios } from '../../lib/rateio';
 import { CULTURAS } from '../../data/culturas';
 import { useToast } from '../../context/ToastContext';
 import RateioEditor from './RateioEditor';
@@ -185,7 +185,7 @@ export default function CompraPropriedadeSheet({ propriedade, onClose, onSaved }
           <div className="flex flex-col gap-2 mb-2">
             {lotes.map(l => {
               const d = destinos[l.id] || {};
-              const ms = membros[l.id] || [];
+              const ms = soSocios(membros[l.id]);
               const v = valorDe(d);
               return (
                 <div key={l.id} className="card p-3" style={d.ativo ? { boxShadow: `0 0 0 2px ${BRAND}55` } : undefined}>

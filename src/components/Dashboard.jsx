@@ -26,6 +26,7 @@ import { useAnotar } from '../context/AnotarContext';
 import { useToast } from '../context/ToastContext';
 import Logo from './Logo';
 import PendenciasCard from './rateio/PendenciasCard';
+import PropriedadeResumoCard from './PropriedadeResumoCard';
 
 const BRAND = 'hsl(156 64% 31%)';
 
@@ -43,11 +44,12 @@ function somaDias(iso, n) {
 const fmtBRL = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtQ = (n) => Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
 
-export default function Dashboard({ onAddLote, onSelectLote, onGoEstoque, onGoAgenda, onGoCompradores, userName }) {
+export default function Dashboard({ onAddLote, onSelectLote, onSelectPropriedade, onGoEstoque, onGoAgenda, onGoCompradores, userName }) {
   const toast = useToast();
   const { anotar, versao, avisarMudanca } = useAnotar();
 
   const [lotes, setLotes]         = useState([]);
+  const [todosLotes, setTodosLotes] = useState([]); // inclui concluídos (contagem no cartão da propriedade)
   const [props, setProps]         = useState([]);
   const [estoque, setEstoque]     = useState([]);
   const [atividades, setAtividades] = useState([]);
@@ -63,6 +65,7 @@ export default function Dashboard({ onAddLote, onSelectLote, onGoEstoque, onGoAg
       const [ls, ps, est] = await Promise.all([loadTodosLotes(100), loadPropriedades(), loadEstoque(null)]);
       const ativos = (ls || []).filter(l => !l.status || l.status === 'ativo');
       setLotes(ativos);
+      setTodosLotes(ls || []);
       setProps(ps || []);
       setEstoque(est || []);
       const rows = await loadAtividadesPorLotes(ativos.map(l => l.id));
@@ -97,8 +100,8 @@ export default function Dashboard({ onAddLote, onSelectLote, onGoEstoque, onGoAg
   }, [limiteSemana, versao]);
 
   const lotePorId = useMemo(() => Object.fromEntries(lotes.map(l => [l.id, l])), [lotes]);
-  const variasProps = props.length > 1;
-  const nomeProp = (id) => props.find(p => p.id === id)?.nome;
+  const idsProps = new Set(props.map(p => p.id));
+  const semPropriedade = lotes.filter(l => !l.propriedade_id || !idsProps.has(l.propriedade_id));
 
   // Para fazer: agendados até 7 dias à frente (inclui atrasados)
   const paraFazer = useMemo(() => atividades
@@ -245,13 +248,31 @@ export default function Dashboard({ onAddLote, onSelectLote, onGoEstoque, onGoAg
               </div>
             )}
 
-            {/* ── 4. Lotes ── */}
-            <Secao titulo="Lotes" extra={`${lotes.length}`} acao={{ lbl: '+ Novo', onClick: onAddLote }}>
-              {lotes.map((l, i) => (
-                <LoteLinha key={l.id} lote={l} ultimo={ultimoPorLote[l.id]} ultima={i === lotes.length - 1}
-                  prop={variasProps ? nomeProp(l.propriedade_id) : null} onClick={() => onSelectLote(l)} />
-              ))}
-            </Secao>
+            {/* ── 4. Propriedades (toque abre a propriedade com os lotes dela) ── */}
+            {props.length > 0 && (
+              <div className="mb-5">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <p className="section-label">Propriedades · {props.length}</p>
+                  <button onClick={onAddLote} className="text-[11.5px] font-bold" style={{ color: BRAND }}>+ Novo lote</button>
+                </div>
+                {props.map(p => (
+                  <PropriedadeResumoCard key={p.id} propriedade={p}
+                    lotes={todosLotes.filter(l => l.propriedade_id === p.id)}
+                    onClick={() => onSelectPropriedade?.(p)} />
+                ))}
+              </div>
+            )}
+
+            {/* Lotes que não estão em nenhuma propriedade continuam aqui */}
+            {semPropriedade.length > 0 && (
+              <Secao titulo={props.length ? 'Lotes sem propriedade' : 'Lotes'} extra={`${semPropriedade.length}`}
+                acao={props.length ? null : { lbl: '+ Novo', onClick: onAddLote }}>
+                {semPropriedade.map((l, i) => (
+                  <LoteLinha key={l.id} lote={l} ultimo={ultimoPorLote[l.id]} ultima={i === semPropriedade.length - 1}
+                    prop={null} onClick={() => onSelectLote(l)} />
+                ))}
+              </Secao>
+            )}
 
             {/* ── 5. Últimos registros ── */}
             {recentes.length > 0 && (

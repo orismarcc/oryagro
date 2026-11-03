@@ -93,3 +93,49 @@ export function pendenciasPorPessoa(rateios) {
   }
   return [...m.values()].sort((a, b) => b.total - a.total);
 }
+
+/** Só quem divide as despesas (exclui quem tem apenas acesso ao lote). */
+export const soSocios = (membros = []) => membros.filter(m => m.participa_rateio !== false);
+
+/**
+ * Quem pagou o quê no lote: por sócio, a parte dele nas despesas divididas,
+ * quanto já pagou, quanto falta, a % do total dividido e a diferença para a
+ * média (positivo = colocou mais que a média dos sócios).
+ * `rateiosPorDespesa` = { [despesaId]: [{ membro_id, valor, status }] }
+ * Despesas sem divisão entram em `semDivisao`.
+ */
+export function resumoPorSocio(despesas = [], rateiosPorDespesa = {}, membros = []) {
+  const socios = soSocios(membros);
+  const linhas = new Map(socios.map(m => [m.id, { membroId: m.id, nome: m.nome, parte: 0, pago: 0, pendente: 0 }]));
+  let semDivisao = 0;
+  for (const d of despesas) {
+    const rs = rateiosPorDespesa[d.id] || [];
+    if (!rs.length) { semDivisao += cents(d.valor); continue; }
+    for (const r of rs) {
+      let l = linhas.get(r.membro_id);
+      if (!l) {  // sócio removido ou que virou "só acesso": mantém o que ele pagou
+        l = { membroId: r.membro_id, nome: r.membro?.nome || '—', parte: 0, pago: 0, pendente: 0 };
+        linhas.set(r.membro_id, l);
+      }
+      const v = cents(r.valor);
+      l.parte += v;
+      if (r.status === 'pendente') l.pendente += v; else l.pago += v;
+    }
+  }
+  const lista = [...linhas.values()];
+  const totalDividido = lista.reduce((s, l) => s + l.parte, 0);
+  const media = lista.length ? totalDividido / lista.length : 0;
+  return {
+    totalDividido: totalDividido / 100,
+    semDivisao: semDivisao / 100,
+    socios: lista.map(l => ({
+      membroId: l.membroId,
+      nome: l.nome,
+      parte: l.parte / 100,
+      pago: l.pago / 100,
+      pendente: l.pendente / 100,
+      percentual: totalDividido > 0 ? Math.round((l.parte / totalDividido) * 1000) / 10 : 0,
+      diferenca: Math.round(l.parte - media) / 100,
+    })),
+  };
+}

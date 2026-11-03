@@ -21,6 +21,7 @@ import TalhaoMapEditor from './TalhaoMapEditor';
 import TalhaoMapPreview from './TalhaoMapPreview';
 import { geojsonToPoints as geojsonToPts } from '../lib/geo';
 import ComprasPropriedadeCard from './rateio/ComprasPropriedadeCard';
+import { AcessoLotesForm, AcessoLotesLista } from './rateio/AcessoPorLote';
 
 
 
@@ -229,7 +230,9 @@ function LoteSummaryCard({ lote, onSelect, index, onDeleteLote, canDelete, ativi
   );
 }
 
-function FarmMembersSection({ propriedade, userRole }) {
+function FarmMembersSection({ propriedade, userRole, lotes = [] }) {
+  const [modo, setModo] = useState('lotes'); // 'lotes' = só alguns lotes · 'fazenda' = propriedade inteira
+  const [versaoLotes, setVersaoLotes] = useState(0);
   const [members, setMembers] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [email, setEmail] = useState('');
@@ -289,8 +292,7 @@ function FarmMembersSection({ propriedade, userRole }) {
   return (
     <div className="mt-6">
       <div className="flex items-center gap-2 mb-3 px-1">
-        <p className="section-label flex-1">Usuários da Propriedade</p>
-        <span className="text-[11px] text-muted-foreground">{members.length} {members.length === 1 ? 'membro' : 'membros'}</span>
+        <p className="section-label flex-1">Usuários e acessos</p>
       </div>
 
       {/* Add user form */}
@@ -299,7 +301,23 @@ function FarmMembersSection({ propriedade, userRole }) {
           <UserPlus size={14} className="text-green-600" />
           <span className="text-[13px] font-bold text-foreground">Adicionar usuário</span>
         </div>
+        {/* Acesso a quê: só alguns lotes/talhões, ou a propriedade inteira */}
+        <div className="flex gap-1 p-1 rounded-xl mb-3" style={{ background: 'hsl(140 14% 93%)' }}>
+          {[['lotes', 'Só alguns lotes'], ['fazenda', 'Propriedade inteira']].map(([v, lbl]) => (
+            <button key={v} type="button" onClick={() => { setModo(v); setMsg(null); }}
+              className="flex-1 py-2 rounded-lg text-[12px] font-bold transition-all"
+              style={modo === v ? { background: '#fff', color: 'hsl(156 64% 31%)', boxShadow: '0 1px 3px rgb(0 0 0 / 0.08)' } : { color: 'hsl(150 8% 40%)' }}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+        {modo === 'lotes' ? (
+          <AcessoLotesForm lotes={lotes} onAdded={() => setVersaoLotes(n => n + 1)} />
+        ) : (
         <form onSubmit={handleAdd} className="flex flex-col gap-2">
+          <p className="text-[11px] text-muted-foreground">
+            Vê e mexe em <strong>todos</strong> os lotes, estoque e despesas da propriedade. A pessoa precisa já ter conta.
+          </p>
           <input
             type="email"
             value={email}
@@ -335,7 +353,10 @@ function FarmMembersSection({ propriedade, userRole }) {
             </p>
           )}
         </form>
+        )}
       </div>
+
+      <p className="section-label mb-2 px-1">Propriedade inteira · {members.length}</p>
 
       {/* Members list */}
       {loadingMembers ? (
@@ -412,6 +433,8 @@ function FarmMembersSection({ propriedade, userRole }) {
           })}
         </div>
       )}
+
+      <AcessoLotesLista lotes={lotes} versao={versaoLotes} />
     </div>
   );
 }
@@ -1148,7 +1171,7 @@ export default function PropriedadePage({ propriedade, userRole, onBack, onSelec
         {/* Gastos lançados na propriedade e distribuídos entre os lotes */}
         <ComprasPropriedadeCard propriedade={propriedade} lotes={todosLotes} podeLancar={canDeleteLote} />
 
-        <FarmMembersSection propriedade={propriedade} userRole={userRole} />
+        <FarmMembersSection propriedade={propriedade} userRole={userRole} lotes={todosLotes} />
       </div>
 
       {showBackup && (

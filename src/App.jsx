@@ -237,8 +237,10 @@ function AppInner({ session, displayName, signOut }) {
   };
 
   // ── Propriedades / talhões (via Mais) ──
-  const handleSelectPropriedade = (p) => { setSelectedPropriedade(p); setMainView('propriedade'); };
-  const handleBackFromPropriedade = () => { setSelectedPropriedade(null); setMainView('propriedades'); };
+  // A propriedade pode ser aberta pelo Início ou por Mais → Propriedades; o voltar respeita a origem.
+  const [propriedadeOrigem, setPropriedadeOrigem] = useState('propriedades');
+  const handleSelectPropriedade = (p, origem = 'propriedades') => { setPropriedadeOrigem(origem); setSelectedPropriedade(p); setMainView('propriedade'); };
+  const handleBackFromPropriedade = () => { setSelectedPropriedade(null); setMainView(propriedadeOrigem); };
   const handleSelectTalhao = (t) => { setSelectedTalhao(t); setMainView('talhao'); };
   const handleBackFromTalhao = () => { setSelectedTalhao(null); setMainView('propriedade'); };
 
@@ -312,6 +314,7 @@ function AppInner({ session, displayName, signOut }) {
                 <Dashboard
                   onAddLote={() => handleAddLote('dashboard')}
                   onSelectLote={(l) => abrirLote(l, 'dashboard')}
+                  onSelectPropriedade={(p) => handleSelectPropriedade(p, 'dashboard')}
                   onGoEstoque={() => abrirEstoque(null)}
                   onGoAgenda={() => irPara('calendario')}
                   onGoCompradores={isGlobalAdmin ? () => irPara('compradores') : null}

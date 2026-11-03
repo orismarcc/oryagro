@@ -16,7 +16,7 @@ export default function MembrosLoteCard({ loteId, cor, podeGerir = true }) {
   const [loading, setLoading] = useState(true);
   const [aberto, setAberto] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [form, setForm] = useState({ nome: '', email: '', papel: 'membro' });
+  const [form, setForm] = useState({ nome: '', email: '', papel: 'membro', participaRateio: true });
 
   const carregar = useCallback(async () => {
     const ms = await loadMembros(loteId);
@@ -40,7 +40,7 @@ export default function MembrosLoteCard({ loteId, cor, podeGerir = true }) {
     setSalvando(false);
     if (!r.ok) { toast.error(r.duplicado ? 'Esse e-mail já é sócio deste lote.' : 'Não foi possível adicionar.'); return; }
     toast.success(`${r.membro.nome} adicionado ✓`);
-    setForm({ nome: '', email: '', papel: 'membro' });
+    setForm({ nome: '', email: '', papel: 'membro', participaRateio: true });
     setAberto(false);
     carregar();
   };
@@ -55,12 +55,16 @@ export default function MembrosLoteCard({ loteId, cor, podeGerir = true }) {
     if (await updateMembro(m.id, { papel: m.papel === 'admin' ? 'membro' : 'admin' })) carregar();
   };
 
+  const alternarSocio = async (m) => {
+    if (await updateMembro(m.id, { participa_rateio: m.participa_rateio === false })) carregar();
+  };
+
   const inputStyle = { background: 'hsl(140 14% 96%)', borderColor: 'hsl(140 13% 88%)', '--tw-ring-color': cor };
 
   return (
     <div className="card p-4">
       <div className="flex items-center justify-between mb-3">
-        <p className="section-label flex items-center gap-1.5"><Users size={13} /> Sócios do lote</p>
+        <p className="section-label flex items-center gap-1.5"><Users size={13} /> Pessoas do lote</p>
         {podeGerir && !aberto && (
           <button onClick={() => setAberto(true)} className="text-[12px] font-bold flex items-center gap-1" style={{ color: cor }}>
             <Plus size={14} /> Adicionar
@@ -72,26 +76,36 @@ export default function MembrosLoteCard({ loteId, cor, podeGerir = true }) {
         <Loader2 size={18} className="animate-spin text-muted-foreground mx-auto" />
       ) : membros.length === 0 ? (
         <p className="text-[12px] text-muted-foreground">
-          Nenhum sócio cadastrado. Adicione quem divide os gastos deste lote — as despesas passam a ser divididas entre eles.
+          Ninguém além de você. Adicione quem divide os gastos (sócio) ou quem só precisa ver e anotar neste lote.
         </p>
       ) : (
-        <div className="flex flex-col divide-y" style={{ borderColor: 'hsl(140 13% 90%)' }}>
+        <div className="flex flex-col divide-y divide-border">
           {membros.map(m => (
-            <div key={m.id} className="flex items-center gap-2 py-2">
-              <div className="flex-1 min-w-0">
+            <div key={m.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 py-2">
+              <div className="flex-1 min-w-[180px]">
                 <p className="text-[13px] font-bold truncate flex items-center gap-1.5">
                   {m.nome}
                   {m.papel === 'admin' && (
                     <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded-full inline-flex items-center gap-0.5"
                       style={{ background: `${cor}18`, color: cor }}><ShieldCheck size={10} /> Admin</span>
                   )}
+                  <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded-full"
+                    style={m.participa_rateio === false
+                      ? { background: 'hsl(210 30% 93%)', color: 'hsl(210 25% 40%)' }
+                      : { background: 'hsl(152 50% 92%)', color: 'hsl(152 55% 28%)' }}>
+                    {m.participa_rateio === false ? 'Só acesso' : 'Sócio'}
+                  </span>
                 </p>
                 <p className="text-[11px] text-muted-foreground truncate flex items-center gap-1">
                   <Mail size={10} /> {m.email} · {m.user_id ? 'conta ativa' : 'aguardando criar a conta'}
                 </p>
               </div>
               {podeGerir && (
-                <>
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <button onClick={() => alternarSocio(m)} className="text-[10.5px] font-bold px-2 py-1 rounded-lg"
+                    style={{ background: 'hsl(140 14% 94%)', color: 'hsl(150 8% 40%)' }}>
+                    {m.participa_rateio === false ? 'Tornar sócio' : 'Só acesso'}
+                  </button>
                   <button onClick={() => alternarPapel(m)} className="text-[10.5px] font-bold px-2 py-1 rounded-lg"
                     style={{ background: 'hsl(140 14% 94%)', color: 'hsl(150 8% 40%)' }}>
                     {m.papel === 'admin' ? 'Tirar admin' : 'Tornar admin'}
@@ -100,7 +114,7 @@ export default function MembrosLoteCard({ loteId, cor, podeGerir = true }) {
                     className="min-w-[36px] min-h-[36px] flex items-center justify-center text-muted-foreground hover:text-red-500">
                     <Trash2 size={14} />
                   </button>
-                </>
+                </div>
               )}
             </div>
           ))}
@@ -116,6 +130,10 @@ export default function MembrosLoteCard({ loteId, cor, podeGerir = true }) {
           <label className="flex items-center gap-2 text-[12.5px] font-semibold">
             <input type="checkbox" checked={form.papel === 'admin'} onChange={e => setForm(f => ({ ...f, papel: e.target.checked ? 'admin' : 'membro' }))} />
             Administrador do lote (pode lançar e editar despesas)
+          </label>
+          <label className="flex items-center gap-2 text-[12.5px] font-semibold">
+            <input type="checkbox" checked={form.participaRateio} onChange={e => setForm(f => ({ ...f, participaRateio: e.target.checked }))} />
+            Sócio — divide as despesas deste lote
           </label>
           <div className="flex gap-2">
             <button onClick={adicionar} disabled={salvando}

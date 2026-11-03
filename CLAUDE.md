@@ -45,7 +45,7 @@ Regras não óbvias:
 - **Gravação offline-safe:** registros, compras e movimentações passam por `src/lib/outbox.js` (insert/update/delete por id gerado no cliente, reenvio em ordem). `cronograma_atividades` **não tem** coluna `user_id`.
 - `producaoModelo` por cultura (`planta` = kg/planta × plantas; `ha` = kg/ha × área). Culturas com `cronogramaGuiaCompleto` (ex.: maracujá) mantêm os dias do guia sem reescalonar.
 - Receitas = `vendas` (+ `venda_parcelas`); anotações livres = registro categoria `anotacao`.
-- **Sócios do lote** (`lote_membros`): entram por e-mail; o `user_id` é ligado sozinho quando a conta com esse e-mail existe ou é criada (`handle_new_user`). O app **não cria contas**.
+- **Acesso por lote** (`lote_membros`): Propriedade → "Usuários e acessos" dá acesso à propriedade inteira (`farm_members`, precisa de conta) ou só a alguns lotes/talhões. `participa_rateio` separa **sócio** (divide despesas) de **só acesso**; `papel = admin` lança/edita despesas do lote. Entram por e-mail; o `user_id` é ligado sozinho quando a conta com esse e-mail existe ou é criada (`handle_new_user`). O app **não cria contas**.
 - **Rateio** (`despesa_rateios`): cada despesa do lote pode ser dividida entre os sócios (partes iguais por padrão, editáveis); cada parte é `pago` ou `pendente`. Pendentes aparecem em destaque no Início até a quitação. Contas em `src/lib/rateio.js`.
 - **Compra da propriedade:** despesa "mãe" sem `plantio_id` + uma despesa por lote com `despesa_origem_id`. Só as filhas contam no financeiro (o DRE ignora despesas sem lote e `loadTodasDespesas` descarta a mãe) — nunca some as duas.
 
@@ -82,11 +82,12 @@ Regras não óbvias:
 
 ## 8. Design
 - Verde-floresta como cor primária (`--color-primary: hsl(156 64% 31%)`, `BRAND` nos componentes), fundo verde-acinzentado claro, cards brancos arredondados (`--radius: 1.15rem`), hero com gradiente escuro (`gradient-hero`). Fontes: Nunito (títulos) e Inter (texto). Cada cultura tem cor e emoji próprios (`cultura.cor`, `cultura.emoji`).
+- Início: pendências de pagamento em destaque e um cartão por **propriedade** (toque abre a propriedade com os lotes); lotes sem propriedade continuam listados.
 - **Mobile-first e poucos cliques.** Barra inferior: Início · Agenda · **[Anotar]** · Estoque · Mais. O lote tem 4 abas: Registros · Colheita · Finanças · Lote. Respeitar `env(safe-area-inset-*)` (PWA instalado na tela inicial).
 - Linguagem simples de produtor, em português do Brasil; números no formato pt-BR.
 
 ## Decisões já tomadas (03/11/2026)
-- Histórico de migrations alinhado (39 arquivos = 39 linhas em `supabase_migrations.schema_migrations`).
+- Histórico de migrations alinhado (40 arquivos = 40 linhas em `supabase_migrations.schema_migrations`).
 - Tabelas legadas (`plantio_eventos`, `diario_campo`, `aplicacoes_campo`, `receitas`) removidas.
 - Sem APK/Capacitor: o produto é só o PWA web.
 - Supabase no plano gratuito **pausa após ~7 dias sem uso** (status `INACTIVE`). Se o app não carregar dados, verifique e reative (painel do Supabase → Restore, ou `POST /v1/projects/yjwwbynuqnfqkjdoexhm/restore`).

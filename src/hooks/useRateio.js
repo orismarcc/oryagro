@@ -32,10 +32,10 @@ export async function loadMembrosPorLotes(plantioIds = []) {
   return out;
 }
 
-export async function addMembro(plantioId, { nome, email, papel = 'membro' }) {
+export async function addMembro(plantioId, { nome, email, papel = 'membro', participaRateio = true }) {
   const { data, error } = await supabase
     .from('lote_membros')
-    .insert({ plantio_id: plantioId, nome: nome.trim(), email: email.trim().toLowerCase(), papel })
+    .insert({ plantio_id: plantioId, nome: nome.trim(), email: email.trim().toLowerCase(), papel, participa_rateio: participaRateio })
     .select().single();
   if (error) { logDbError('addMembro', error); return { ok: false, duplicado: error.code === '23505' }; }
   return { ok: true, membro: data };

@@ -18,6 +18,8 @@ import {
 } from '../../hooks/useRateio';
 import RateioEditor from '../rateio/RateioEditor';
 import DespesaExtras from '../rateio/DespesaExtras';
+import QuemPagouCard from '../rateio/QuemPagouCard';
+import { soSocios } from '../../lib/rateio';
 
 const RATEIO_VAZIO = { linhas: [], pagadorId: '' };
 
@@ -31,7 +33,8 @@ function TabDespesas({ lote, cor, canDelete }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [editId, setEditId] = useState(null); // despesa em edição (null = modo adicionar)
   // Sócios do lote e a divisão de cada despesa entre eles
-  const [membros, setMembros] = useState([]);
+  const [membros, setMembros] = useState([]);           // só sócios (dividem as despesas)
+  const [todosMembros, setTodosMembros] = useState([]); // + quem só tem acesso
   const [rateioForm, setRateioForm] = useState(RATEIO_VAZIO);
   const [rateios, setRateios] = useState({});
   const [anexos, setAnexos] = useState({});
@@ -87,7 +90,8 @@ function TabDespesas({ lote, cor, canDelete }) {
     try {
       const [data, ms] = await Promise.all([loadDespesasByLote(lote.id), loadMembros(lote.id)]);
       setRegistros(data ?? []);
-      setMembros(ms);
+      setMembros(soSocios(ms));
+      setTodosMembros(ms);
       const ids = (data ?? []).map(d => d.id);
       const [rs, an] = await Promise.all([loadRateios(ids), loadComprovantes(ids)]);
       setRateios(rs);
@@ -284,6 +288,9 @@ function TabDespesas({ lote, cor, canDelete }) {
           )}
         </motion.div>
       )}
+
+      {/* Quanto cada sócio colocou (R$, %, falta e diferença) */}
+      <QuemPagouCard despesas={registros} rateios={rateios} membros={todosMembros} cor={cor} />
 
       {/* Form */}
       <p className="section-label mb-3">{editId ? 'Editar Despesa' : 'Registrar Despesa'}</p>
