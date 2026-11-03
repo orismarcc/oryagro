@@ -64,7 +64,6 @@ export default function FinanceiroPage({ onBack, propriedades = [] }) {
   // Realtime: re-fetch DRE whenever vendas or despesas change (any device/user)
   useRealtimeSync('vendas',   fetchData);
   useRealtimeSync('despesas', fetchData);
-  useRealtimeSync('receitas', fetchData);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

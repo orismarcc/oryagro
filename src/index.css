@@ -79,15 +79,6 @@
   --glass-blur:   16px;
 }
 
-/* APK (Capacitor) — fallback para o primeiro frame, antes do JS medir e
-   sobrescrever via inline style. 40px cobre barras de status de qualquer
-   densidade em dispositivos Android atuais (24-36dp). */
-html.native {
-  /* Usa o inset real da status bar quando o WebView o expõe; senão, 40px cobre
-     barras de 24–36dp em qualquer densidade Android atual. */
-  --safe-top: env(safe-area-inset-top, 40px);
-}
-
 /* ── Base reset ──────────────────────────────────────────── */
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }

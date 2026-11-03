@@ -48,7 +48,7 @@ credentials/
 supabase/.temp/
 supabase/.branches/
 
-# Keystore (legado — projeto agora é PWA, sem APK)
+# Chaves de assinatura (não há app nativo — o OryAgro é só PWA web)
 *.keystore
 *.jks
 

@@ -53,10 +53,10 @@ async function query(sql) {
 // ── Expectativas (o que o código assume existir) ──────────────────────────────
 const EXPECT = {
   tables: [
-    'plantios', 'talhoes', 'despesas', 'receitas', 'vendas', 'venda_parcelas',
+    'plantios', 'talhoes', 'despesas', 'vendas', 'venda_parcelas',
     'estoque_insumos', 'estoque_movimentos', 'cronograma_atividades', 'audit_log',
-    'propriedades', 'farm_members', 'plantio_eventos', 'ciclos_historico',
-    'compradores', 'diario_campo', 'mao_obra_registros', 'simulador_configs',
+    'propriedades', 'farm_members', 'ciclos_historico', 'atividade_fotos',
+    'compradores', 'mao_obra_registros', 'simulador_configs',
     'curvas_producao', 'producao_registros', 'profiles',
     'whatsapp_config', 'whatsapp_notificacoes',
   ],

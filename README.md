@@ -1,16 +1,27 @@
-# React + Vite
+# OryAgro
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Gestão agrícola em PWA para o produtor anotar o que faz em cada lote (adubação, defensivo, colheita, compra), controlar estoque e finanças e consultar guias técnicos por cultura — inclusive sem sinal no campo.
 
-Currently, two official plugins are available:
+- Produção: https://oryagro.vercel.app
+- Stack: React 19 + Vite 6 + Tailwind 4 + Supabase (Postgres, Auth, Storage) + Vercel
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Rodar localmente
+```bash
+cp .env.example .env.local   # preencher VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY
+npm ci
+npm run dev
+```
 
-## React Compiler
+## Antes de commitar
+```bash
+npm test
+npm run lint
+npm run build
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Publicar
+```bash
+npm run build && git push && vercel --prod
+```
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Regras do projeto (infraestrutura, segurança, modelo de dados, convenções): veja [`CLAUDE.md`](CLAUDE.md).

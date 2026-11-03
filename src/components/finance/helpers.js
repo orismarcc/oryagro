@@ -73,11 +73,11 @@ export function periodFromDate(dateStr, mode = 'ano') {
 
 /**
  * Constrói o mapa da DRE: { [plantioId]: { [ano]: { receita, custos…, vendas… } } }
- * a partir dos dados brutos (vendas, receitas, movimentos, despesas, plantios,
+ * a partir dos dados brutos (vendas, movimentos, despesas, plantios,
  * mão de obra). Função pura — sem efeitos colaterais.
  */
 export function buildDreMap(rawData, periodMode = 'ano') {
-  const { vendas, receitas = [], movimentos, despesas, plantios, maoObraMap = {} } = rawData;
+  const { vendas, movimentos, despesas, plantios, maoObraMap = {} } = rawData;
 
   const map = {};
 
@@ -107,18 +107,6 @@ export function buildDreMap(rawData, periodMode = 'ano') {
     const valor = (v.quantidade ?? 0) * (v.preco_unitario ?? 0);
     entry.receita += valor;
     entry.vendas.push({ ...v, valor });
-  });
-
-  // Processar receitas diretas (tabela receitas — serviços, outras entradas)
-  receitas.forEach((r) => {
-    if (!r.data) return;
-    const ano = periodFromDate(r.data, periodMode);
-    if (!ano) return;
-    // Agrupa pelo plantio_id quando disponível; caso contrário usa '__receita__'
-    const pid = r.plantio_id ? String(r.plantio_id) : '__receita__';
-    const entry = ensureEntry(pid, ano);
-    entry.receita += r.valor ?? 0;
-    entry.vendas.push({ ...r, valor: r.valor ?? 0, _source: 'receita' });
   });
 
   // Processar movimentos de saída de estoque

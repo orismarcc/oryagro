@@ -303,7 +303,7 @@ function SumarioMensal({ monthStart, atividadesPorDia, today, colheitaEventos, l
   const concluidas = atvsDoMes.filter(a => a.done).length;
   const atrasadas  = atvsDoMes.filter(a => !a.done && a.dataPlanejada && a.dataPlanejada < today).length;
 
-  // Harvest kg from plantio_eventos (tipo='colheita') in this month
+  // Kg colhido no mês (producao_registros, via loadColheitas)
   const colheitaKg = useMemo(() => {
     return (colheitaEventos || []).reduce((sum, ev) => {
       if (!ev.data) return sum;

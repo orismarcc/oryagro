@@ -57,21 +57,18 @@ export async function exportPropriedadeBackup(propriedadeId, propriedadeNome) {
     // 3. For each plantio fetch related sub-tables
     const lotes = await Promise.all((plantios || []).map(async (plantio) => {
       const [
-        { data: eventos,    error: evErr  },
+        { data: producao,   error: prErr  },
         { data: cronograma, error: crErr  },
-        { data: diario,     error: diErr  },
         { data: vendas,     error: veErr  },
       ] = await Promise.all([
-        // B-06 fix: use real columns (notas, quantidade, area_ha — not descricao/observacoes)
-        supabase.from('plantio_eventos')
-          .select('id, plantio_id, tipo, data, quantidade, area_ha, notas, created_at')
-          .eq('plantio_id', plantio.id),
+        // Colheitas (produção real). Registros vindos do Anotar são recriados pelo
+        // gatilho ao importar o cronograma — por isso só os avulsos (sem atividade_id).
+        supabase.from('producao_registros')
+          .select('data, quantidade, unidade, qualidade, observacao')
+          .eq('plantio_id', plantio.id)
+          .is('atividade_id', null),
         supabase.from('cronograma_atividades')
           .select('*')
-          .eq('plantio_id', plantio.id),
-        // B-02 fix: use real column 'texto' (not titulo/descricao)
-        supabase.from('diario_campo')
-          .select('id, plantio_id, data, tipo, texto, created_at')
           .eq('plantio_id', plantio.id),
         // B-03 fix: use real column names (data/quantidade/unidade/preco_unitario/destino/observacao)
         supabase.from('vendas')
@@ -79,9 +76,8 @@ export async function exportPropriedadeBackup(propriedadeId, propriedadeNome) {
           .eq('plantio_id', plantio.id),
       ]);
 
-      if (evErr) logDbError('exportPropriedadeBackup/plantio_eventos', evErr);
+      if (prErr) logDbError('exportPropriedadeBackup/producao_registros', prErr);
       if (crErr) logDbError('exportPropriedadeBackup/cronograma_atividades', crErr);
-      if (diErr) logDbError('exportPropriedadeBackup/diario_campo', diErr);
       if (veErr) logDbError('exportPropriedadeBackup/vendas', veErr);
 
       return {
@@ -100,9 +96,8 @@ export async function exportPropriedadeBackup(propriedadeId, propriedadeNome) {
         espacamento_linhas: plantio.espacamento_linhas,
         espacamento_plantas: plantio.espacamento_plantas,
         _originalId:        plantio.id,
-        eventos:            (eventos    || []).map(e => omitKeys(e, ['user_id'])),
+        producao:           producao || [],
         cronograma:         (cronograma || []),
-        diario:             (diario     || []).map(d => omitKeys(d, ['user_id'])),
         vendas:             (vendas     || []).map(v => omitKeys(v, ['user_id'])),
       };
     }));
@@ -243,39 +238,58 @@ export async function importPropriedadeBackup(jsonData, userId) {
 
       const newLoteId = newLote.id;
 
-      // 3b. Eventos
-      if (lote.eventos?.length) {
-        const evPayload = lote.eventos.map(e => ({
-          ...omitKeys(e, ['id', 'plantio_id', 'user_id']),
+      // 3b. Produção (colheitas avulsas). Backups antigos trazem `eventos`
+      // (tabela plantio_eventos, removida): as colheitas viram produção.
+      const producaoImport = [
+        ...(lote.producao || []),
+        ...(lote.eventos || []).filter(e => e.tipo === 'colheita' && Number(e.quantidade) > 0)
+          .map(e => ({ data: e.data, quantidade: e.quantidade, unidade: 'kg', observacao: e.notas || null })),
+      ];
+      if (producaoImport.length) {
+        const prPayload = producaoImport.map(r => ({
           plantio_id: newLoteId,
           user_id:    userId,
+          data:       r.data,
+          quantidade: r.quantidade,
+          unidade:    r.unidade || 'kg',
+          qualidade:  r.qualidade || 'A',
+          observacao: r.observacao || null,
         }));
-        const { error: evErr } = await supabase.from('plantio_eventos').insert(evPayload);
-        if (evErr) logDbError('importPropriedadeBackup/plantio_eventos', evErr);
+        const { error: prErr } = await supabase.from('producao_registros').insert(prPayload);
+        if (prErr) logDbError('importPropriedadeBackup/producao_registros', prErr);
       }
 
       // 3c. Cronograma
       if (lote.cronograma?.length) {
         const crPayload = lote.cronograma.map(c => ({
-          ...omitKeys(c, ['id', 'plantio_id']),
+          // insumo_id aponta para o estoque da propriedade de origem: não religar,
+          // senão o gatilho daria baixa no estoque errado.
+          ...omitKeys(c, ['id', 'plantio_id', 'insumo_id']),
           plantio_id: newLoteId,
         }));
         const { error: crErr } = await supabase.from('cronograma_atividades').insert(crPayload);
         if (crErr) logDbError('importPropriedadeBackup/cronograma_atividades', crErr);
       }
 
-      // 3d. Diário — B-02 fix: map only real columns (texto, not titulo/descricao)
+      // 3d. Diário de backups antigos (tabela diario_campo, removida) → vira
+      // registro "Anotação" no cronograma do lote.
       if (lote.diario?.length) {
-        const diPayload = lote.diario.map(d => ({
-          plantio_id: newLoteId,
-          user_id:    userId,
-          data:       d.data,
-          tipo:       d.tipo,
-          // backward-compat: old backups may have titulo/descricao instead of texto
-          texto:      d.texto || d.descricao || d.titulo || '',
-        }));
-        const { error: diErr } = await supabase.from('diario_campo').insert(diPayload);
-        if (diErr) logDbError('importPropriedadeBackup/diario_campo', diErr);
+        const diPayload = lote.diario.map(d => {
+          const texto = d.texto || d.descricao || d.titulo || '';
+          return {
+            plantio_id:    newLoteId,
+            cultura_id:    lote.cultura_id,
+            etapa:         (texto || 'Anotação').slice(0, 200),
+            categoria:     'anotacao',
+            tipo:          'manejo',
+            status:        'feito',
+            data_execucao: d.data,
+            observacao:    texto || null,
+            is_custom:     true,
+          };
+        });
+        const { error: diErr } = await supabase.from('cronograma_atividades').insert(diPayload);
+        if (diErr) logDbError('importPropriedadeBackup/diario→cronograma', diErr);
       }
 
       // 3e. Vendas — B-03 fix: map only real columns (data/quantidade/unidade/preco_unitario/destino/observacao)

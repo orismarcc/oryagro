@@ -271,44 +271,6 @@ function AppInner({ session, displayName, signOut }) {
   const corAtiva = mainView === 'lote' && selectedLote && CULTURAS[selectedLote.cultura_id]
     ? CULTURAS[selectedLote.cultura_id].cor : BRAND;
 
-  // ── Botão "voltar" físico do Android (Capacitor) ───────────────────────────
-  const androidBackRef = useRef(() => false);
-  androidBackRef.current = () => {
-    switch (mainView) {
-      case 'cultura-picker': handleBackFromPicker();       return true;
-      case 'cultura':        handleBackFromCultura();      return true;
-      case 'lote':           handleBackFromLote();         return true;
-      case 'propriedade':    handleBackFromPropriedade();  return true;
-      case 'talhao':         handleBackFromTalhao();       return true;
-      case 'estoque':
-        if (estoqueOpenedFrom === 'propriedade') setMainView('propriedade'); else irPara('dashboard');
-        return true;
-      case 'propriedades': case 'financeiro': case 'compradores': case 'analise':
-      case 'simulador': case 'comparacao': case 'calculadora': case 'configuracoes':
-        voltarMais(); return true;
-      case 'calendario': case 'mais':
-        irPara('dashboard'); return true;
-      default: return false; // Início — sai do app
-    }
-  };
-
-  useEffect(() => {
-    let remove = null;
-    (async () => {
-      try {
-        const { Capacitor } = await import('@capacitor/core');
-        if (!Capacitor.isNativePlatform()) return;
-        const { App: CapApp } = await import('@capacitor/app');
-        const sub = await CapApp.addListener('backButton', () => {
-          const handled = androidBackRef.current?.();
-          if (!handled) CapApp.exitApp();
-        });
-        remove = () => sub.remove();
-      } catch { /* web — sem botão físico */ }
-    })();
-    return () => { if (remove) remove(); };
-  }, []);
-
   return (
     <AnotarProvider lotes={allLotes} onAbrir={refreshDados}>
       <div className="bg-background" style={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

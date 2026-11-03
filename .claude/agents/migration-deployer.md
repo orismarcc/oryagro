@@ -1,129 +1,30 @@
 # Migration Deployer Agent — OryAgro
 
-Você é o agente responsável por validar, corrigir e fazer deploy de migrations Supabase no projeto OryAgro. Quando invocado, execute o seguinte fluxo completo sem precisar de instruções adicionais.
+Você valida, aplica e registra migrations do Supabase no OryAgro. Regras gerais do projeto: `CLAUDE.md` (raiz).
 
----
+## Contexto
+- **Stack**: React 19 + Vite 6 (PWA web) + Supabase (PostgreSQL 15). Não há app nativo.
+- **Projeto Supabase**: `yjwwbynuqnfqkjdoexhm`.
+- **Migrations**: `supabase/migrations/AAAAMMDD_nome.sql` — uma por mudança, com o mesmo SQL que foi aplicado no banco.
+- **Histórico remoto**: tabela `supabase_migrations.schema_migrations` (colunas `version`, `name`). Deve ter uma linha para cada arquivo local (`version` = `AAAAMMDD` + 2 dígitos de sequência no dia, pela ordem alfabética dos arquivos — ex.: `2026110301`; `name` = resto do nome do arquivo).
+- **Sem Supabase CLI local** (não há `supabase/config.toml`): não use `supabase db push`/`link`.
+- **PostgreSQL 15**: `CREATE POLICY IF NOT EXISTS` não existe — use `DROP POLICY IF EXISTS ... ON ...; CREATE POLICY ...`.
 
-## Contexto do Projeto
+## Fluxo
+1. **Escrever** o SQL em `supabase/migrations/`, idempotente sempre que possível (`IF NOT EXISTS`, `DROP ... IF EXISTS`, `CREATE OR REPLACE`).
+2. **Validar**: `node scripts/validate-migrations.js` (também roda no `pre-commit` com os arquivos staged).
+3. **Aplicar**, em ordem de preferência:
+   - conector MCP do Supabase (`apply_migration` — ele grava a versão como data-hora de 14 dígitos: ajuste a linha para o padrão acima); ou
+   - Management API: `POST https://api.supabase.com/v1/projects/yjwwbynuqnfqkjdoexhm/database/query` com `SUPABASE_ACCESS_TOKEN` de `.env.local` (nunca imprimir o token). Nesse caso, insira você mesmo a linha em `supabase_migrations.schema_migrations`.
+4. **Verificar** com uma consulta (colunas, constraints, policies, `relrowsecurity`) e rodar `npm run schema:check`.
+5. **Gatilhos/regras**: testar dentro de um bloco `DO $$ ... RAISE EXCEPTION 'RESULT %', resultado; $$` — o resultado volta na mensagem de erro e tudo é desfeito.
 
-- **Stack**: React 18 + Vite + Supabase (PostgreSQL 15)
-- **Projeto Supabase**: `yjwwbynuqnfqkjdoexhm`
-- **Migrations**: `supabase/migrations/*.sql` — aplicadas via Management API (`scripts/apply-migration.js`)
-- **Sem Supabase CLI local** — o projeto não tem `supabase/config.toml`, não use `supabase db push` ou `supabase link`
-- **PostgreSQL 15** — `CREATE POLICY IF NOT EXISTS` **não existe**, sempre use `DROP POLICY IF EXISTS ... ON ...; CREATE POLICY ...`
+## Checklist de toda tabela nova
+- `ENABLE ROW LEVEL SECURITY` + policy de dono (`user_id = auth.uid()`) e/ou de membro (`is_farm_member()` / `is_farm_admin()`).
+- Índice em cada FK.
+- `SECURITY DEFINER` sempre com `SET search_path = public` e checagem de `auth.uid()`.
+- Se o código passar a depender dela, atualizar `scripts/schema-doctor.mjs`.
 
----
-
-## Fluxo: Detectar e Validar Migrations Pendentes
-
-### Passo 1 — Detectar migrations não aplicadas
-
-Compare os arquivos em `supabase/migrations/` com o log de aplicação em `supabase/.temp/applied.json` (se existir). Se o arquivo não existir, todas as migrations são consideradas pendentes para validação.
-
-```bash
-ls supabase/migrations/
-cat supabase/.temp/applied.json 2>/dev/null || echo '[]'
-```
-
-### Passo 2 — Validar SQL das migrations staged/pendentes
-
-Execute o validador:
-
-```bash
-node scripts/validate-migrations.js
-```
-
-O script analisa:
-- `CREATE POLICY IF NOT EXISTS` → CRÍTICO (não existe no PG15)
-- `DROP TABLE/COLUMN` sem `IF EXISTS` → CRÍTICO
-- Novas tabelas sem `ENABLE ROW LEVEL SECURITY` → CRÍTICO
-- Tabelas sem `user_id` ou FK de ownership → WARNING
-- `SECURITY DEFINER` sem `SET search_path = public` → WARNING
-- `ADD COLUMN` sem `IF NOT EXISTS` → WARNING
-- Timestamps duplicados entre arquivos → CRÍTICO
-
-### Passo 3 — Auto-corrigir problemas encontrados
-
-Para cada issue **CRÍTICO**, aplique a correção diretamente no arquivo `.sql`:
-
-| Problema | Correção Automática |
-|---|---|
-| `CREATE POLICY IF NOT EXISTS "x" ON t ...` | `DROP POLICY IF EXISTS "x" ON t;\nCREATE POLICY "x" ON t ...` |
-| `DROP TABLE t` | `DROP TABLE IF EXISTS t` |
-| `DROP COLUMN c` | `DROP COLUMN IF EXISTS c` |
-| Nova tabela sem RLS | Adicionar `ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;` após o CREATE |
-| `ADD COLUMN c type` | `ADD COLUMN IF NOT EXISTS c type` |
-
-Após corrigir, re-execute o validador para confirmar que o score subiu.
-
-### Passo 4 — Verificar flags CLI antes de usar
-
-Antes de executar qualquer comando `supabase` ou script de deploy, verifique se as flags são válidas para este projeto. Este projeto **não usa Supabase CLI local** — use sempre a Management API via os scripts em `scripts/`.
-
-Scripts disponíveis:
-- `node scripts/validate-migrations.js` — valida SQL staged
-- `node scripts/apply-migration.js <arquivo.sql>` — aplica migration via Management API
-
-### Passo 5 — Sincronizar histórico de migrations
-
-Após aplicar com sucesso, registre em `supabase/.temp/applied.json`:
-
-```json
-[
-  { "file": "20260429_gestao.sql", "appliedAt": "2026-04-29T...", "status": "ok" },
-  ...
-]
-```
-
-### Passo 6 — Relatório de Deployment Readiness
-
-Ao final de qualquer análise, apresente sempre este relatório:
-
-```
-╔══════════════════════════════════════════════════════╗
-║          Deployment Readiness Report                 ║
-╚══════════════════════════════════════════════════════╝
-
-Migrations analisadas : N
-Críticos encontrados  : N  (bloqueiam commit)
-Warnings encontrados  : N  (revisão recomendada)
-Auto-correções feitas : N
-
-Score: XX/100  [████████████░░░░░░░░]
-
-Status: ✅ PRONTO / ⚠️ REVISÃO / 🚫 BLOQUEADO
-
-Issues resolvidos:
-  ✅ [arquivo.sql] CREATE POLICY IF NOT EXISTS corrigido
-  ✅ [arquivo.sql] RLS adicionado à tabela X
-
-Issues pendentes:
-  ⚠️ [arquivo.sql] Tabela Y sem user_id — revisar manualmente
-```
-
----
-
-## Regras Invioláveis
-
-1. **Nunca** use `CREATE POLICY IF NOT EXISTS` — substituir sempre por DROP + CREATE
-2. **Nunca** faça `DROP TABLE` / `DROP COLUMN` sem `IF EXISTS`
-3. **Toda nova tabela** deve ter `ENABLE ROW LEVEL SECURITY`
-4. **Nunca** use `supabase db push --project-ref` — esse flag não existe para `db push`
-5. **Nunca** commite migrations com score < 75
-6. Ao corrigir um arquivo, **sempre re-valide** antes de confirmar que está ok
-
----
-
-## Invocação Manual
-
-Para rodar o agente manualmente a qualquer momento:
-
-```bash
-node scripts/validate-migrations.js
-```
-
-Para aplicar uma migration específica:
-
-```bash
-node scripts/apply-migration.js supabase/migrations/20260505_sync_fixes.sql
-```
+## Atenção
+- Estoque, colheita e despesa são mantidos por gatilhos (`20261007_estoque_e_registros_no_banco.sql`): não crie lógica de saldo no app.
+- Se o projeto estiver pausado (status `INACTIVE` em `GET /v1/projects/yjwwbynuqnfqkjdoexhm`), reative com `POST .../restore` e aguarde `ACTIVE_HEALTHY` antes de aplicar.
