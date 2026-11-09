@@ -67,14 +67,37 @@ export function rateioInicial(membros, total, pagadorId = null) {
 /**
  * Redistribui o total entre as linhas NÃO editadas à mão, mantendo as
  * editadas. Útil quando o total muda ou alguém ajusta uma parte.
+ * Quem está fora da divisão (`incluido: false`) fica com 0.
  */
 export function redistribuir(linhas, total, editadas = new Set()) {
-  const fixas = linhas.filter(l => editadas.has(l.membroId));
-  const livres = linhas.filter(l => !editadas.has(l.membroId));
+  const incluidas = linhas.filter(l => l.incluido !== false);
+  const fixas = incluidas.filter(l => editadas.has(l.membroId));
+  const livres = incluidas.filter(l => !editadas.has(l.membroId));
   const sobra = Math.max(0, (cents(numero(total) || 0) - cents(somar(fixas.map(l => l.valor)))) / 100);
   const valores = dividirIgual(sobra, livres.length);
   let i = 0;
-  return linhas.map(l => (editadas.has(l.membroId) ? l : { ...l, valor: valores[i++] ?? 0 }));
+  return linhas.map(l => {
+    if (l.incluido === false) return { ...l, valor: 0 };
+    return editadas.has(l.membroId) ? l : { ...l, valor: valores[i++] ?? 0 };
+  });
+}
+
+/**
+ * Tira ou devolve um sócio da divisão e reparte de novo. Quem volta entra como
+ * "pendente" se outra pessoa pagou tudo. Se todos os incluídos estavam editados
+ * à mão, volta a dividir igual (senão a parte de quem saiu ficaria sem dono).
+ * @returns {{ linhas: object[], editadas: Set }}
+ */
+export function alternarMembro(linhas, membroId, total, editadas = new Set(), pagadorId = null) {
+  const novas = linhas.map(l => {
+    if (l.membroId !== membroId) return l;
+    const incluido = l.incluido === false;
+    return { ...l, incluido, status: incluido && pagadorId && pagadorId !== membroId ? 'pendente' : l.status };
+  });
+  let ed = new Set(editadas);
+  ed.delete(membroId);
+  if (!novas.some(l => l.incluido !== false && !ed.has(l.membroId))) ed = new Set();
+  return { linhas: redistribuir(novas, total, ed), editadas: ed };
 }
 
 /**

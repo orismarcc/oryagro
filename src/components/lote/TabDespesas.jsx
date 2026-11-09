@@ -172,7 +172,7 @@ function TabDespesas({ lote, cor, canDelete }) {
           pagadorId: r.pagador_membro_id || '',
           linhas: membros.map(m => {
             const x = atual.find(a => a.membro_id === m.id);
-            return { membroId: m.id, nome: m.nome, valor: x ? Number(x.valor) : 0, status: x?.status || 'pago' };
+            return { membroId: m.id, nome: m.nome, valor: x ? Number(x.valor) : 0, status: x?.status || 'pago', incluido: !!x };
           }),
         }
       : RATEIO_VAZIO);
@@ -249,6 +249,9 @@ function TabDespesas({ lote, cor, canDelete }) {
     }
     setConfirmDeleteId(null);
   };
+
+  // Quem adiantou o dinheiro pode estar fora da divisão: o nome vem dos membros do lote.
+  const nomePagador = (r) => todosMembros.find(m => m.id === r.pagador_membro_id)?.nome;
 
   const totalDespesas = registros.reduce((s, r) => s + (r.valor ?? 0), 0);
 
@@ -430,7 +433,7 @@ function TabDespesas({ lote, cor, canDelete }) {
         </div>
 
         {/* Divisão entre os sócios do lote (cadastrados na aba Lote) */}
-        <RateioEditor membros={membros} total={form.valor} value={rateioForm} onChange={setRateioForm} cor={cor} />
+        <RateioEditor key={editId || 'novo'} membros={membros} total={form.valor} value={rateioForm} onChange={setRateioForm} cor={cor} />
 
         {/* Comprovante de pagamento (foto ou PDF) */}
         <div className="mb-3">
@@ -619,6 +622,9 @@ function TabDespesas({ lote, cor, canDelete }) {
                   )}
                   {r.prestador && (
                     <p className="text-[11px] text-muted-foreground mb-0.5">👤 {r.prestador}</p>
+                  )}
+                  {nomePagador(r) && (
+                    <p className="text-[11px] font-semibold mb-0.5">💳 Pagou: {nomePagador(r)}</p>
                   )}
                   <div className="flex items-baseline gap-3">
                     <p className="text-[14px] font-bold" style={{ color: cor }}>{fmtBRL(r.valor)}</p>

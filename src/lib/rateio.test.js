@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  numero, dividirIgual, valorProporcional, somar, diferenca, rateioInicial, redistribuir, pendenciasPorPessoa, resumoPorSocio,
+  numero, dividirIgual, valorProporcional, somar, diferenca, rateioInicial, redistribuir, alternarMembro, pendenciasPorPessoa, resumoPorSocio,
 } from './rateio';
 
 describe('numero', () => {
@@ -59,6 +59,38 @@ describe('redistribuir', () => {
     const linhas = [{ membroId: 'h', valor: 600 }, { membroId: 'p', valor: 0 }, { membroId: 'o', valor: 0 }];
     const r = redistribuir(linhas, 900, new Set(['h']));
     expect(r.map(l => l.valor)).toEqual([600, 150, 150]);
+  });
+});
+
+describe('fora da divisão', () => {
+  const linhas = [
+    { membroId: 'h', valor: 150, status: 'pago' },
+    { membroId: 'm', valor: 150, status: 'pago' },
+    { membroId: 'o', valor: 150, status: 'pago' },
+  ];
+  it('quem sai fica com 0 e os outros dividem o total', () => {
+    const { linhas: r } = alternarMembro(linhas, 'm', 450);
+    expect(r.map(l => l.valor)).toEqual([225, 0, 225]);
+    expect(r[1].incluido).toBe(false);
+  });
+  it('quem volta divide de novo; fica pendente se outro pagou tudo', () => {
+    const fora = alternarMembro(linhas, 'm', 450, new Set(), 'h').linhas;
+    const { linhas: r } = alternarMembro(fora, 'm', 450, new Set(), 'h');
+    expect(r.map(l => l.valor)).toEqual([150, 150, 150]);
+    expect(r[1].status).toBe('pendente');
+  });
+  it('mantém parte editada à mão de quem ficou', () => {
+    const { linhas: r } = alternarMembro([{ ...linhas[0], valor: 300 }, linhas[1], linhas[2]], 'm', 450, new Set(['h']));
+    expect(r.map(l => l.valor)).toEqual([300, 0, 150]);
+  });
+  it('se só restam partes editadas, volta a dividir igual', () => {
+    const { linhas: r, editadas } = alternarMembro(linhas, 'o', 450, new Set(['h', 'm']));
+    expect(r.map(l => l.valor)).toEqual([225, 225, 0]);
+    expect(editadas.size).toBe(0);
+  });
+  it('todos fora: tudo zera', () => {
+    const r = redistribuir(linhas.map(l => ({ ...l, incluido: false })), 450);
+    expect(r.map(l => l.valor)).toEqual([0, 0, 0]);
   });
 });
 
