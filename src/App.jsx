@@ -26,7 +26,7 @@ const CompradoresPage   = lazy(() => import('./components/CompradoresPage'));
 import InstallPWA from './components/InstallPWA';
 import { CULTURAS } from './data/culturas';
 import { useAuth } from './hooks/useAuth';
-import { loadPropriedades, loadTodosLotes } from './hooks/useSupabaseSync';
+import { loadPropriedades, loadTodosLotes, loadLote } from './hooks/useSupabaseSync';
 import { FarmProvider, useFarm } from './context/FarmContext';
 import { ToastProvider, useToast } from './context/ToastContext';
 import { AnotarProvider, useAnotar } from './context/AnotarContext';
@@ -168,6 +168,15 @@ function AppInner({ session, displayName, signOut }) {
     refreshPropriedadesRef.current = refreshDados;
   }, [session, refreshDados]);
 
+  // Depois de anotar: o banco pode ter mudado o lote aberto (ex.: transplante muda
+  // o total de plantas), então recarrega ele junto com as listas.
+  const aposAnotar = async () => {
+    refreshDados();
+    if (!selectedLote?.id) return;
+    const atual = await loadLote(selectedLote.id);
+    if (atual) setSelectedLote(l => (l?.id === atual.id ? { ...l, ...atual } : l));
+  };
+
   // Propriedade "padrão" para o Estoque quando não há uma aberta: se só existe uma, é ela.
   const propriedadePadrao = selectedPropriedade ?? (propriedades.length === 1 ? propriedades[0] : null);
 
@@ -274,7 +283,7 @@ function AppInner({ session, displayName, signOut }) {
     ? CULTURAS[selectedLote.cultura_id].cor : BRAND;
 
   return (
-    <AnotarProvider lotes={allLotes} onAbrir={refreshDados}>
+    <AnotarProvider lotes={allLotes} onAbrir={refreshDados} onSalvo={aposAnotar}>
       <div className="bg-background" style={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <NetworkStatusBanner />
         <InstallPWA />

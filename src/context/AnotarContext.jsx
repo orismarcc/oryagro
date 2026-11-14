@@ -17,7 +17,7 @@ import AnotarSheet from '../components/AnotarSheet';
 
 const AnotarCtx = createContext({ anotar: () => {}, versao: 0, avisarMudanca: () => {} });
 
-export function AnotarProvider({ lotes = [], onAbrir, children }) {
+export function AnotarProvider({ lotes = [], onAbrir, onSalvo, children }) {
   const [estado, setEstado] = useState({ open: false, loteId: null, editar: null, agendado: false, data: null, preenchido: null, n: 0 });
   const [versao, setVersao] = useState(0);
 
@@ -53,7 +53,7 @@ export function AnotarProvider({ lotes = [], onAbrir, children }) {
         preenchido={estado.preenchido}
         aberturaId={estado.n}
         onClose={() => setEstado(s => ({ ...s, open: false }))}
-        onSaved={avisarMudanca}
+        onSaved={() => { avisarMudanca(); onSalvo?.(); }}
       />
     </AnotarCtx.Provider>
   );

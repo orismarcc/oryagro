@@ -39,6 +39,7 @@ Regras não óbvias:
   - O saldo do insumo é o efeito das movimentações (`tg_estoque_movimentos_saldo`). Insumo novo nasce com quantidade 0 e recebe uma "entrada".
   - Um registro `feito` com `insumo_id` gera saída automática, com conversão g→kg e mL→L (`fn_qtd_na_unidade`); editar, reabrir ou excluir refaz ou estorna. Máximo de uma saída por registro.
   - Um registro de colheita `feito` com quantidade vira `producao_registros` (`atividade_id`).
+  - Um registro `plantio` `feito` com quantidade em `mudas` é transplante: `total_plantas` do lote (e do talhão da safra ativa) vira a soma dos transplantes (`tg_cronograma_transplante`). Não atualize plantas pelo app.
   - Editar uma despesa ajusta a entrada vinculada; excluir a despesa estorna.
   - As RPCs `adjust_insumo_quantidade` e `delete_movimento_with_balance` existem só para compatibilidade com versões antigas (não têm efeito no saldo).
 - **Estoque mínimo:** `minimo_tipo` `percent` (padrão 25% de `quantidade_referencia`, o nível após a última compra) ou `valor`; o banco recalcula `quantidade_minima`.
@@ -87,7 +88,7 @@ Regras não óbvias:
 - Linguagem simples de produtor, em português do Brasil; números no formato pt-BR.
 
 ## Decisões já tomadas (03/11/2026)
-- Histórico de migrations alinhado (40 arquivos = 40 linhas em `supabase_migrations.schema_migrations`).
+- Histórico de migrations alinhado (41 arquivos = 41 linhas em `supabase_migrations.schema_migrations`).
 - Tabelas legadas (`plantio_eventos`, `diario_campo`, `aplicacoes_campo`, `receitas`) removidas.
 - Sem APK/Capacitor: o produto é só o PWA web.
 - Supabase no plano gratuito **pausa após ~7 dias sem uso** (status `INACTIVE`). Se o app não carregar dados, verifique e reative (painel do Supabase → Restore, ou `POST /v1/projects/yjwwbynuqnfqkjdoexhm/restore`).

@@ -117,6 +117,14 @@ export async function loadTodosLotes(limit = 8) {
   return data || (cacheGet(cacheKey) ?? []);
 }
 
+/** Um lote pelo id (para atualizar a tela depois que o banco mudou algo nele). */
+export async function loadLote(id) {
+  if (!id) return null;
+  const { data, error } = await supabase.from('plantios').select('*').eq('id', id).maybeSingle();
+  if (error) { logDbError('loadLote', error); return null; }
+  return data;
+}
+
 /**
  * Delete a plantio lot by id. Returns true on success.
  */

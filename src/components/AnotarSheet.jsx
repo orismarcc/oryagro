@@ -158,9 +158,12 @@ export default function AnotarSheet({
   const estoqueVisivel = estoque.filter(i => !i.propriedade_id || propsSel.size === 0 || propsSel.has(i.propriedade_id));
 
   const cat = getCategoria(ehColheita ? 'colheita' : form.categoria);
+  // Plantio: a quantidade é de MUDAS levadas ao campo (transplante). O banco soma
+  // os transplantes feitos e atualiza o total de plantas do lote.
+  const ehTransplante = !ehColheita && !ehCompra && form.categoria === 'plantio';
   // Atividade: mostra produto/quantidade se a categoria usa insumo OU já há algo
   // preenchido (registros antigos) — nada fica escondido.
-  const mostraProduto = !ehColheita && (cat.usaInsumo || !!form.produto || !!form.quantidade);
+  const mostraProduto = !ehColheita && !ehTransplante && (cat.usaInsumo || !!form.produto || !!form.quantidade);
   const insumo = estoque.find(i => String(i.id) === String(form.insumoId)) || null;
 
   const datas = useMemo(() => (
@@ -249,7 +252,7 @@ export default function AnotarSheet({
           etapa: (form.etapa.trim() || (ehColheita ? 'Colheita' : form.produto.trim()) || cat.label),
           produto: ehColheita ? '' : form.produto.trim(),
           insumoId: mostraProduto ? form.insumoId : '',
-          unidade: form.quantidade ? form.unidade : '',
+          unidade: form.quantidade ? (ehTransplante ? 'mudas' : form.unidade) : '',
         };
         if (editando) {
           const r = await editarLancamento(editar.id, payload, { arquivos });
@@ -406,6 +409,28 @@ export default function AnotarSheet({
                     })}
                   </div>
                 </>
+              )}
+
+              {/* Plantio: quantas mudas foram para o campo */}
+              {ehTransplante && (
+                <div className="rounded-2xl p-3 mb-4" style={CAIXA}>
+                  <label className={LBL}>
+                    Mudas plantadas no campo (opcional){lotesSel.length > 1 ? ' — em cada lote' : ''}
+                  </label>
+                  <div className="flex gap-2 items-center">
+                    <input type="number" inputMode="numeric" min="0" step="1" value={form.quantidade} placeholder="0"
+                      onChange={e => set({ quantidade: e.target.value })}
+                      className="w-28 flex-shrink-0 rounded-xl border px-3 py-2.5 text-[15px] font-bold focus:outline-none focus:ring-2"
+                      style={{ ...INP_STYLE, background: '#fff' }} />
+                    <span className="text-[13px] font-bold" style={{ color: BRAND }}>mudas</span>
+                  </div>
+                  <p className="text-[11px] mt-2 text-muted-foreground">
+                    Preencha quando for transplante/plantio no campo. O total de plantas do lote passa a ser a soma de
+                    todos os transplantes anotados, e a estimativa de produção e de faturamento se recalcula.
+                    {lotesSel.length === 1 && lotesSel[0].total_plantas ? ` Hoje o lote tem ${fmtQ(lotesSel[0].total_plantas)} plantas.` : ''}
+                    {form.agendado ? ' Conta só quando for marcado como feito.' : ''}
+                  </p>
+                </div>
               )}
 
               {/* Compra: tipo de despesa */}
